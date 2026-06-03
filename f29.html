@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>F29 · RS Tax & Legal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --azul-principal: #1e3a5f;
+      --azul-medio: #2e5a87;
+      --azul-claro: #e8eff5;
+      --gris-oscuro: #1f2937;
+      --gris-medio: #6b7280;
+      --gris-claro: #f3f4f6;
+      --gris-borde: #e5e7eb;
+      --rojo: #dc2626;
+      --rojo-bg: #fee2e2;
+      --amarillo: #d97706;
+      --amarillo-bg: #fef3c7;
+      --verde: #059669;
+      --verde-bg: #d1fae5;
+      --blanco: #ffffff;
+      --sombra: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+      --sombra-modal: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--gris-claro);
+      color: var(--gris-oscuro);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .hidden { display: none !important; }
+
+    /* === LOGIN === */
+    #login-screen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: linear-gradient(135deg, var(--azul-principal) 0%, var(--azul-medio) 100%);
+    }
+
+    .login-card {
+      background: var(--blanco);
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: var(--sombra-modal);
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .login-logo {
+      width: 56px;
+      height: 56px;
+      background: var(--azul-principal);
+      color: var(--blanco);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 18px;
+      margin-bottom: 20px;
+    }
+
+    .login-card h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--gris-oscuro);
+    }
+
+    .login-card p.subtitle {
+      color: var(--gris-medio);
+      margin-bottom: 28px;
+    }
+
+    .login-card label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: var(--gris-oscuro);
+    }
+
+    .login-card input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid var(--gris-borde);
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+
+    .login-card input:focus {
+      outline: none;
+      border-color: var(--azul-medio);
+      box-shadow: 0 0 0 3px rgba(46, 90, 135, 0.1);
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 12px;
+      background: var(--azul-principal);
+      color: var(--blanco);
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      margin-top: 16px;
+      transition: background 0.15s;
+    }
+
+    .btn-primary:hover { background: var(--azul-medio); }
+    .btn-primary:disabled { background: var(--gris-medio); cursor: not-allowed; }
+
+    .login-msg {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+
+    .login-msg.success { background: var(--verde-bg); color: var(--verde); display: block; }
+    .login-msg.error { background: var(--rojo-bg); color: var(--rojo); display: block; }
+    .login-msg.info { background: var(--azul-claro); color: var(--azul-principal); display: block; }
+
+    /* === MAIN APP === */
+    header {
+      background: var(--blanco);
+      border-bottom: 1px solid var(--gris-borde);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-left { display: flex; align-items: center; gap: 12px; }
+
+    .header-logo {
+      width: 36px; height: 36px;
+      background: var(--azul-principal);
+      color: var(--blanco);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px;
+    }
+
+    .header-title { font-weight: 600; font-size: 15px; }
+    .header-subtitle { font-size: 12px; color: var(--gris-medio); }
+
+    .header-right { display: flex; align-items: center; gap: 16px; }
+    .user-info { text-align: right; }
+    .user-name { font-weight: 600; font-size: 13px; }
+    .user-rol { font-size: 11px; color: var(--gris-medio); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .btn-logout {
+      background: transparent;
+      border: 1px solid var(--gris-borde);
+      padding: 7px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      color: var(--gris-medio);
+      transition: all 0.15s;
+    }
+
+    .btn-logout:hover { background: var(--gris-claro); color: var(--gris-oscuro); }
+
+    main {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .resumen {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .resumen-card {
+      background: var(--blanco);
+      padding: 14px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--gris-borde);
+    }
+
+    .resumen-label { font-size: 11px; color: var(--gris-medio); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .resumen-valor { font-size: 22px; font-weight: 700; color: var(--gris-oscuro); }
+    .resumen-card.urgente .resumen-valor { color: var(--rojo); }
+    .resumen-card.cerrado .resumen-valor { color: var(--verde); }
+
+    .controles {
+      background: var(--blanco);
+      padding: 14px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--gris-borde);
+      margin-bottom: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .controles input, .controles select {
+      padding: 8px 10px;
+      border: 1px solid var(--gris-borde);
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      background: var(--blanco);
+    }
+
+    .controles input:focus, .controles select:focus {
+      outline: none;
+      border-color: var(--azul-medio);
+    }
+
+    .control-buscar { flex: 1; min-width: 200px; }
+    .control-count { margin-left: auto; font-size: 12px; color: var(--gris-medio); }
+
+    .tabla-wrapper {
+      background: var(--blanco);
+      border-radius: 8px;
+      border: 1px solid var(--gris-borde);
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead {
+      background: var(--azul-claro);
+      position: sticky;
+      top: 0;
+    }
+
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      font-weight: 600;
+      color: var(--azul-principal);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--gris-borde);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--gris-borde);
+      vertical-align: middle;
+    }
+
+    tbody tr { cursor: pointer; transition: background 0.1s; }
+    tbody tr:hover { background: var(--gris-claro); }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-sin-iniciar { background: var(--gris-claro); color: var(--gris-medio); }
+    .badge-conciliando { background: #ddd6fe; color: #5b21b6; }
+    .badge-armando-f29 { background: #bfdbfe; color: #1e40af; }
+    .badge-pendiente-presentación { background: var(--amarillo-bg); color: var(--amarillo); }
+    .badge-cerrado { background: var(--verde-bg); color: var(--verde); }
+
+    .badge-previred { background: var(--azul-claro); color: var(--azul-principal); }
+    .badge-no-previred { background: #fce7f3; color: #be185d; }
+
+    .dias-cell {
+      font-weight: 700;
+      text-align: center;
+      padding: 6px 10px;
+      border-radius: 4px;
+      display: inline-block;
+      min-width: 42px;
+    }
+
+    .dias-urgente { background: var(--rojo-bg); color: var(--rojo); }
+    .dias-cercano { background: var(--amarillo-bg); color: var(--amarillo); }
+    .dias-normal { background: var(--gris-claro); color: var(--gris-medio); }
+    .dias-cerrado { background: var(--verde-bg); color: var(--verde); }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal {
+      background: var(--blanco);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 680px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: var(--sombra-modal);
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--gris-borde);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+
+    .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+    .modal-subtitle { font-size: 12px; color: var(--gris-medio); }
+
+    .modal-close {
+      background: transparent;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--gris-medio);
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 6px;
+      line-height: 1;
+    }
+
+    .modal-close:hover { background: var(--gris-claro); }
+
+    .modal-body { padding: 24px; }
+
+    .field-group { margin-bottom: 18px; }
+
+    .field-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gris-oscuro);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .field-group input,
+    .field-group select,
+    .field-group textarea {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1px solid var(--gris-borde);
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .field-group input:focus, .field-group select:focus, .field-group textarea:focus {
+      outline: none;
+      border-color: var(--azul-medio);
+    }
+
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .field-grupo-fechas {
+      background: var(--gris-claro);
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 18px;
+    }
+
+    .field-grupo-fechas .grupo-titulo {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--gris-medio);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--gris-borde);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .btn-secondary {
+      padding: 9px 16px;
+      background: var(--blanco);
+      color: var(--gris-oscuro);
+      border: 1px solid var(--gris-borde);
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .btn-secondary:hover { background: var(--gris-claro); }
+
+    .btn-save {
+      padding: 9px 18px;
+      background: var(--azul-principal);
+      color: var(--blanco);
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .btn-save:hover { background: var(--azul-medio); }
+    .btn-save:disabled { background: var(--gris-medio); cursor: not-allowed; }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      z-index: 2000;
+      box-shadow: var(--sombra-modal);
+      animation: slideUp 0.3s ease-out;
+    }
+
+    .toast.success { background: var(--verde); color: var(--blanco); }
+    .toast.error { background: var(--rojo); color: var(--blanco); }
+    .toast.info { background: var(--azul-principal); color: var(--blanco); }
+
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .skeleton-row {
+      height: 44px;
+      background: linear-gradient(90deg, var(--gris-claro) 0%, #fafafa 50%, var(--gris-claro) 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-bottom: 1px solid var(--gris-borde);
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    @media (max-width: 768px) {
+      main { padding: 12px; }
+      .controles { flex-direction: column; align-items: stretch; }
+      .control-buscar { width: 100%; }
+      .field-row { grid-template-columns: 1fr; }
+      th, td { padding: 8px 10px; font-size: 12px; }
+      .header-subtitle { display: none; }
+      .modal { max-height: 100vh; border-radius: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ====== LOGIN ====== -->
+  <div id="login-screen">
+    <div class="login-card">
+      <div class="login-logo">RS</div>
+      <h1>F29 Mensual</h1>
+      <p class="subtitle">Ingresa con tu correo de RS Tax & Legal</p>
+
+      <div class="field-group">
+        <label for="login-email">Correo electrónico</label>
+        <input type="email" id="login-email" placeholder="tu.correo@rstaxlegal.cl" autocomplete="email">
+      </div>
+
+      <button class="btn-primary" id="login-btn" onclick="enviarMagicLink()">Enviar link de acceso</button>
+
+      <div class="login-msg" id="login-msg"></div>
+    </div>
+  </div>
+
+  <!-- ====== APP PRINCIPAL ====== -->
+  <div id="main-app" class="hidden">
+    <header>
+      <div class="header-left">
+        <div class="header-logo">RS</div>
+        <div>
+          <div class="header-title">F29</div>
+          <div class="header-subtitle">Declaración mensual · RS Tax & Legal</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="user-info">
+          <div class="user-name" id="user-name">—</div>
+          <div class="user-rol" id="user-rol">—</div>
+        </div>
+        <a href="index.html" class="btn-logout" style="text-decoration:none;display:inline-flex;align-items:center;">← Menú</a>
+        <button class="btn-logout" onclick="cerrarSesion()">Salir</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="resumen" id="resumen"></div>
+
+      <div class="controles">
+        <input
+          type="text"
+          class="control-buscar"
+          id="buscar"
+          placeholder="Buscar por razón social o RUT..."
+          oninput="filtrarYRenderizar()"
+        >
+        <select id="filtro-periodo" onchange="cargarDashboard()">
+          <option value="2026-05">Mayo 2026</option>
+          <option value="2026-06">Junio 2026</option>
+          <option value="2026-07">Julio 2026</option>
+        </select>
+        <select id="filtro-estado" onchange="filtrarYRenderizar()">
+          <option value="">Todos los estados</option>
+          <option value="Sin iniciar">Sin iniciar</option>
+          <option value="Conciliando">Conciliando</option>
+          <option value="Armando F29">Armando F29</option>
+          <option value="Pendiente presentación">Pendiente presentación</option>
+          <option value="Cerrado">Cerrado</option>
+        </select>
+        <select id="filtro-responsable" onchange="filtrarYRenderizar()">
+          <option value="">Todos los responsables</option>
+        </select>
+        <span class="control-count" id="control-count">0 clientes</span>
+      </div>
+
+      <div class="tabla-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>RUT Empresa</th>
+              <th>Estado</th>
+              <th>Responsable</th>
+              <th>Plazo F29</th>
+              <th>Días</th>
+              <th>Compras</th>
+              <th>Ventas</th>
+              <th>Conciliación</th>
+              <th>F29 Armado</th>
+              <th>F29 Presentado</th>
+              <th>Monto</th>
+              <th>Folio</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-body"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- ====== MODAL DE EDICIÓN ====== -->
+  <div id="edit-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title" id="modal-cliente-nombre">—</div>
+          <div class="modal-subtitle" id="modal-cliente-rut">—</div>
+        </div>
+        <button class="modal-close" onclick="cerrarModal()">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="field-group">
+          <label>Responsable</label>
+          <select id="edit-responsable">
+            <option value="">Sin asignar</option>
+          </select>
+        </div>
+
+        <div class="field-grupo-fechas">
+          <div class="grupo-titulo">Hitos del ciclo F29</div>
+          <div class="field-row">
+            <div class="field-group">
+              <label>Compras descargadas</label>
+              <input type="date" id="edit-fecha-compras">
+            </div>
+            <div class="field-group">
+              <label>Ventas descargadas</label>
+              <input type="date" id="edit-fecha-ventas">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field-group">
+              <label>Conciliación lista</label>
+              <input type="date" id="edit-fecha-conciliacion">
+            </div>
+            <div class="field-group">
+              <label>F29 armado</label>
+              <input type="date" id="edit-fecha-armado">
+            </div>
+          </div>
+          <div class="field-group">
+            <label>F29 presentado</label>
+            <input type="date" id="edit-fecha-presentado">
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field-group">
+            <label>Monto a pagar (CLP)</label>
+            <input type="number" id="edit-monto" placeholder="0">
+          </div>
+          <div class="field-group">
+            <label>Folio F29</label>
+            <input type="text" id="edit-folio" placeholder="Folio del SII">
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label>Observaciones</label>
+          <textarea id="edit-observaciones" rows="3" placeholder="Notas del ciclo..."></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn-save" id="btn-save" onclick="guardarCambios()">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // ============================================
+    // CONFIGURACIÓN
+    // ============================================
+    const SUPABASE_URL = 'https://nnwoknmbbxbjzswrkzmw.supabase.co';
+    const SUPABASE_ANON_KEY = 'REEMPLAZAR_CON_TU_ANON_KEY';
+
+    const { createClient } = supabase;
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let estado = {
+      usuario: null,
+      datosUsuario: null,
+      ciclos: [],
+      ciclosFiltrados: [],
+      usuarios: [],
+      cicloEditando: null,
+    };
+
+    // ============================================
+    // INICIALIZACIÓN
+    // ============================================
+    window.addEventListener('DOMContentLoaded', async () => {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) await iniciarSesion(session.user);
+
+      sb.auth.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' && session) await iniciarSesion(session.user);
+        else if (event === 'SIGNED_OUT') mostrarLogin();
+      });
+    });
+
+    // ============================================
+    // AUTH
+    // ============================================
+    async function enviarMagicLink() {
+      const email = document.getElementById('login-email').value.trim().toLowerCase();
+      const msgEl = document.getElementById('login-msg');
+      const btn = document.getElementById('login-btn');
+
+      if (!email || !email.includes('@')) {
+        mostrarMsg(msgEl, 'Ingresa un correo válido.', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+      mostrarMsg(msgEl, 'Verificando autorización...', 'info');
+
+      const { data: usr, error: errUsr } = await sb
+        .from('usuarios')
+        .select('*')
+        .eq('correo', email)
+        .eq('activo', true)
+        .maybeSingle();
+
+      if (errUsr) {
+        console.error(errUsr);
+        mostrarMsg(msgEl, 'Error al validar usuario. Revisa la consola.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Enviar link de acceso';
+        return;
+      }
+
+      if (!usr) {
+        mostrarMsg(msgEl, 'Este correo no está autorizado. Contacta al administrador.', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Enviar link de acceso';
+        return;
+      }
+
+      const { error: errAuth } = await sb.auth.signInWithOtp({
+        email: email,
+        options: { emailRedirectTo: window.location.href }
+      });
+
+      if (errAuth) {
+        console.error(errAuth);
+        mostrarMsg(msgEl, 'Error al enviar el link: ' + errAuth.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Enviar link de acceso';
+        return;
+      }
+
+      mostrarMsg(msgEl, 'Listo. Revisa tu correo (incluida la carpeta de spam) y haz clic en el link de acceso.', 'success');
+      btn.textContent = 'Link enviado';
+    }
+
+    function mostrarMsg(el, texto, tipo) {
+      el.textContent = texto;
+      el.className = 'login-msg ' + tipo;
+    }
+
+    async function iniciarSesion(authUser) {
+      const correo = authUser.email.toLowerCase();
+
+      const { data: usr, error } = await sb
+        .from('usuarios')
+        .select('*')
+        .eq('correo', correo)
+        .eq('activo', true)
+        .maybeSingle();
+
+      if (error || !usr) {
+        await sb.auth.signOut();
+        alert('Tu cuenta no está autorizada. Contacta al administrador.');
+        return;
+      }
+
+      estado.usuario = authUser;
+      estado.datosUsuario = usr;
+
+      document.getElementById('user-name').textContent = usr.nombre;
+      document.getElementById('user-rol').textContent = usr.rol;
+
+      mostrarApp();
+      await cargarUsuarios();
+      await cargarDashboard();
+    }
+
+    async function cerrarSesion() {
+      await sb.auth.signOut();
+      estado = { usuario: null, datosUsuario: null, ciclos: [], ciclosFiltrados: [], usuarios: [], cicloEditando: null };
+      mostrarLogin();
+    }
+
+    function mostrarLogin() {
+      document.getElementById('login-screen').classList.remove('hidden');
+      document.getElementById('main-app').classList.add('hidden');
+    }
+
+    function mostrarApp() {
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('main-app').classList.remove('hidden');
+    }
+
+    // ============================================
+    // CARGA DE DATOS
+    // ============================================
+    async function cargarUsuarios() {
+      const { data, error } = await sb
+        .from('usuarios')
+        .select('id, nombre')
+        .eq('activo', true)
+        .order('nombre');
+
+      if (error) { console.error(error); return; }
+
+      estado.usuarios = data || [];
+
+      const filtroResp = document.getElementById('filtro-responsable');
+      const editResp = document.getElementById('edit-responsable');
+
+      filtroResp.innerHTML = '<option value="">Todos los responsables</option><option value="__SIN_ASIGNAR__">Sin asignar</option>';
+      editResp.innerHTML = '<option value="">Sin asignar</option>';
+
+      estado.usuarios.forEach(u => {
+        filtroResp.innerHTML += `<option value="${u.nombre}">${u.nombre}</option>`;
+        editResp.innerHTML += `<option value="${u.id}">${u.nombre}</option>`;
+      });
+    }
+
+    async function cargarDashboard() {
+      const periodo = document.getElementById('filtro-periodo').value;
+      mostrarSkeleton();
+
+      const { data, error } = await sb
+        .from('v_checklist_f29')
+        .select('*')
+        .eq('periodo', periodo)
+        .order('razon_social');
+
+      if (error) {
+        console.error(error);
+        toast('Error al cargar datos: ' + error.message, 'error');
+        return;
+      }
+
+      estado.ciclos = data || [];
+      filtrarYRenderizar();
+    }
+
+    function mostrarSkeleton() {
+      const tbody = document.getElementById('tabla-body');
+      tbody.innerHTML = '';
+      for (let i = 0; i < 10; i++) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="14"><div class="skeleton-row"></div></td>';
+        tbody.appendChild(tr);
+      }
+    }
+
+    // ============================================
+    // FILTROS Y RENDER
+    // ============================================
+    function filtrarYRenderizar() {
+      const busq = document.getElementById('buscar').value.trim().toLowerCase();
+      const estadoF = document.getElementById('filtro-estado').value;
+      const respF = document.getElementById('filtro-responsable').value;
+
+      estado.ciclosFiltrados = estado.ciclos.filter(c => {
+        if (busq) {
+          const texto = (c.razon_social + ' ' + (c.rut_empresa || '') + ' ' + (c.previred_rut || '')).toLowerCase();
+          if (!texto.includes(busq)) return false;
+        }
+        if (estadoF && c.estado !== estadoF) return false;
+        if (respF === '__SIN_ASIGNAR__') {
+          if (c.responsable) return false;
+        } else if (respF && c.responsable !== respF) return false;
+        return true;
+      });
+
+      renderResumen();
+      renderTabla();
+      document.getElementById('control-count').textContent =
+        `${estado.ciclosFiltrados.length} de ${estado.ciclos.length} clientes`;
+    }
+
+    function renderResumen() {
+      const cards = [
+        { label: 'Total', valor: estado.ciclos.length, clase: '' },
+        { label: 'Sin iniciar', valor: estado.ciclos.filter(c => c.estado === 'Sin iniciar').length, clase: '' },
+        { label: 'En curso', valor: estado.ciclos.filter(c => ['Conciliando', 'Armando F29', 'Pendiente presentación'].includes(c.estado)).length, clase: '' },
+        { label: 'Cerrados', valor: estado.ciclos.filter(c => c.estado === 'Cerrado').length, clase: 'cerrado' },
+        { label: 'Plazo ≤ 5 días', valor: estado.ciclos.filter(c => c.estado !== 'Cerrado' && c.dias_restantes_f29 !== null && c.dias_restantes_f29 <= 5).length, clase: 'urgente' },
+        { label: 'Sin asignar', valor: estado.ciclos.filter(c => !c.responsable).length, clase: '' },
+      ];
+
+      document.getElementById('resumen').innerHTML = cards.map(c =>
+        `<div class="resumen-card ${c.clase}">
+          <div class="resumen-label">${c.label}</div>
+          <div class="resumen-valor">${c.valor}</div>
+        </div>`
+      ).join('');
+    }
+
+    function renderTabla() {
+      const tbody = document.getElementById('tabla-body');
+
+      if (estado.ciclosFiltrados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--gris-medio)">Sin resultados. Ajusta los filtros.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = estado.ciclosFiltrados.map(c => {
+        const diasClase = c.estado === 'Cerrado' ? 'dias-cerrado' :
+          c.dias_restantes_f29 <= 5 ? 'dias-urgente' :
+          c.dias_restantes_f29 <= 10 ? 'dias-cercano' : 'dias-normal';
+
+        const estadoClase = 'badge-' + c.estado.toLowerCase().replace(/ /g, '-');
+
+        return `<tr onclick='abrirModal("${c.ciclo_id}")'>
+          <td><strong>${escapeHtml(c.razon_social)}</strong></td>
+          <td>${escapeHtml(c.rut_empresa || '—')}</td>
+          <td><span class="badge ${estadoClase}">${c.estado}</span></td>
+          <td>${escapeHtml(c.responsable || '—')}</td>
+          <td>${formatFecha(c.plazo_f29)}</td>
+          <td><span class="dias-cell ${diasClase}">${c.dias_restantes_f29}</span></td>
+          <td>${formatFecha(c.fecha_compras_descargadas)}</td>
+          <td>${formatFecha(c.fecha_ventas_descargadas)}</td>
+          <td>${formatFecha(c.fecha_conciliacion_lista)}</td>
+          <td>${formatFecha(c.fecha_f29_armado)}</td>
+          <td>${formatFecha(c.fecha_f29_presentado)}</td>
+          <td>${formatMonto(c.monto_a_pagar)}</td>
+          <td>${escapeHtml(c.folio_f29 || '—')}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // ============================================
+    // MODAL DE EDICIÓN
+    // ============================================
+    function abrirModal(cicloId) {
+      const ciclo = estado.ciclos.find(c => c.ciclo_id === cicloId);
+      if (!ciclo) return;
+
+      estado.cicloEditando = ciclo;
+
+      document.getElementById('modal-cliente-nombre').textContent = ciclo.razon_social;
+
+      const partes = [];
+      if (ciclo.rut_empresa) partes.push('RUT: ' + ciclo.rut_empresa);
+      partes.push('Período ' + ciclo.periodo);
+      partes.push('Plazo F29: día 20');
+      if (ciclo.responsable_default) partes.push('Responsable Previred: ' + ciclo.responsable_default);
+      document.getElementById('modal-cliente-rut').textContent = partes.join(' · ');
+
+      const respUser = estado.usuarios.find(u => u.nombre === ciclo.responsable);
+      document.getElementById('edit-responsable').value = respUser ? respUser.id : '';
+
+      document.getElementById('edit-fecha-compras').value = ciclo.fecha_compras_descargadas || '';
+      document.getElementById('edit-fecha-ventas').value = ciclo.fecha_ventas_descargadas || '';
+      document.getElementById('edit-fecha-conciliacion').value = ciclo.fecha_conciliacion_lista || '';
+      document.getElementById('edit-fecha-armado').value = ciclo.fecha_f29_armado || '';
+      document.getElementById('edit-fecha-presentado').value = ciclo.fecha_f29_presentado || '';
+      document.getElementById('edit-monto').value = ciclo.monto_a_pagar || '';
+      document.getElementById('edit-folio').value = ciclo.folio_f29 || '';
+      document.getElementById('edit-observaciones').value = ciclo.observaciones || '';
+
+      document.getElementById('edit-modal').classList.remove('hidden');
+    }
+
+    function cerrarModal() {
+      document.getElementById('edit-modal').classList.add('hidden');
+      estado.cicloEditando = null;
+    }
+
+    async function guardarCambios() {
+      if (!estado.cicloEditando) return;
+
+      const btn = document.getElementById('btn-save');
+      btn.disabled = true;
+      btn.textContent = 'Guardando...';
+
+      const ciclo = estado.cicloEditando;
+      const respId = document.getElementById('edit-responsable').value || null;
+
+      const updateCiclo = {
+        responsable_id: respId,
+        fecha_compras_descargadas: document.getElementById('edit-fecha-compras').value || null,
+        fecha_ventas_descargadas: document.getElementById('edit-fecha-ventas').value || null,
+        fecha_conciliacion_lista: document.getElementById('edit-fecha-conciliacion').value || null,
+        fecha_f29_armado: document.getElementById('edit-fecha-armado').value || null,
+        fecha_f29_presentado: document.getElementById('edit-fecha-presentado').value || null,
+        monto_a_pagar: document.getElementById('edit-monto').value || null,
+        folio_f29: document.getElementById('edit-folio').value || null,
+        observaciones: document.getElementById('edit-observaciones').value || null,
+      };
+
+      const { error: errCiclo } = await sb
+        .from('ciclo_f29')
+        .update(updateCiclo)
+        .eq('id', ciclo.ciclo_id);
+
+      if (errCiclo) {
+        console.error(errCiclo);
+        toast('Error al guardar ciclo: ' + errCiclo.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Guardar cambios';
+        return;
+      }
+
+      // NOTA: NO se actualiza responsable_default del cliente desde aquí
+      // porque el responsable F29 puede ser distinto al de Previred.
+
+      toast('Cambios guardados', 'success');
+      cerrarModal();
+      await cargarDashboard();
+
+      btn.disabled = false;
+      btn.textContent = 'Guardar cambios';
+    }
+
+    // ============================================
+    // UTILIDADES
+    // ============================================
+    function formatFecha(fechaIso) {
+      if (!fechaIso) return '—';
+      const [y, m, d] = fechaIso.split('-');
+      return `${d}-${m}-${y}`;
+    }
+
+    function formatMonto(monto) {
+      if (monto === null || monto === undefined || monto === '') return '—';
+      return '$' + Number(monto).toLocaleString('es-CL');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function toast(mensaje, tipo = 'info') {
+      const t = document.createElement('div');
+      t.className = 'toast ' + tipo;
+      t.textContent = mensaje;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 3500);
+    }
+  </script>
+</body>
+</html>
