@@ -8,10 +8,6 @@ export type GuardarLiquidacionInput = {
   clienteId: string;
   responsableId: string | null;
   modalidad: string;
-  fechaConsulta: string | null;
-  fechaDetalle: string | null;
-  fechaLiquidaciones: string | null;
-  fechaPrevired: string | null;
   fechaPreviredListoPago: string | null;
   fechaPreviredPagado: string | null;
   monto: string | null;
@@ -21,9 +17,9 @@ export type GuardarLiquidacionInput = {
 };
 
 /**
- * Actualiza el ciclo de liquidaciones y, si cambió, hereda responsable y
- * modalidad al cliente (igual que liquidaciones.html). Auditoría y updated_at
- * los maneja Postgres por trigger; no se tocan acá.
+ * Guarda los campos del modal: responsable, modalidad, fechas de pago y monto.
+ * Los pasos 1-3 (consulta/detalle/liquidaciones) se marcan con checkbox inline
+ * vía `marcarPaso`, no acá. Hereda responsable/modalidad al cliente si cambian.
  */
 export async function guardarLiquidacion(
   input: GuardarLiquidacionInput,
@@ -34,10 +30,6 @@ export async function guardarLiquidacion(
     .from("ciclo_liquidaciones")
     .update({
       responsable_id: input.responsableId,
-      fecha_consulta_enviada: input.fechaConsulta,
-      fecha_detalle_recibido: input.fechaDetalle,
-      fecha_liquidaciones_enviadas: input.fechaLiquidaciones,
-      fecha_previred_presentada: input.fechaPrevired,
       fecha_previred_listo_pago: input.fechaPreviredListoPago,
       fecha_previred_pagado: input.fechaPreviredPagado,
       monto_previred_total: input.monto,
@@ -70,6 +62,39 @@ export async function guardarLiquidacion(
       };
     }
   }
+
+  revalidatePath("/liquidaciones");
+  return { ok: true };
+}
+
+/** Columnas-fecha permitidas para los pasos marcables con checkbox. */
+const COLUMNAS_PASO = new Set([
+  "fecha_consulta_enviada",
+  "fecha_detalle_recibido",
+  "fecha_liquidaciones_enviadas",
+]);
+
+/**
+ * Marca/desmarca un paso del ciclo (checkbox inline en la tabla). Al marcar,
+ * estampa la fecha de hoy en la columna; al desmarcar, la deja en null. El
+ * estado se recalcula solo en la vista.
+ */
+export async function marcarPaso(
+  cicloId: string,
+  columna: string,
+  hecho: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!COLUMNAS_PASO.has(columna)) {
+    return { ok: false, error: "Columna no permitida" };
+  }
+  const supabase = await createClient();
+  const hoy = new Date().toISOString().slice(0, 10);
+  const { error } = await supabase
+    .from("ciclo_liquidaciones")
+    .update({ [columna]: hecho ? hoy : null })
+    .eq("id", cicloId);
+
+  if (error) return { ok: false, error: error.message };
 
   revalidatePath("/liquidaciones");
   return { ok: true };

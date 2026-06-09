@@ -12,12 +12,13 @@ import {
   type LiquidacionRow,
   type UsuarioOpcion,
 } from "@/lib/ciclos";
-import { guardarLiquidacion } from "./actions";
+import { guardarLiquidacion, marcarPaso } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -38,12 +39,18 @@ import {
 const ESTADOS = [
   "Sin iniciar",
   "En espera de detalle",
-  "Procesando liquidaciones",
-  "Pendiente Previred",
-  "Previred enviado",
+  "Envío de liquidaciones",
+  "Envío previred",
   "Previred listo para pago RS",
   "Previred pagado",
 ];
+
+// Pasos marcables con checkbox inline (columna en BD → etiqueta de columna)
+const PASOS = [
+  { columna: "fecha_consulta_enviada", label: "En espera detalle" },
+  { columna: "fecha_detalle_recibido", label: "Envío liquidac." },
+  { columna: "fecha_liquidaciones_enviadas", label: "Envío previred" },
+] satisfies { columna: keyof LiquidacionRow; label: string }[];
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -75,6 +82,7 @@ export function LiquidacionesClient({
   const [respF, setRespF] = useState("");
   const [editando, setEditando] = useState<LiquidacionRow | null>(null);
   const [guardando, startGuardar] = useTransition();
+  const [marcando, startMarcar] = useTransition();
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
@@ -116,6 +124,14 @@ export function LiquidacionesClient({
     },
   ];
 
+  function toggle(cicloId: string, columna: string, hecho: boolean) {
+    startMarcar(async () => {
+      const res = await marcarPaso(cicloId, columna, hecho);
+      if (res.ok) router.refresh();
+      else toast.error(res.error ?? "Error al actualizar");
+    });
+  }
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!editando) return;
@@ -131,10 +147,6 @@ export function LiquidacionesClient({
         clienteId: ciclo.cliente_id,
         responsableId: get("responsable"),
         modalidad: String(fd.get("modalidad") ?? "pago"),
-        fechaConsulta: get("fecha_consulta"),
-        fechaDetalle: get("fecha_detalle"),
-        fechaLiquidaciones: get("fecha_liquidaciones"),
-        fechaPrevired: get("fecha_previred"),
         fechaPreviredListoPago: get("fecha_previred_listo_pago"),
         fechaPreviredPagado: get("fecha_previred_pagado"),
         monto: get("monto"),
@@ -260,10 +272,11 @@ export function LiquidacionesClient({
               <TableHead>Responsable</TableHead>
               <TableHead>Plazo</TableHead>
               <TableHead className="text-center">Días</TableHead>
-              <TableHead>Consulta</TableHead>
-              <TableHead>Detalle</TableHead>
-              <TableHead>Liquidac.</TableHead>
-              <TableHead>Enviado</TableHead>
+              {PASOS.map((p) => (
+                <TableHead key={p.columna} className="text-center">
+                  {p.label}
+                </TableHead>
+              ))}
               <TableHead>Pagado</TableHead>
               <TableHead className="text-right">Monto</TableHead>
             </TableRow>
@@ -272,7 +285,7 @@ export function LiquidacionesClient({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={13}
+                  colSpan={12}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -300,10 +313,7 @@ export function LiquidacionesClient({
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={claseEstado(c.estado)}
-                    >
+                    <Badge variant="outline" className={claseEstado(c.estado)}>
                       {c.estado}
                     </Badge>
                   </TableCell>
@@ -314,17 +324,23 @@ export function LiquidacionesClient({
                   >
                     {c.dias_restantes_previred ?? "—"}
                   </TableCell>
-                  <TableCell>{formatFecha(c.fecha_consulta_enviada)}</TableCell>
-                  <TableCell>{formatFecha(c.fecha_detalle_recibido)}</TableCell>
-                  <TableCell>
-                    {formatFecha(c.fecha_liquidaciones_enviadas)}
-                  </TableCell>
-                  <TableCell>
-                    {formatFecha(c.fecha_previred_presentada)}
-                  </TableCell>
-                  <TableCell>
-                    {formatFecha(c.fecha_previred_pagado)}
-                  </TableCell>
+                  {PASOS.map((p) => (
+                    <TableCell
+                      key={p.columna}
+                      className="text-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Checkbox
+                        checked={c[p.columna] !== null}
+                        disabled={marcando}
+                        onCheckedChange={(v) =>
+                          toggle(c.ciclo_id, p.columna, v === true)
+                        }
+                        aria-label={p.label}
+                      />
+                    </TableCell>
+                  ))}
+                  <TableCell>{formatFecha(c.fecha_previred_pagado)}</TableCell>
                   <TableCell className="text-right">
                     {formatMonto(c.monto_previred_total)}
                   </TableCell>
@@ -362,6 +378,11 @@ export function LiquidacionesClient({
               </DialogDescription>
             </DialogHeader>
 
+            <p className="text-xs text-muted-foreground">
+              Los pasos En espera de detalle · Envío de liquidaciones · Envío
+              previred se marcan con los checkboxes de la tabla.
+            </p>
+
             <form
               id="form-liq"
               onSubmit={onSubmit}
@@ -397,50 +418,24 @@ export function LiquidacionesClient({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="fecha_consulta">Consulta enviada</Label>
-                <Input
-                  id="fecha_consulta"
-                  name="fecha_consulta"
-                  type="date"
-                  defaultValue={editando.fecha_consulta_enviada ?? ""}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="fecha_detalle">Detalle recibido</Label>
-                <Input
-                  id="fecha_detalle"
-                  name="fecha_detalle"
-                  type="date"
-                  defaultValue={editando.fecha_detalle_recibido ?? ""}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="fecha_liquidaciones">Liquidac. enviadas</Label>
-                <Input
-                  id="fecha_liquidaciones"
-                  name="fecha_liquidaciones"
-                  type="date"
-                  defaultValue={editando.fecha_liquidaciones_enviadas ?? ""}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="fecha_previred">Previred enviado</Label>
-                <Input
-                  id="fecha_previred"
-                  name="fecha_previred"
-                  type="date"
-                  defaultValue={editando.fecha_previred_presentada ?? ""}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
                 <Label htmlFor="fecha_previred_listo_pago">
-                  Listo para pago RS
+                  Previred listo para pago RS
                 </Label>
                 <Input
                   id="fecha_previred_listo_pago"
                   name="fecha_previred_listo_pago"
                   type="date"
                   defaultValue={editando.fecha_previred_listo_pago ?? ""}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="monto">Monto de pago</Label>
+                <Input
+                  id="monto"
+                  name="monto"
+                  type="number"
+                  inputMode="numeric"
+                  defaultValue={editando.monto_previred_total ?? ""}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -452,16 +447,7 @@ export function LiquidacionesClient({
                   defaultValue={editando.fecha_previred_pagado ?? ""}
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="monto">Monto Previred total</Label>
-                <Input
-                  id="monto"
-                  name="monto"
-                  type="number"
-                  inputMode="numeric"
-                  defaultValue={editando.monto_previred_total ?? ""}
-                />
-              </div>
+
               <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="observaciones">Observaciones</Label>
                 <Textarea
