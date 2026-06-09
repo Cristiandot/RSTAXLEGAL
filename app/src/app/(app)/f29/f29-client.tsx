@@ -1,0 +1,442 @@
+"use client";
+
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Search, CheckCircle2, AlertTriangle } from "lucide-react";
+import { formatFecha, formatMonto } from "@/lib/format";
+import { opcionesPeriodo } from "@/lib/periodos";
+import {
+  claseDias,
+  claseEstado,
+  type F29Row,
+  type UsuarioOpcion,
+} from "@/lib/ciclos";
+import { guardarF29 } from "./actions";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+const ESTADOS = ["Sin iniciar", "Pendiente presentación", "Cerrado"];
+
+const selectCls =
+  "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+function ResumenCard({ label, valor }: { label: string; valor: number }) {
+  return (
+    <div className="card-soft rounded-xl bg-card px-4 py-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-0.5 text-2xl font-semibold">{valor}</div>
+    </div>
+  );
+}
+
+export function F29Client({
+  periodo,
+  filas,
+  usuarios,
+  errorCarga,
+}: {
+  periodo: string;
+  filas: F29Row[];
+  usuarios: UsuarioOpcion[];
+  errorCarga: string | null;
+}) {
+  const router = useRouter();
+  const [buscar, setBuscar] = useState("");
+  const [estadoF, setEstadoF] = useState("");
+  const [concilF, setConcilF] = useState("");
+  const [respF, setRespF] = useState("");
+  const [editando, setEditando] = useState<F29Row | null>(null);
+  const [guardando, startGuardar] = useTransition();
+
+  const filtradas = useMemo(() => {
+    const q = buscar.trim().toLowerCase();
+    return filas.filter((c) => {
+      if (q) {
+        const t = `${c.razon_social} ${c.rut_empresa ?? ""}`.toLowerCase();
+        if (!t.includes(q)) return false;
+      }
+      if (estadoF && c.estado !== estadoF) return false;
+      if (concilF === "ok" && !c.conciliacion_ok) return false;
+      if (concilF === "no" && c.conciliacion_ok) return false;
+      if (respF && c.responsable !== respF) return false;
+      return true;
+    });
+  }, [filas, buscar, estadoF, concilF, respF]);
+
+  const resumen = [
+    { label: "Total", valor: filas.length },
+    {
+      label: "Sin iniciar",
+      valor: filas.filter((c) => c.estado === "Sin iniciar").length,
+    },
+    {
+      label: "Por presentar",
+      valor: filas.filter((c) => c.estado === "Pendiente presentación").length,
+    },
+    {
+      label: "Cerrados",
+      valor: filas.filter((c) => c.estado === "Cerrado").length,
+    },
+    {
+      label: "Plazo ≤ 5 días",
+      valor: filas.filter(
+        (c) =>
+          c.estado !== "Cerrado" &&
+          c.dias_restantes_f29 !== null &&
+          c.dias_restantes_f29 <= 5,
+      ).length,
+    },
+  ];
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editando) return;
+    const fd = new FormData(e.currentTarget);
+    const get = (k: string) => {
+      const v = fd.get(k);
+      return v === null || v === "" ? null : String(v);
+    };
+    const ciclo = editando;
+    startGuardar(async () => {
+      const res = await guardarF29({
+        cicloId: ciclo.ciclo_id,
+        responsableId: get("responsable"),
+        fechaArmado: get("fecha_armado"),
+        fechaPresentado: get("fecha_presentado"),
+        monto: get("monto"),
+        folio: get("folio"),
+        observaciones: get("observaciones"),
+      });
+      if (res.ok) {
+        toast.success("Cambios guardados");
+        setEditando(null);
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Error al guardar");
+      }
+    });
+  }
+
+  const respDefault = editando
+    ? (usuarios.find((u) => u.nombre === editando.responsable)?.id ?? "")
+    : "";
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+          F29
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Armado y presentación mensual del F29. Plazo uniforme: día 20.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {resumen.map((r) => (
+          <ResumenCard key={r.label} label={r.label} valor={r.valor} />
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          aria-label="Período"
+          className={selectCls}
+          value={periodo}
+          onChange={(e) => router.push(`/f29?periodo=${e.target.value}`)}
+        >
+          {opcionesPeriodo().map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+
+        <div className="relative">
+          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar cliente o RUT…"
+            className="h-9 w-56 bg-card pl-8"
+            value={buscar}
+            onChange={(e) => setBuscar(e.target.value)}
+          />
+        </div>
+
+        <select
+          aria-label="Estado"
+          className={selectCls}
+          value={estadoF}
+          onChange={(e) => setEstadoF(e.target.value)}
+        >
+          <option value="">Todos los estados</option>
+          {ESTADOS.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+
+        <select
+          aria-label="Conciliación"
+          className={selectCls}
+          value={concilF}
+          onChange={(e) => setConcilF(e.target.value)}
+        >
+          <option value="">Concil: todos</option>
+          <option value="ok">Concil OK</option>
+          <option value="no">Sin conciliar aún</option>
+        </select>
+
+        <select
+          aria-label="Responsable"
+          className={selectCls}
+          value={respF}
+          onChange={(e) => setRespF(e.target.value)}
+        >
+          <option value="">Todos los responsables</option>
+          {usuarios.map((u) => (
+            <option key={u.id} value={u.nombre}>
+              {u.nombre}
+            </option>
+          ))}
+        </select>
+
+        <span className="ml-auto text-sm text-muted-foreground">
+          {filtradas.length} de {filas.length} clientes
+        </span>
+      </div>
+
+      {errorCarga ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          Error al cargar: {errorCarga}
+        </div>
+      ) : null}
+
+      <div className="card-soft overflow-x-auto rounded-xl bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-[220px]">Cliente</TableHead>
+              <TableHead>RUT</TableHead>
+              <TableHead>Conciliación</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Responsable</TableHead>
+              <TableHead>Plazo</TableHead>
+              <TableHead className="text-center">Días</TableHead>
+              <TableHead>Armado</TableHead>
+              <TableHead>Presentado</TableHead>
+              <TableHead className="text-right">Monto</TableHead>
+              <TableHead>Folio</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtradas.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={11}
+                  className="py-10 text-center text-muted-foreground"
+                >
+                  Sin resultados para este período y filtros.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtradas.map((c) => (
+                <TableRow
+                  key={c.ciclo_id}
+                  onClick={() => setEditando(c)}
+                  className="cursor-pointer"
+                >
+                  <TableCell className="font-medium">
+                    <span
+                      className="block max-w-[220px] truncate"
+                      title={c.razon_social}
+                    >
+                      {c.razon_social}
+                    </span>
+                  </TableCell>
+                  <TableCell>{c.rut_empresa ?? "—"}</TableCell>
+                  <TableCell>
+                    {c.conciliacion_ok ? (
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-200 bg-emerald-50 text-emerald-700"
+                      >
+                        OK
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="border-amber-200 bg-amber-50 text-amber-700"
+                      >
+                        Pendiente
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={claseEstado(c.estado)}>
+                      {c.estado}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{c.responsable ?? "—"}</TableCell>
+                  <TableCell>{formatFecha(c.plazo_f29)}</TableCell>
+                  <TableCell
+                    className={`text-center ${claseDias(c.estado, c.dias_restantes_f29)}`}
+                  >
+                    {c.dias_restantes_f29 ?? "—"}
+                  </TableCell>
+                  <TableCell>{formatFecha(c.fecha_f29_armado)}</TableCell>
+                  <TableCell>{formatFecha(c.fecha_f29_presentado)}</TableCell>
+                  <TableCell className="text-right">
+                    {formatMonto(c.monto_a_pagar)}
+                  </TableCell>
+                  <TableCell>{c.folio_f29 ?? "—"}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <Dialog
+        open={editando !== null}
+        onOpenChange={(o) => {
+          if (!o) setEditando(null);
+        }}
+      >
+        {editando ? (
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="font-heading">
+                {editando.razon_social}
+              </DialogTitle>
+              <DialogDescription>
+                {[
+                  editando.rut_empresa ? `RUT: ${editando.rut_empresa}` : null,
+                  `Período ${editando.periodo}`,
+                  "Plazo F29: día 20",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </DialogDescription>
+            </DialogHeader>
+
+            {editando.conciliacion_ok ? (
+              <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-sm text-emerald-700">
+                <CheckCircle2 className="size-4 shrink-0" />
+                Conciliación de Compras y Ventas: OK para este período.
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-700">
+                <AlertTriangle className="size-4 shrink-0" />
+                Conciliación pendiente. Verifica con Solange antes de armar el
+                F29.
+              </div>
+            )}
+
+            <form
+              id="form-f29"
+              onSubmit={onSubmit}
+              className="grid grid-cols-2 gap-3"
+            >
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="responsable">Responsable</Label>
+                <select
+                  id="responsable"
+                  name="responsable"
+                  className={selectCls}
+                  defaultValue={respDefault}
+                >
+                  <option value="">Sin asignar</option>
+                  {usuarios.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="fecha_armado">F29 armado</Label>
+                <Input
+                  id="fecha_armado"
+                  name="fecha_armado"
+                  type="date"
+                  defaultValue={editando.fecha_f29_armado ?? ""}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="fecha_presentado">F29 presentado</Label>
+                <Input
+                  id="fecha_presentado"
+                  name="fecha_presentado"
+                  type="date"
+                  defaultValue={editando.fecha_f29_presentado ?? ""}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="monto">Monto a pagar</Label>
+                <Input
+                  id="monto"
+                  name="monto"
+                  type="number"
+                  inputMode="numeric"
+                  defaultValue={editando.monto_a_pagar ?? ""}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="folio">Folio F29</Label>
+                <Input
+                  id="folio"
+                  name="folio"
+                  defaultValue={editando.folio_f29 ?? ""}
+                />
+              </div>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="observaciones">Observaciones</Label>
+                <Textarea
+                  id="observaciones"
+                  name="observaciones"
+                  rows={2}
+                  defaultValue={editando.observaciones ?? ""}
+                />
+              </div>
+            </form>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditando(null)}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" form="form-f29" disabled={guardando}>
+                {guardando ? "Guardando…" : "Guardar cambios"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
+    </div>
+  );
+}
