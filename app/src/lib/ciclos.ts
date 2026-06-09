@@ -21,6 +21,8 @@ export type LiquidacionRow = {
   fecha_detalle_recibido: string | null;
   fecha_liquidaciones_enviadas: string | null;
   fecha_previred_presentada: string | null;
+  fecha_previred_listo_pago: string | null;
+  fecha_previred_pagado: string | null;
   monto_previred_total: number | string | null;
   observaciones: string | null;
 };
@@ -47,11 +49,13 @@ export type F29Row = {
 export function claseEstado(estado: string): string {
   switch (estado) {
     case "Cerrado":
+    case "Previred pagado":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "Sin iniciar":
       return "border-slate-200 bg-slate-100 text-slate-600";
     case "Pendiente Previred":
     case "Pendiente presentación":
+    case "Previred listo para pago RS":
       return "border-amber-200 bg-amber-50 text-amber-700";
     default:
       return "border-sky-200 bg-sky-50 text-sky-700";
@@ -60,7 +64,8 @@ export function claseEstado(estado: string): string {
 
 /** Clase de color para la celda de días restantes. */
 export function claseDias(estado: string, dias: number | null): string {
-  if (estado === "Cerrado") return "text-muted-foreground";
+  if (estado === "Cerrado" || estado === "Previred pagado")
+    return "text-muted-foreground";
   if (dias === null) return "text-muted-foreground";
   if (dias <= 5) return "font-semibold text-red-600";
   if (dias <= 10) return "font-medium text-amber-600";

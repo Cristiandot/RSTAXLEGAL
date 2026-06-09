@@ -12,6 +12,8 @@ export type GuardarLiquidacionInput = {
   fechaDetalle: string | null;
   fechaLiquidaciones: string | null;
   fechaPrevired: string | null;
+  fechaPreviredListoPago: string | null;
+  fechaPreviredPagado: string | null;
   monto: string | null;
   observaciones: string | null;
   origResponsableDefaultId: string | null;
@@ -36,6 +38,8 @@ export async function guardarLiquidacion(
       fecha_detalle_recibido: input.fechaDetalle,
       fecha_liquidaciones_enviadas: input.fechaLiquidaciones,
       fecha_previred_presentada: input.fechaPrevired,
+      fecha_previred_listo_pago: input.fechaPreviredListoPago,
+      fecha_previred_pagado: input.fechaPreviredPagado,
       monto_previred_total: input.monto,
       observaciones: input.observaciones,
     })

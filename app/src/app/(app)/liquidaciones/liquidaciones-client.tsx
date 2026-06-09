@@ -40,7 +40,9 @@ const ESTADOS = [
   "En espera de detalle",
   "Procesando liquidaciones",
   "Pendiente Previred",
-  "Cerrado",
+  "Previred enviado",
+  "Previred listo para pago RS",
+  "Previred pagado",
 ];
 
 const selectCls =
@@ -95,24 +97,19 @@ export function LiquidacionesClient({
       valor: filas.filter((c) => c.estado === "Sin iniciar").length,
     },
     {
-      label: "En curso",
-      valor: filas.filter((c) =>
-        [
-          "En espera de detalle",
-          "Procesando liquidaciones",
-          "Pendiente Previred",
-        ].includes(c.estado),
-      ).length,
+      label: "Listo p/ pago RS",
+      valor: filas.filter((c) => c.estado === "Previred listo para pago RS")
+        .length,
     },
     {
-      label: "Cerrados",
-      valor: filas.filter((c) => c.estado === "Cerrado").length,
+      label: "Pagados",
+      valor: filas.filter((c) => c.estado === "Previred pagado").length,
     },
     {
       label: "Plazo ≤ 5 días",
       valor: filas.filter(
         (c) =>
-          c.estado !== "Cerrado" &&
+          c.estado !== "Previred pagado" &&
           c.dias_restantes_previred !== null &&
           c.dias_restantes_previred <= 5,
       ).length,
@@ -138,6 +135,8 @@ export function LiquidacionesClient({
         fechaDetalle: get("fecha_detalle"),
         fechaLiquidaciones: get("fecha_liquidaciones"),
         fechaPrevired: get("fecha_previred"),
+        fechaPreviredListoPago: get("fecha_previred_listo_pago"),
+        fechaPreviredPagado: get("fecha_previred_pagado"),
         monto: get("monto"),
         observaciones: get("observaciones"),
         origResponsableDefaultId: ciclo.responsable_default_id,
@@ -264,7 +263,8 @@ export function LiquidacionesClient({
               <TableHead>Consulta</TableHead>
               <TableHead>Detalle</TableHead>
               <TableHead>Liquidac.</TableHead>
-              <TableHead>Previred</TableHead>
+              <TableHead>Enviado</TableHead>
+              <TableHead>Pagado</TableHead>
               <TableHead className="text-right">Monto</TableHead>
             </TableRow>
           </TableHeader>
@@ -272,7 +272,7 @@ export function LiquidacionesClient({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={12}
+                  colSpan={13}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -321,6 +321,9 @@ export function LiquidacionesClient({
                   </TableCell>
                   <TableCell>
                     {formatFecha(c.fecha_previred_presentada)}
+                  </TableCell>
+                  <TableCell>
+                    {formatFecha(c.fecha_previred_pagado)}
                   </TableCell>
                   <TableCell className="text-right">
                     {formatMonto(c.monto_previred_total)}
@@ -421,12 +424,32 @@ export function LiquidacionesClient({
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="fecha_previred">Previred presentada</Label>
+                <Label htmlFor="fecha_previred">Previred enviado</Label>
                 <Input
                   id="fecha_previred"
                   name="fecha_previred"
                   type="date"
                   defaultValue={editando.fecha_previred_presentada ?? ""}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="fecha_previred_listo_pago">
+                  Listo para pago RS
+                </Label>
+                <Input
+                  id="fecha_previred_listo_pago"
+                  name="fecha_previred_listo_pago"
+                  type="date"
+                  defaultValue={editando.fecha_previred_listo_pago ?? ""}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="fecha_previred_pagado">Previred pagado</Label>
+                <Input
+                  id="fecha_previred_pagado"
+                  name="fecha_previred_pagado"
+                  type="date"
+                  defaultValue={editando.fecha_previred_pagado ?? ""}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
