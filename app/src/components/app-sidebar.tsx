@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronsUpDown, LogOut, Scale } from "lucide-react";
+import { ChevronsUpDown, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { modulosVisibles, type Rol } from "@/lib/modules";
 import {
@@ -59,15 +60,21 @@ export function AppSidebar({ usuario }: { usuario: UsuarioSesion }) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href="/" />}>
-              <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                <Scale className="size-4" />
-              </div>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">RS Tax &amp; Legal</span>
-                <span className="truncate text-xs text-muted-foreground">
-                  Panel operativo
-                </span>
-              </div>
+              <Image
+                src="/logo-oscuro.png"
+                alt="Rodríguez Samith Tax & Legal"
+                width={170}
+                height={48}
+                priority
+                className="h-8 w-auto object-contain object-left group-data-[collapsible=icon]:hidden"
+              />
+              <Image
+                src="/logo-icono-blanco.png"
+                alt=""
+                width={24}
+                height={20}
+                className="hidden size-6 shrink-0 object-contain group-data-[collapsible=icon]:block"
+              />
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
