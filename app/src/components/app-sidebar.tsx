@@ -56,28 +56,27 @@ export function AppSidebar({ usuario }: { usuario: UsuarioSesion }) {
 
   return (
     <Sidebar collapsible="icon" variant="floating">
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<Link href="/" />}>
-              <Image
-                src="/logo-oscuro.png"
-                alt="Rodríguez Samith Tax & Legal"
-                width={170}
-                height={48}
-                priority
-                className="h-8 w-auto object-contain object-left group-data-[collapsible=icon]:hidden"
-              />
-              <Image
-                src="/logo-icono-blanco.png"
-                alt=""
-                width={24}
-                height={20}
-                className="hidden size-6 shrink-0 object-contain group-data-[collapsible=icon]:block"
-              />
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      <SidebarHeader className="p-2">
+        <Link
+          href="/"
+          className="flex items-center justify-center rounded-md px-2 py-2 group-data-[collapsible=icon]:px-0"
+        >
+          <Image
+            src="/logo-oscuro.png"
+            alt="Rodríguez Samith Tax & Legal"
+            width={210}
+            height={60}
+            priority
+            className="h-12 w-auto object-contain group-data-[collapsible=icon]:hidden"
+          />
+          <Image
+            src="/logo-icono-blanco.png"
+            alt="Rodríguez Samith Tax & Legal"
+            width={32}
+            height={27}
+            className="hidden size-8 shrink-0 object-contain group-data-[collapsible=icon]:block"
+          />
+        </Link>
       </SidebarHeader>
 
       <SidebarContent>
