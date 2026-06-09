@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { supabaseUrl, supabasePublishableKey } from "./config";
 
 /**
  * Refresca la sesión Supabase en cada request y protege rutas.
@@ -8,10 +9,7 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  const supabase = createServerClient(supabaseUrl, supabasePublishableKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
