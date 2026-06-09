@@ -57,10 +57,12 @@ Cambios de IVA recuperable a no recuperable (solo profesionales de salud): tabla
 
 ## Infraestructura
 
-- **Supabase:** proyecto `nnwoknmbbxbjzswrkzmw` (plan Free, Postgres 17, us-east-1).
-- **GitHub:** `Cristiandot/RSTAXLEGAL`.
-- **Vercel:** https://rstaxlegal-k3dl.vercel.app — auto-deploy desde `main`. Todo push a `main` queda en producción.
-- **Auth:** magic link de Supabase; Site URL y redirects ya configurados.
+- **Supabase:** proyecto `nnwoknmbbxbjzswrkzmw` (plan Free, Postgres 17, us-east-1). Nota: el plan Free pausa el proyecto tras ~1 semana de inactividad — a futuro evaluar Pro (US$25) para producción.
+- **GitHub:** `Cristiandot/RSTAXLEGAL`. Todo push a `main` redespliega AMBOS proyectos Vercel.
+- **Vercel — sitio HTML (legacy):** proyecto `rstaxlegal-k3dl`, https://rstaxlegal-k3dl.vercel.app — sirve la RAÍZ del repo (los 4 HTML). Sigue siendo producción para Conciliación hasta que se migre.
+- **Vercel — app Next (nuevo):** proyecto `rstaxlegal-panel`, https://rstaxlegal-panel.vercel.app — **Root Directory = `app`**, Framework Preset = Next.js. Es el panel nuevo (login + Liquidaciones + F29). Variables de entorno opcionales (la app tiene fallback público en `app/src/lib/supabase/config.ts`).
+- **Auth / correos:** magic link de Supabase con **SMTP propio = Resend** (`smtp.resend.com`, user `resend`, password = API key). Sender actual `onboarding@resend.dev` (dominio de prueba) → **solo entrega a `clopez@rstaxlegal.cl`**. ⚠️ PENDIENTE: verificar el dominio `rstaxlegal.cl` en Resend (registros DNS SPF/DKIM) y cambiar el Sender a `notificaciones@rstaxlegal.cl` para habilitar a TODO el equipo. (El correo incorporado de Supabase NO sirve para producción — rate limit; aplica igual en Free y Pro.)
+- **Redirect URLs (Supabase Auth):** deben incluir `https://rstaxlegal-panel.vercel.app/**`, `https://rstaxlegal-k3dl.vercel.app/**` y `http://localhost:3000/**`. El **Site URL** sigue siendo el sitio viejo (`k3dl`); por eso, para aterrizar en el panel nuevo hay que **pedir el magic link DESDE la URL del panel** (si no, Supabase cae al Site URL = sitio viejo).
 
 ## Backend (Supabase)
 
