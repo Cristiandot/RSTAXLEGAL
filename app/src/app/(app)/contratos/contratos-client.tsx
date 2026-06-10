@@ -4,10 +4,11 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ClipboardCopy, Download, FilePlus2, Link2, Search } from "lucide-react";
+import { ClipboardCopy, Download, FilePlus2, Link2, Search, Send } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import {
   cambiarEstadoContrato,
+  enviarContratoAlCliente,
   generarContrato,
   linkDescargaContrato,
 } from "./actions";
@@ -141,6 +142,17 @@ export function ContratosClient({
     });
   }
 
+  function enviarAlCliente(f: ContratoRow) {
+    if (!window.confirm(`¿Enviar el contrato de ${f.trabajador} al correo asignado de ${f.empresa}?`)) return;
+    startAccion(async () => {
+      const res = await enviarContratoAlCliente(f.id);
+      if (res.ok) {
+        toast.success(`Contrato enviado a ${res.enviadoA}`);
+        router.refresh();
+      } else toast.error(res.error ?? "Error al enviar");
+    });
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -270,9 +282,15 @@ export function ContratosClient({
                         </Button>
                       ) : null}
                       {f.estado === "aprobado" ? (
-                        <Button size="sm" variant="outline" disabled={ocupado} onClick={() => avanzar(f.id, "enviado")}>
-                          Marcar enviado
-                        </Button>
+                        <>
+                          <Button size="sm" disabled={ocupado} onClick={() => enviarAlCliente(f)}>
+                            <Send className="size-3.5" />
+                            Enviar al cliente
+                          </Button>
+                          <Button size="sm" variant="ghost" disabled={ocupado} onClick={() => avanzar(f.id, "enviado")} title="Marcar como enviado sin mandar correo (si lo enviaste a mano)">
+                            Marcar enviado
+                          </Button>
+                        </>
                       ) : null}
                       {f.estado !== "enviado" && f.estado !== "anulado" ? (
                         <Button size="sm" variant="ghost" className="text-destructive" disabled={ocupado} onClick={() => avanzar(f.id, "anulado")}>

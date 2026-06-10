@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { generarYSubirContrato } from "@/lib/contrato-generacion";
+import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
 
 const TRANSICIONES: Record<string, string[]> = {
   solicitado: ["generado", "anulado"],
@@ -50,6 +51,71 @@ export async function generarContrato(
   if (!res.ok) return { ok: false, error: res.error };
   revalidatePath("/contratos");
   return { ok: true };
+}
+
+/**
+ * Envía el contrato APROBADO al correo asignado de la empresa, con el .docx
+ * adjunto, y lo marca como enviado (con trazabilidad de destino y fecha).
+ */
+export async function enviarContratoAlCliente(
+  contratoId: string,
+): Promise<{ ok: boolean; error?: string; enviadoA?: string }> {
+  const supabase = await createClient();
+
+  const { data: con } = await supabase
+    .from("contratos")
+    .select(
+      "id, estado, documento_path, tipo_documento, clientes(razon_social, correo_empresa), trabajadores(nombres, apellidos)",
+    )
+    .eq("id", contratoId)
+    .single();
+  if (!con) return { ok: false, error: "Contrato no encontrado." };
+  if (con.estado !== "aprobado") {
+    return { ok: false, error: "Solo se puede enviar un contrato APROBADO (revísalo y apruébalo primero)." };
+  }
+  if (!con.documento_path) {
+    return { ok: false, error: "Este contrato no tiene documento generado." };
+  }
+
+  const cli = con.clientes as unknown as { razon_social: string; correo_empresa: string | null } | null;
+  const t = con.trabajadores as unknown as { nombres: string; apellidos: string } | null;
+  if (!cli?.correo_empresa) {
+    return { ok: false, error: `La empresa ${cli?.razon_social ?? ""} no tiene correo asignado. Cárgalo en sus datos primero.` };
+  }
+
+  const { data: archivo, error: errDl } = await supabase.storage
+    .from("contratos")
+    .download(con.documento_path);
+  if (errDl || !archivo) {
+    return { ok: false, error: `No se pudo leer el documento: ${errDl?.message}` };
+  }
+  const base64 = Buffer.from(await archivo.arrayBuffer()).toString("base64");
+
+  const trabajador = t ? `${t.nombres} ${t.apellidos}` : "trabajador";
+  const res = await enviarCorreo({
+    para: cli.correo_empresa,
+    asunto: `Contrato de trabajo — ${trabajador} · ${cli.razon_social}`,
+    html: htmlCorreoDocumento({
+      titulo: "Contrato de trabajo listo",
+      cuerpo: `<p>Estimado cliente:</p>
+<p>Adjuntamos el contrato de trabajo de <strong>${trabajador}</strong>, revisado y aprobado por nuestro equipo.</p>
+<p>Por favor imprímelo en dos ejemplares, fírmenlo ambas partes y conserva uno en la carpeta del trabajador. Cualquier ajuste que necesites, responde a este correo o contacta a tu ejecutivo.</p>`,
+    }),
+    adjuntos: [{ filename: `Contrato - ${trabajador}.docx`, content: base64 }],
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+
+  await supabase
+    .from("contratos")
+    .update({
+      estado: "enviado",
+      enviado_a: cli.correo_empresa,
+      enviado_fecha: new Date().toISOString(),
+    })
+    .eq("id", contratoId);
+
+  revalidatePath("/contratos");
+  return { ok: true, enviadoA: cli.correo_empresa };
 }
 
 /** Genera un link firmado (1 hora) para descargar el documento. */
