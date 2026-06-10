@@ -3,6 +3,7 @@ import {
   GitCompareArrows,
   FileText,
   FilePlus2,
+  Inbox,
   Building2,
   Users,
   Table2,
@@ -82,6 +83,15 @@ export const MODULOS: SeccionModulos[] = [
           "Solicitud, generación desde plantilla aprobada y revisión de contratos de trabajo.",
         href: "/contratos",
         icon: FilePlus2,
+        estado: "activo",
+      },
+      {
+        key: "gestiones",
+        label: "Gestiones RRHH",
+        descripcion:
+          "Amonestaciones, finiquitos y vacaciones solicitadas por los clientes desde su portal.",
+        href: "/gestiones",
+        icon: Inbox,
         estado: "activo",
       },
     ],

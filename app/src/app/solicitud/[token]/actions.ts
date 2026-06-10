@@ -65,3 +65,81 @@ export async function enviarSolicitud(
   }
   return { ok: true };
 }
+
+export type GestionInput = {
+  tipo: "amonestacion" | "finiquito" | "vacaciones";
+  nombres: string;
+  apellidos: string;
+  rut: string;
+  correo_contacto: string;
+  observaciones: string;
+  datos: Record<string, string>;
+};
+
+/**
+ * Gestiones RRHH desde el portal del cliente (amonestación, finiquito,
+ * vacaciones). Solo solicitud de datos: el equipo revisa, aprueba y envía el
+ * resultado al correo de contacto. Inserta vía SECURITY DEFINER con token.
+ */
+export async function enviarGestion(
+  token: string,
+  g: GestionInput,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!g.nombres.trim() || !g.apellidos.trim()) {
+    return { ok: false, error: "Nombres y apellidos del trabajador son obligatorios." };
+  }
+  if (!validarRut(g.rut)) {
+    return { ok: false, error: "El RUT del trabajador no es válido (revisa el dígito verificador)." };
+  }
+  if (!g.correo_contacto.trim() || !g.correo_contacto.includes("@")) {
+    return { ok: false, error: "Indica un correo válido para enviarte el resultado." };
+  }
+
+  if (g.tipo === "amonestacion") {
+    if (!g.datos.fecha_hechos) return { ok: false, error: "Indica la fecha de los hechos." };
+    if (!g.datos.descripcion?.trim()) {
+      return { ok: false, error: "Describe los hechos que motivan la amonestación." };
+    }
+  }
+  if (g.tipo === "finiquito") {
+    if (!g.datos.fecha_ingreso) return { ok: false, error: "Indica la fecha de ingreso del trabajador." };
+    if (!g.datos.fecha_termino) return { ok: false, error: "Indica el último día trabajado (o fecha de término prevista)." };
+    if (!g.datos.causal) return { ok: false, error: "Indica la causal de término." };
+    if (!g.datos.sueldo_base || Number(g.datos.sueldo_base) <= 0) {
+      return { ok: false, error: "Indica el sueldo base actual." };
+    }
+    if (g.datos.vacaciones_dias_tomados === "" || g.datos.vacaciones_dias_tomados === undefined) {
+      return { ok: false, error: "Indica cuántos días de vacaciones se ha tomado (0 si ninguno)." };
+    }
+  }
+  if (g.tipo === "vacaciones") {
+    if (!g.datos.fecha_inicio) return { ok: false, error: "Indica la fecha de inicio de las vacaciones." };
+    if (!g.datos.fecha_regreso) return { ok: false, error: "Indica la fecha de regreso al trabajo." };
+    if (!g.datos.dias_habiles || Number(g.datos.dias_habiles) <= 0) {
+      return { ok: false, error: "Indica los días hábiles solicitados." };
+    }
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("crear_gestion_rrhh", {
+    p_token: token,
+    p: {
+      tipo: g.tipo,
+      nombres: g.nombres.trim(),
+      apellidos: g.apellidos.trim(),
+      rut: g.rut.trim(),
+      correo_contacto: g.correo_contacto.trim(),
+      observaciones: g.observaciones,
+      datos: g.datos,
+    },
+  });
+  if (error) {
+    return {
+      ok: false,
+      error: error.message.includes("inválido")
+        ? "Este link de solicitud no es válido. Contacta a RS Tax & Legal."
+        : `No se pudo enviar la solicitud: ${error.message}`,
+    };
+  }
+  return { ok: true };
+}

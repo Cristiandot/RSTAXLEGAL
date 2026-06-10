@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, ClipboardCopy, ListChecks } from "lucide-react";
-import { enviarSolicitud } from "./actions";
+import { enviarSolicitud, enviarGestion } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +33,16 @@ const selectCls =
 
 const AFPS = ["AFP Capital", "AFP Cuprum", "AFP Habitat", "AFP Modelo", "AFP PlanVital", "AFP Provida", "AFP Uno"];
 const ESTADOS_CIVILES = ["Soltero(a)", "Casado(a)", "Divorciado(a)", "Viudo(a)", "Conviviente civil"];
+
+type TipoGestion = "contrato" | "anexo" | "amonestacion" | "finiquito" | "vacaciones";
+
+const GESTIONES: { value: TipoGestion; label: string }[] = [
+  { value: "contrato", label: "Contrato nuevo (trabajador que se incorpora)" },
+  { value: "anexo", label: "Anexo de contrato (modificación o renovación)" },
+  { value: "amonestacion", label: "Carta de amonestación" },
+  { value: "finiquito", label: "Finiquito / cálculo de despido" },
+  { value: "vacaciones", label: "Papeleta de vacaciones" },
+];
 
 function Campo({ label, children, span2 = false }: { label: string; children: React.ReactNode; span2?: boolean }) {
   return (
@@ -114,8 +124,9 @@ function NotaMinimos() {
 export function SolicitudForm({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
   const [enviando, startEnviar] = useTransition();
   const [enviada, setEnviada] = useState(false);
-  const [tipoSolicitud, setTipoSolicitud] = useState<"contrato" | "anexo">("contrato");
+  const [gestion, setGestion] = useState<TipoGestion>("contrato");
   const [anexoTipo, setAnexoTipo] = useState("renovacion_fijo_a_fijo");
+  const [causal, setCausal] = useState("");
 
   const cargos = useMemo(() => [...new Set(empresa.opciones.map((o) => o.cargo))], [empresa]);
   const [cargo, setCargo] = useState(cargos[0] ?? "");
@@ -130,7 +141,6 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
   const [paisExtranjero, setPaisExtranjero] = useState("");
   const esExtranjero = tipoNacionalidad === "extranjera";
 
-  // Tipos de contrato realmente disponibles para cargo × jornada × nacionalidad
   const nacBuscada = esExtranjero ? "extranjero" : "chileno";
   const opcionesCombo = useMemo(
     () =>
@@ -151,57 +161,98 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
     ? tipoContrato
     : (tiposDisponibles[0] ?? "plazo_fijo");
 
+  const esContrato = gestion === "contrato";
+  const esAnexo = gestion === "anexo";
+  const esGestionRrhh = gestion === "amonestacion" || gestion === "finiquito" || gestion === "vacaciones";
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const s = (k: string) => String(fd.get(k) ?? "").trim();
 
-    const base = {
-      tipo_solicitud: tipoSolicitud,
-      nombres: s("nombres"),
-      apellidos: s("apellidos"),
-      rut: s("rut"),
-      rut_provisorio: fd.get("rut_provisorio") === "on",
-      nacionalidad: esExtranjero ? paisExtranjero.trim() || "Extranjera" : "Chilena",
-      observaciones: s("observaciones"),
-    };
-
-    const payload =
-      tipoSolicitud === "anexo"
-        ? {
-            ...base,
-            anexo_tipo: anexoTipo,
-            anexo_detalle: s("anexo_detalle"),
-            fecha_inicio: s("fecha_contrato_original"),
-            fecha_vencimiento: s("fecha_nueva_termino") || null,
-          }
-        : {
-            ...base,
-            fecha_nacimiento: s("fecha_nacimiento") || null,
-            estado_civil: s("estado_civil"),
-            direccion: s("direccion"),
-            comuna: s("comuna"),
-            fono: s("fono"),
-            correo: s("correo"),
-            afp: s("afp"),
-            salud: s("salud") === "Isapre" ? s("isapre_nombre") || "Isapre" : "Fonasa",
-            cargo,
-            jornada_tipo: jornadaActual,
-            horas_semanales: jornadaActual === "parcial" ? s("horas_semanales") : null,
-            tipo_contrato: tipoActual,
-            fecha_inicio: s("fecha_inicio"),
-            fecha_vencimiento: s("fecha_vencimiento") || null,
-            sueldo_base: s("sueldo_base"),
-            movilizacion: s("movilizacion") || "0",
-            colacion: s("colacion") || "0",
-            gratificacion:
-              s("gratificacion") === "anual"
-                ? "Anual (Art. 50 CT, tope 4,75 IMM)"
-                : "Mensual (Art. 50 CT, tope 4,75 IMM prorrateado)",
-          };
-
     startEnviar(async () => {
-      const res = await enviarSolicitud(token, payload);
+      let res: { ok: boolean; error?: string };
+
+      if (esGestionRrhh) {
+        const datos: Record<string, string> =
+          gestion === "amonestacion"
+            ? {
+                fecha_hechos: s("fecha_hechos"),
+                descripcion: s("descripcion"),
+                amonestaciones_previas: s("amonestaciones_previas"),
+              }
+            : gestion === "finiquito"
+              ? {
+                  fecha_ingreso: s("fecha_ingreso"),
+                  fecha_termino: s("fecha_termino"),
+                  causal: s("causal"),
+                  sueldo_base: s("sueldo_base"),
+                  otras_remuneraciones: s("otras_remuneraciones") || "0",
+                  aviso_30_dias: s("aviso_30_dias"),
+                  vacaciones_dias_tomados: s("vacaciones_dias_tomados"),
+                  licencia_vigente: s("licencia_vigente"),
+                  fuero: s("fuero"),
+                }
+              : {
+                  fecha_inicio: s("fecha_inicio_vac"),
+                  fecha_regreso: s("fecha_regreso"),
+                  dias_habiles: s("dias_habiles"),
+                };
+
+        res = await enviarGestion(token, {
+          tipo: gestion,
+          nombres: s("nombres"),
+          apellidos: s("apellidos"),
+          rut: s("rut"),
+          correo_contacto: s("correo_contacto"),
+          observaciones: s("observaciones"),
+          datos,
+        });
+      } else {
+        const base = {
+          tipo_solicitud: gestion,
+          nombres: s("nombres"),
+          apellidos: s("apellidos"),
+          rut: s("rut"),
+          rut_provisorio: fd.get("rut_provisorio") === "on",
+          nacionalidad: esExtranjero ? paisExtranjero.trim() || "Extranjera" : "Chilena",
+          observaciones: s("observaciones"),
+        };
+        const payload = esAnexo
+          ? {
+              ...base,
+              anexo_tipo: anexoTipo,
+              anexo_detalle: s("anexo_detalle"),
+              fecha_inicio: s("fecha_contrato_original"),
+              fecha_vencimiento: s("fecha_nueva_termino") || null,
+            }
+          : {
+              ...base,
+              fecha_nacimiento: s("fecha_nacimiento") || null,
+              estado_civil: s("estado_civil"),
+              direccion: s("direccion"),
+              comuna: s("comuna"),
+              fono: s("fono"),
+              correo: s("correo"),
+              afp: s("afp"),
+              salud: s("salud") === "Isapre" ? s("isapre_nombre") || "Isapre" : "Fonasa",
+              cargo,
+              jornada_tipo: jornadaActual,
+              horas_semanales: jornadaActual === "parcial" ? s("horas_semanales") : null,
+              tipo_contrato: tipoActual,
+              fecha_inicio: s("fecha_inicio"),
+              fecha_vencimiento: s("fecha_vencimiento") || null,
+              sueldo_base: s("sueldo_base"),
+              movilizacion: s("movilizacion") || "0",
+              colacion: s("colacion") || "0",
+              gratificacion:
+                s("gratificacion") === "anual"
+                  ? "Anual (Art. 50 CT, tope 4,75 IMM)"
+                  : "Mensual (Art. 50 CT, tope 4,75 IMM prorrateado)",
+            };
+        res = await enviarSolicitud(token, payload);
+      }
+
       if (res.ok) {
         setEnviada(true);
         window.scrollTo({ top: 0 });
@@ -220,8 +271,8 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
           </span>
           <CardTitle className="font-heading">Solicitud enviada</CardTitle>
           <CardDescription>
-            El equipo de RS Tax &amp; Legal recibió la solicitud y preparará el
-            documento. Te contactaremos si falta algún antecedente.
+            El equipo de RS Tax &amp; Legal la revisará y te contactará al correo
+            indicado. Si falta algún antecedente, te lo pediremos.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center">
@@ -233,13 +284,11 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
     );
   }
 
-  const esAnexo = tipoSolicitud === "anexo";
-
   return (
     <form onSubmit={onSubmit} className="space-y-5">
       <div className="text-center">
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Solicitud de contrato o anexo
+          Portal de solicitudes
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {empresa.razon_social} · RS Tax &amp; Legal
@@ -251,60 +300,69 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
           <Campo label="¿Qué necesitas solicitar?">
             <select
               className={selectCls}
-              value={tipoSolicitud}
-              onChange={(e) => setTipoSolicitud(e.target.value as "contrato" | "anexo")}
+              value={gestion}
+              onChange={(e) => setGestion(e.target.value as TipoGestion)}
             >
-              <option value="contrato">Contrato nuevo (trabajador que se incorpora)</option>
-              <option value="anexo">Anexo de contrato (trabajador que ya tiene contrato)</option>
+              {GESTIONES.map((g) => (
+                <option key={g.value} value={g.value}>{g.label}</option>
+              ))}
             </select>
           </Campo>
         </CardContent>
       </Card>
 
-      {!esAnexo ? <ChecklistDatos /> : null}
+      {esContrato ? <ChecklistDatos /> : null}
 
+      {/* ================= TRABAJADOR ================= */}
       <Card className="card-soft border-transparent">
         <CardHeader>
           <CardTitle className="text-base">
-            {esAnexo ? "Trabajador (ya contratado)" : "Datos del trabajador"}
+            {esContrato ? "Datos del trabajador" : "Trabajador"}
           </CardTitle>
+          {esGestionRrhh ? (
+            <CardDescription>El trabajador ya contratado al que corresponde esta gestión.</CardDescription>
+          ) : null}
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <Campo label="Nombres"><Input name="nombres" required /></Campo>
           <Campo label="Apellidos"><Input name="apellidos" required /></Campo>
-          <Campo label="RUT"><Input name="rut" placeholder="12.345.678-9" /></Campo>
-          <div className="flex items-end gap-2 pb-1.5">
-            <Checkbox id="rut_provisorio" name="rut_provisorio" />
-            <Label htmlFor="rut_provisorio" className="text-xs">
-              RUT provisorio / en trámite (trabajador extranjero)
-            </Label>
-          </div>
-          <Campo label="Nacionalidad">
-            <select
-              className={selectCls}
-              value={tipoNacionalidad}
-              onChange={(e) => setTipoNacionalidad(e.target.value as "chilena" | "extranjera")}
-            >
-              <option value="chilena">Chilena</option>
-              <option value="extranjera">Extranjera</option>
-            </select>
-            {esExtranjero ? (
-              <>
-                <Input
-                  value={paisExtranjero}
-                  onChange={(e) => setPaisExtranjero(e.target.value)}
-                  placeholder="País (ej. Venezuela, Perú, Colombia…)"
-                  required
-                />
-                {!esAnexo ? (
-                  <p className="text-xs text-sky-700">
-                    El contrato incluirá las cláusulas para trabajador extranjero.
-                  </p>
-                ) : null}
-              </>
-            ) : null}
-          </Campo>
-          {!esAnexo ? (
+          <Campo label="RUT"><Input name="rut" placeholder="12.345.678-9" required={esGestionRrhh} /></Campo>
+          {!esGestionRrhh ? (
+            <div className="flex items-end gap-2 pb-1.5">
+              <Checkbox id="rut_provisorio" name="rut_provisorio" />
+              <Label htmlFor="rut_provisorio" className="text-xs">
+                RUT provisorio / en trámite (trabajador extranjero)
+              </Label>
+            </div>
+          ) : null}
+          {!esGestionRrhh ? (
+            <Campo label="Nacionalidad">
+              <select
+                className={selectCls}
+                value={tipoNacionalidad}
+                onChange={(e) => setTipoNacionalidad(e.target.value as "chilena" | "extranjera")}
+              >
+                <option value="chilena">Chilena</option>
+                <option value="extranjera">Extranjera</option>
+              </select>
+              {esExtranjero ? (
+                <>
+                  <Input
+                    value={paisExtranjero}
+                    onChange={(e) => setPaisExtranjero(e.target.value)}
+                    placeholder="País (ej. Venezuela, Perú, Colombia…)"
+                    required
+                  />
+                  {esContrato ? (
+                    <p className="text-xs text-sky-700">
+                      El contrato incluirá las cláusulas para trabajador extranjero.
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
+            </Campo>
+          ) : null}
+          {esContrato ? (
             <>
               <Campo label="Fecha de nacimiento"><Input name="fecha_nacimiento" type="date" required /></Campo>
               <Campo label="Estado civil">
@@ -335,6 +393,7 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
         </CardContent>
       </Card>
 
+      {/* ================= ANEXO ================= */}
       {esAnexo ? (
         <Card className="card-soft border-transparent">
           <CardHeader>
@@ -366,7 +425,139 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
             </Campo>
           </CardContent>
         </Card>
-      ) : (
+      ) : null}
+
+      {/* ================= AMONESTACIÓN ================= */}
+      {gestion === "amonestacion" ? (
+        <Card className="card-soft border-transparent">
+          <CardHeader>
+            <CardTitle className="text-base">Carta de amonestación</CardTitle>
+            <CardDescription>
+              Cuéntanos qué pasó. El equipo legal redactará la carta y te la
+              enviará para firmar y entregar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <Campo label="Fecha de los hechos">
+              <Input name="fecha_hechos" type="date" required />
+            </Campo>
+            <Campo label="¿Tiene amonestaciones anteriores?">
+              <select name="amonestaciones_previas" className={selectCls} defaultValue="no">
+                <option value="no">No</option>
+                <option value="si">Sí</option>
+                <option value="no_se">No estoy seguro</option>
+              </select>
+            </Campo>
+            <Campo label="¿Qué ocurrió? Descríbelo con tus palabras" span2>
+              <Textarea
+                name="descripcion"
+                rows={4}
+                required
+                placeholder="Ejemplo: llegó 2 horas atrasado el lunes 9 y el martes 10 sin avisar; no usó los elementos de seguridad; abandonó el turno antes de la hora, etc…"
+              />
+            </Campo>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* ================= FINIQUITO ================= */}
+      {gestion === "finiquito" ? (
+        <Card className="card-soft border-transparent">
+          <CardHeader>
+            <CardTitle className="text-base">Finiquito / cálculo de despido</CardTitle>
+            <CardDescription>
+              Con estos datos haremos el cálculo. Lo revisamos, lo aprobamos y te
+              lo enviamos al correo antes de cualquier paso.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <Campo label="Fecha de ingreso del trabajador">
+              <Input name="fecha_ingreso" type="date" required />
+            </Campo>
+            <Campo label="Último día trabajado (o fecha prevista)">
+              <Input name="fecha_termino" type="date" required />
+            </Campo>
+            <Campo label="Motivo del término" span2>
+              <select name="causal" className={selectCls} value={causal} onChange={(e) => setCausal(e.target.value)} required>
+                <option value="">Selecciona…</option>
+                <option value="renuncia">Renuncia del trabajador</option>
+                <option value="mutuo_acuerdo">Mutuo acuerdo</option>
+                <option value="vencimiento_plazo">Se cumple el plazo del contrato (no se renueva)</option>
+                <option value="conclusion_obra">Termina la obra o servicio</option>
+                <option value="necesidades_empresa">Necesidades de la empresa (Art. 161)</option>
+                <option value="conducta">Despido por conducta del trabajador (Art. 160)</option>
+                <option value="no_seguro">No estoy seguro (explicar en observaciones)</option>
+              </select>
+            </Campo>
+            <Campo label="Sueldo base actual ($)">
+              <Input name="sueldo_base" type="number" min={1} required />
+            </Campo>
+            <Campo label="Otros pagos mensuales promedio ($: bonos, comisiones…)">
+              <Input name="otras_remuneraciones" type="number" min={0} defaultValue={0} />
+            </Campo>
+            <Campo label="Días de vacaciones que SE HA TOMADO (0 si ninguno)">
+              <Input name="vacaciones_dias_tomados" type="number" min={0} required />
+            </Campo>
+            {causal === "necesidades_empresa" ? (
+              <Campo label="¿Se le avisó con 30 días de anticipación?">
+                <select name="aviso_30_dias" className={selectCls} defaultValue="no">
+                  <option value="no">No (corresponde mes de aviso)</option>
+                  <option value="si">Sí, se avisó por escrito</option>
+                </select>
+              </Campo>
+            ) : (
+              <input type="hidden" name="aviso_30_dias" value="" />
+            )}
+            <Campo label="¿Tiene licencia médica vigente?">
+              <select name="licencia_vigente" className={selectCls} defaultValue="no">
+                <option value="no">No</option>
+                <option value="si">Sí</option>
+                <option value="no_se">No estoy seguro</option>
+              </select>
+            </Campo>
+            <Campo label="¿Tiene algún fuero?">
+              <select name="fuero" className={selectCls} defaultValue="no">
+                <option value="no">No</option>
+                <option value="embarazo">Fuero maternal (embarazo / postnatal)</option>
+                <option value="sindical">Fuero sindical</option>
+                <option value="no_se">No estoy seguro</option>
+              </select>
+            </Campo>
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 sm:col-span-2">
+              Importante: no comuniques el despido al trabajador hasta que el
+              equipo legal revise esta solicitud — hay causales y fueros que
+              cambian completamente el procedimiento.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* ================= VACACIONES ================= */}
+      {gestion === "vacaciones" ? (
+        <Card className="card-soft border-transparent">
+          <CardHeader>
+            <CardTitle className="text-base">Papeleta de vacaciones</CardTitle>
+            <CardDescription>
+              Prepararemos la papeleta (comprobante de feriado legal) y te la
+              enviaremos para la firma del trabajador.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <Campo label="Primer día de vacaciones">
+              <Input name="fecha_inicio_vac" type="date" required />
+            </Campo>
+            <Campo label="Fecha de regreso al trabajo">
+              <Input name="fecha_regreso" type="date" required />
+            </Campo>
+            <Campo label="Días hábiles solicitados">
+              <Input name="dias_habiles" type="number" min={1} max={30} required placeholder="ej. 5" />
+            </Campo>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* ================= CONTRATO (secciones propias) ================= */}
+      {esContrato ? (
         <>
           <Card className="card-soft border-transparent">
             <CardHeader>
@@ -426,17 +617,32 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
                   <option value="anual">Anual</option>
                 </select>
               </Campo>
-              <Campo label="Observaciones" span2>
-                <Textarea
-                  name="observaciones"
-                  rows={3}
-                  placeholder="Si el contrato lleva asignación de pérdida de caja, indícalo aquí (monto). Si lleva bono o comisión, explica cómo se obtiene: porcentaje, metas o tabla de comisiones, si es fijo o variable, etc…"
-                />
-              </Campo>
             </CardContent>
           </Card>
         </>
-      )}
+      ) : null}
+
+      {/* ================= CONTACTO + OBSERVACIONES ================= */}
+      <Card className="card-soft border-transparent">
+        <CardContent className="grid gap-3 pt-4 sm:grid-cols-2">
+          {esGestionRrhh ? (
+            <Campo label="Correo donde te enviaremos el documento / cálculo" span2>
+              <Input name="correo_contacto" type="email" required placeholder="tucorreo@empresa.cl" />
+            </Campo>
+          ) : null}
+          <Campo label="Observaciones" span2>
+            <Textarea
+              name="observaciones"
+              rows={3}
+              placeholder={
+                esContrato
+                  ? "Si el contrato lleva asignación de pérdida de caja, indícalo aquí (monto). Si lleva bono o comisión, explica cómo se obtiene: porcentaje, metas o tabla de comisiones, si es fijo o variable, etc…"
+                  : "Cualquier detalle adicional que debamos saber, etc…"
+              }
+            />
+          </Campo>
+        </CardContent>
+      </Card>
 
       <div className="flex justify-end">
         <Button type="submit" size="lg" disabled={enviando}>

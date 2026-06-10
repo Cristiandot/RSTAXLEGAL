@@ -2,7 +2,7 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
 
-export const metadata = { title: "Solicitud de contrato — RS Tax & Legal" };
+export const metadata = { title: "Portal de solicitudes — RS Tax & Legal" };
 
 export default async function SolicitudPage({
   params,
