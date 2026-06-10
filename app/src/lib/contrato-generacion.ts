@@ -113,6 +113,7 @@ export async function generarYSubirContrato(
     PREVISION: (t.afp as string) ?? "",
     INSTITUCION_SALUD: (t.salud as string) ?? "",
     REGIMEN_PREVISIONAL: "chileno",
+    HORAS_SEMANALES: horas !== null ? String(horas) : "42",
   };
 
   let buffer: Buffer;
