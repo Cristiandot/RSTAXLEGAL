@@ -37,7 +37,7 @@ export default async function ContratosPage() {
   const { data, error } = await supabase
     .from("contratos")
     .select(
-      "id, estado, tipo_contrato, tipo_documento, anexo_tipo, anexo_detalle, cargo, fecha_inicio, fecha_vencimiento, documento_path, created_at, clientes(razon_social), trabajadores(nombres, apellidos, rut, rut_provisorio), usuarios(nombre)",
+      "id, estado, tipo_contrato, tipo_documento, anexo_tipo, anexo_detalle, cargo, fecha_inicio, fecha_vencimiento, documento_path, clausulas_adicionales, created_at, clientes(razon_social), trabajadores(nombres, apellidos, rut, rut_provisorio), usuarios(nombre)",
     )
     .order("created_at", { ascending: false })
     .limit(200);
@@ -57,6 +57,7 @@ export default async function ContratosPage() {
       tipoDocumento: c.tipo_documento ?? "contrato",
       anexoTipo: c.anexo_tipo,
       anexoDetalle: c.anexo_detalle,
+      clausulasAdicionales: c.clausulas_adicionales,
       tipoContrato: c.tipo_contrato,
       cargo: c.cargo,
       fechaInicio: c.fecha_inicio,

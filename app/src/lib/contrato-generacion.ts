@@ -114,6 +114,9 @@ export async function generarYSubirContrato(
     INSTITUCION_SALUD: (t.salud as string) ?? "",
     REGIMEN_PREVISIONAL: "chileno",
     HORAS_SEMANALES: horas !== null ? String(horas) : "42",
+    CLAUSULAS_ADICIONALES: con.clausulas_adicionales
+      ? `CLÁUSULA ADICIONAL PACTADA: ${con.clausulas_adicionales}`
+      : "",
   };
 
   let buffer: Buffer;

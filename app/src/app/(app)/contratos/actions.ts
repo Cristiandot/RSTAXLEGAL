@@ -42,6 +42,33 @@ export async function cambiarEstadoContrato(
   return { ok: true };
 }
 
+/**
+ * Guarda las cláusulas adicionales de un contrato (modificación particular,
+ * ej. funciones extra). Solo antes de enviar; luego hay que regenerar.
+ */
+export async function actualizarClausulas(
+  contratoId: string,
+  texto: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: con } = await supabase
+    .from("contratos")
+    .select("estado")
+    .eq("id", contratoId)
+    .single();
+  if (!con) return { ok: false, error: "Contrato no encontrado." };
+  if (!["solicitado", "generado", "aprobado"].includes(con.estado)) {
+    return { ok: false, error: "Este contrato ya fue enviado o anulado; no se puede modificar." };
+  }
+  const { error } = await supabase
+    .from("contratos")
+    .update({ clausulas_adicionales: texto.trim() || null, estado: con.estado === "aprobado" ? "generado" : con.estado })
+    .eq("id", contratoId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/contratos");
+  return { ok: true };
+}
+
 /** Genera (o regenera) el documento de una solicitud pendiente. */
 export async function generarContrato(
   contratoId: string,

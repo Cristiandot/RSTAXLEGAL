@@ -138,6 +138,7 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
             s("gratificacion") === "anual"
               ? "Anual (Art. 50 CT, tope 4,75 IMM)"
               : "Mensual (Art. 50 CT, tope 4,75 IMM prorrateado)",
+          clausulasAdicionales: s("clausulas_adicionales"),
           observaciones: s("observaciones"),
         },
       });
@@ -389,6 +390,13 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
             <strong>30 hrs → $385.000</strong> ·{" "}
             <strong>20 hrs → $256.667</strong>.
           </div>
+          <Campo label="Cláusulas adicionales (opcional — van al contrato, antes de las firmas)" span2>
+            <Textarea
+              name="clausulas_adicionales"
+              rows={2}
+              placeholder="Ej.: El trabajador realizará además el inventario diario de la tienda al cierre de su turno…"
+            />
+          </Campo>
           <Campo label="Observaciones" span2>
             <Textarea
               name="observaciones"

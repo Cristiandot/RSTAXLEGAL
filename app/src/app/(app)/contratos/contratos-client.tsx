@@ -4,9 +4,10 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ClipboardCopy, Download, FilePlus2, Link2, Search, Send } from "lucide-react";
+import { ClipboardCopy, Download, FilePlus2, Link2, Pencil, Search, Send } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import {
+  actualizarClausulas,
   cambiarEstadoContrato,
   enviarContratoAlCliente,
   generarContrato,
@@ -14,7 +15,16 @@ import {
 } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -36,6 +46,7 @@ export type ContratoRow = {
   tipoDocumento: string;
   anexoTipo: string | null;
   anexoDetalle: string | null;
+  clausulasAdicionales: string | null;
   tipoContrato: string;
   cargo: string | null;
   fechaInicio: string | null;
@@ -139,6 +150,27 @@ export function ContratosClient({
         toast.success("Documento generado");
         router.refresh();
       } else toast.error(res.error ?? "Error al generar");
+    });
+  }
+
+  const [editando, setEditando] = useState<ContratoRow | null>(null);
+  const [textoClausulas, setTextoClausulas] = useState("");
+
+  function abrirEdicion(f: ContratoRow) {
+    setTextoClausulas(f.clausulasAdicionales ?? "");
+    setEditando(f);
+  }
+
+  function guardarClausulas() {
+    if (!editando) return;
+    const id = editando.id;
+    startAccion(async () => {
+      const res = await actualizarClausulas(id, textoClausulas);
+      if (res.ok) {
+        toast.success("Cláusulas guardadas — regenera el documento para aplicarlas");
+        setEditando(null);
+        router.refresh();
+      } else toast.error(res.error ?? "Error al guardar");
     });
   }
 
@@ -271,9 +303,27 @@ export function ContratosClient({
                           <Download className="size-4" />
                         </Button>
                       ) : null}
+                      {f.tipoDocumento !== "anexo" &&
+                      ["solicitado", "generado"].includes(f.estado) ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={ocupado}
+                          onClick={() => abrirEdicion(f)}
+                          title={f.clausulasAdicionales ? `Cláusulas adicionales: ${f.clausulasAdicionales}` : "Agregar cláusulas adicionales (modificación particular)"}
+                          className={f.clausulasAdicionales ? "text-[var(--brand-teal)]" : ""}
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                      ) : null}
                       {f.estado === "solicitado" && f.tipoDocumento !== "anexo" ? (
                         <Button size="sm" variant="outline" disabled={ocupado} onClick={() => generar(f.id)}>
                           Generar
+                        </Button>
+                      ) : null}
+                      {f.estado === "generado" && f.tipoDocumento !== "anexo" ? (
+                        <Button size="sm" variant="ghost" disabled={ocupado} onClick={() => generar(f.id)} title="Volver a generar el documento (aplica cláusulas editadas)">
+                          Regenerar
                         </Button>
                       ) : null}
                       {f.estado === "generado" ? (
@@ -305,6 +355,37 @@ export function ContratosClient({
           </TableBody>
         </Table>
       </div>
+
+      <Dialog open={editando !== null} onOpenChange={(o) => { if (!o) setEditando(null); }}>
+        {editando ? (
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="font-heading">
+                Cláusulas adicionales · {editando.trabajador}
+              </DialogTitle>
+              <DialogDescription>
+                Modificación particular de este contrato (se inserta antes de las
+                firmas como “CLÁUSULA ADICIONAL PACTADA”). Tras guardar, usa
+                Regenerar para aplicarla al documento.
+              </DialogDescription>
+            </DialogHeader>
+            <Textarea
+              rows={4}
+              value={textoClausulas}
+              onChange={(e) => setTextoClausulas(e.target.value)}
+              placeholder="Ej.: El trabajador realizará además el inventario diario de la tienda al cierre de su turno, registrándolo en el sistema dispuesto por el empleador…"
+            />
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditando(null)}>
+                Cancelar
+              </Button>
+              <Button onClick={guardarClausulas} disabled={ocupado}>
+                Guardar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
     </div>
   );
 }
