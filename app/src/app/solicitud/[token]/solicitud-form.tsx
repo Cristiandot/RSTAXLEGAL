@@ -53,7 +53,6 @@ const DATOS_TRABAJADOR = [
   "Teléfono y correo electrónico",
   "AFP",
   "Salud: Fonasa o Isapre (si Isapre, cuál)",
-  "Foto de la cédula de identidad por ambos lados",
 ];
 
 const MENSAJE_WHATSAPP = `Hola! Para preparar tu contrato de trabajo necesito que me envíes estos datos:
