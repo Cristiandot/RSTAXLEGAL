@@ -76,8 +76,10 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
   const [jornadaTipo, setJornadaTipo] = useState("");
   const jornadaActual = jornadaTipo || jornadas[0] || "completa";
 
-  const [nacionalidad, setNacionalidad] = useState("Chilena");
-  const esExtranjero = !nacionalidad.trim().toLowerCase().startsWith("chilen");
+  const [tipoNacionalidad, setTipoNacionalidad] = useState<"chilena" | "extranjera">("chilena");
+  const [paisExtranjero, setPaisExtranjero] = useState("");
+  const esExtranjero = tipoNacionalidad === "extranjera";
+  const nacionalidad = esExtranjero ? paisExtranjero.trim() || "Extranjera" : "Chilena";
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -108,7 +110,7 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
           apellidos: s("apellidos"),
           rut,
           rutProvisorio,
-          nacionalidad: s("nacionalidad") || "Chilena",
+          nacionalidad,
           direccion: s("direccion"),
           comuna: s("comuna"),
           fechaNacimiento: s("fecha_nacimiento") || null,
@@ -132,6 +134,10 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
           sueldoBase: n("sueldo_base"),
           movilizacion: n("movilizacion"),
           colacion: n("colacion"),
+          gratificacion:
+            s("gratificacion") === "anual"
+              ? "Anual (Art. 50 CT, tope 4,75 IMM)"
+              : "Mensual (Art. 50 CT, tope 4,75 IMM prorrateado)",
           observaciones: s("observaciones"),
         },
       });
@@ -268,18 +274,28 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
             <Label htmlFor="rut_provisorio" className="text-xs">RUT provisorio / en trámite (extranjero)</Label>
           </div>
           <Campo label="Nacionalidad">
-            <Input
-              name="nacionalidad"
-              value={nacionalidad}
-              onChange={(e) => setNacionalidad(e.target.value)}
-              required
-            />
+            <select
+              className={selectCls}
+              value={tipoNacionalidad}
+              onChange={(e) => setTipoNacionalidad(e.target.value as "chilena" | "extranjera")}
+            >
+              <option value="chilena">Chilena</option>
+              <option value="extranjera">Extranjera</option>
+            </select>
             {esExtranjero ? (
-              <p className="text-xs text-sky-700">
-                Trabajador extranjero: se usará la plantilla con las cláusulas
-                especiales (vigencia sujeta a visa/permiso, régimen previsional
-                Ley 18.156 e impuesto a la renta sobre 13,5 UTM).
-              </p>
+              <>
+                <Input
+                  value={paisExtranjero}
+                  onChange={(e) => setPaisExtranjero(e.target.value)}
+                  placeholder="País (ej. Venezuela, Perú, Colombia…)"
+                  required
+                />
+                <p className="text-xs text-sky-700">
+                  Se usará la plantilla con las cláusulas especiales de
+                  extranjero (vigencia sujeta a visa/permiso, Ley 18.156,
+                  impuesto 13,5 UTM).
+                </p>
+              </>
             ) : null}
           </Campo>
           <Campo label="Fecha de nacimiento"><Input name="fecha_nacimiento" type="date" /></Campo>
@@ -373,6 +389,12 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
           <Campo label="Sueldo base ($)"><Input name="sueldo_base" type="number" min={1} required /></Campo>
           <Campo label="Movilización ($)"><Input name="movilizacion" type="number" min={0} defaultValue={0} /></Campo>
           <Campo label="Colación ($)"><Input name="colacion" type="number" min={0} defaultValue={0} /></Campo>
+          <Campo label="Gratificación legal (Art. 50 CT)">
+            <select name="gratificacion" className={selectCls} defaultValue="mensual">
+              <option value="mensual">Mensual (prorrateada mes a mes)</option>
+              <option value="anual">Anual</option>
+            </select>
+          </Campo>
           {jornadaActual === "parcial" ? (
             <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 sm:col-span-3">
               <strong>Referencia sueldo mínimo proporcional</strong> (mínimo

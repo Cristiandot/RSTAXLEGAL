@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ClipboardCopy, ListChecks } from "lucide-react";
 import { enviarSolicitud } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,64 @@ function Campo({ label, children, span2 = false }: { label: string; children: Re
   );
 }
 
+const DATOS_TRABAJADOR = [
+  "Nombres y apellidos completos",
+  "RUT (si está en trámite, indicarlo)",
+  "Nacionalidad (si es extranjero, el país)",
+  "Fecha de nacimiento",
+  "Estado civil",
+  "Dirección y comuna donde vive",
+  "Teléfono y correo electrónico",
+  "AFP",
+  "Salud: Fonasa o Isapre (si Isapre, cuál)",
+  "Banco, tipo y número de cuenta para el depósito del sueldo",
+  "Foto de la cédula de identidad por ambos lados",
+];
+
+const MENSAJE_WHATSAPP = `Hola! Para preparar tu contrato de trabajo necesito que me envíes estos datos:
+
+${DATOS_TRABAJADOR.map((d) => `• ${d}`).join("\n")}
+
+¡Gracias!`;
+
+function ChecklistDatos() {
+  return (
+    <Card className="card-soft border-transparent">
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ListChecks className="size-4 text-[var(--brand-teal)]" />
+            Datos que debes pedirle al trabajador
+          </CardTitle>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              navigator.clipboard.writeText(MENSAJE_WHATSAPP);
+              toast.success("Mensaje copiado — pégalo en WhatsApp al trabajador");
+            }}
+          >
+            <ClipboardCopy className="size-3.5" />
+            Copiar mensaje para WhatsApp
+          </Button>
+        </div>
+        <CardDescription>
+          Antes de llenar el formulario, reúne esta información. Puedes copiar el
+          mensaje listo y enviárselo al trabajador.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ul className="grid list-disc gap-1 pl-5 text-sm text-muted-foreground sm:grid-cols-2">
+          {DATOS_TRABAJADOR.map((d) => (
+            <li key={d}>{d}</li>
+          ))}
+        </ul>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function SolicitudForm({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
   const [enviando, startEnviar] = useTransition();
   const [enviada, setEnviada] = useState(false);
@@ -56,8 +114,9 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
   const jornadaActual = jornadas.includes(jornada) ? jornada : (jornadas[0] ?? "completa");
 
   const [tipoContrato, setTipoContrato] = useState("plazo_fijo");
-  const [nacionalidad, setNacionalidad] = useState("Chilena");
-  const esExtranjero = !nacionalidad.trim().toLowerCase().startsWith("chilen");
+  const [tipoNacionalidad, setTipoNacionalidad] = useState<"chilena" | "extranjera">("chilena");
+  const [paisExtranjero, setPaisExtranjero] = useState("");
+  const esExtranjero = tipoNacionalidad === "extranjera";
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -70,7 +129,7 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
         apellidos: s("apellidos"),
         rut: s("rut"),
         rut_provisorio: fd.get("rut_provisorio") === "on",
-        nacionalidad: nacionalidad.trim() || "Chilena",
+        nacionalidad: esExtranjero ? paisExtranjero.trim() || "Extranjera" : "Chilena",
         fecha_nacimiento: s("fecha_nacimiento") || null,
         estado_civil: s("estado_civil"),
         direccion: s("direccion"),
@@ -91,6 +150,10 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
         sueldo_base: s("sueldo_base"),
         movilizacion: s("movilizacion") || "0",
         colacion: s("colacion") || "0",
+        gratificacion:
+          s("gratificacion") === "anual"
+            ? "Anual (Art. 50 CT, tope 4,75 IMM)"
+            : "Mensual (Art. 50 CT, tope 4,75 IMM prorrateado)",
         observaciones: s("observaciones"),
       });
       if (res.ok) {
@@ -135,6 +198,8 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
         </p>
       </div>
 
+      <ChecklistDatos />
+
       <Card className="card-soft border-transparent">
         <CardHeader>
           <CardTitle className="text-base">Datos del trabajador</CardTitle>
@@ -150,11 +215,26 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
             </Label>
           </div>
           <Campo label="Nacionalidad">
-            <Input value={nacionalidad} onChange={(e) => setNacionalidad(e.target.value)} required />
+            <select
+              className={selectCls}
+              value={tipoNacionalidad}
+              onChange={(e) => setTipoNacionalidad(e.target.value as "chilena" | "extranjera")}
+            >
+              <option value="chilena">Chilena</option>
+              <option value="extranjera">Extranjera</option>
+            </select>
             {esExtranjero ? (
-              <p className="text-xs text-sky-700">
-                El contrato incluirá las cláusulas para trabajador extranjero.
-              </p>
+              <>
+                <Input
+                  value={paisExtranjero}
+                  onChange={(e) => setPaisExtranjero(e.target.value)}
+                  placeholder="País (ej. Venezuela, Perú, Colombia…)"
+                  required
+                />
+                <p className="text-xs text-sky-700">
+                  El contrato incluirá las cláusulas para trabajador extranjero.
+                </p>
+              </>
             ) : null}
           </Campo>
           <Campo label="Fecha de nacimiento"><Input name="fecha_nacimiento" type="date" required /></Campo>
@@ -239,6 +319,12 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
           <Campo label="Sueldo base ($)"><Input name="sueldo_base" type="number" min={1} required /></Campo>
           <Campo label="Movilización ($)"><Input name="movilizacion" type="number" min={0} defaultValue={0} /></Campo>
           <Campo label="Colación ($)"><Input name="colacion" type="number" min={0} defaultValue={0} /></Campo>
+          <Campo label="Gratificación legal (Art. 50 CT)">
+            <select name="gratificacion" className={selectCls} defaultValue="mensual">
+              <option value="mensual">Mensual (prorrateada mes a mes)</option>
+              <option value="anual">Anual</option>
+            </select>
+          </Campo>
           {jornadaActual === "parcial" ? (
             <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 sm:col-span-3">
               <strong>Referencia sueldo mínimo proporcional</strong> (mínimo
