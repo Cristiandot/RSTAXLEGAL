@@ -23,14 +23,31 @@ export async function enviarSolicitud(
       error: "El RUT no es válido. Si la persona aún no tiene RUT definitivo, marca la opción de RUT en trámite.",
     };
   }
-  if (!datos.fecha_inicio) {
-    return { ok: false, error: "La fecha de inicio es obligatoria." };
-  }
-  if (datos.tipo_contrato === "plazo_fijo" && !datos.fecha_vencimiento) {
-    return { ok: false, error: "Un contrato a plazo fijo necesita fecha de término." };
-  }
-  if (!datos.sueldo_base || Number(datos.sueldo_base) <= 0) {
-    return { ok: false, error: "El sueldo base es obligatorio." };
+
+  const esAnexo = datos.tipo_solicitud === "anexo";
+  if (esAnexo) {
+    if (!datos.anexo_tipo) {
+      return { ok: false, error: "Indica el tipo de anexo." };
+    }
+    if (!datos.fecha_inicio) {
+      return { ok: false, error: "La fecha del contrato original es obligatoria." };
+    }
+    if (datos.anexo_tipo === "renovacion_fijo_a_fijo" && !datos.fecha_vencimiento) {
+      return { ok: false, error: "Indica la nueva fecha de término de la renovación." };
+    }
+    if (datos.anexo_tipo === "otro" && !datos.anexo_detalle) {
+      return { ok: false, error: "Explica qué necesitas que diga el anexo." };
+    }
+  } else {
+    if (!datos.fecha_inicio) {
+      return { ok: false, error: "La fecha de inicio es obligatoria." };
+    }
+    if (datos.tipo_contrato === "plazo_fijo" && !datos.fecha_vencimiento) {
+      return { ok: false, error: "Un contrato a plazo fijo necesita fecha de término." };
+    }
+    if (!datos.sueldo_base || Number(datos.sueldo_base) <= 0) {
+      return { ok: false, error: "El sueldo base es obligatorio." };
+    }
   }
 
   const supabase = await createClient();

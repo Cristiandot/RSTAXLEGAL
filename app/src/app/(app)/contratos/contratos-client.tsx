@@ -32,6 +32,9 @@ export type EmpresaForm = {
 export type ContratoRow = {
   id: string;
   estado: string;
+  tipoDocumento: string;
+  anexoTipo: string | null;
+  anexoDetalle: string | null;
   tipoContrato: string;
   cargo: string | null;
   fechaInicio: string | null;
@@ -225,7 +228,24 @@ export function ContratosClient({
                     <span className="block max-w-[200px] truncate" title={f.empresa}>{f.empresa}</span>
                   </TableCell>
                   <TableCell>{f.cargo ?? "—"}</TableCell>
-                  <TableCell>{f.tipoContrato === "plazo_fijo" ? "Plazo fijo" : f.tipoContrato === "indefinido" ? "Indefinido" : f.tipoContrato}</TableCell>
+                  <TableCell>
+                    {f.tipoDocumento === "anexo" ? (
+                      <span title={f.anexoDetalle ?? undefined}>
+                        Anexo:{" "}
+                        {f.anexoTipo === "renovacion_fijo_a_fijo"
+                          ? "renovación fijo a fijo"
+                          : f.anexoTipo === "renovacion_indefinido"
+                            ? "renovación a indefinido"
+                            : "otro"}
+                      </span>
+                    ) : f.tipoContrato === "plazo_fijo" ? (
+                      "Plazo fijo"
+                    ) : f.tipoContrato === "indefinido" ? (
+                      "Indefinido"
+                    ) : (
+                      f.tipoContrato
+                    )}
+                  </TableCell>
                   <TableCell>{formatFecha(f.fechaInicio)}</TableCell>
                   <TableCell>{formatFecha(f.fechaVencimiento)}</TableCell>
                   <TableCell>
@@ -239,7 +259,7 @@ export function ContratosClient({
                           <Download className="size-4" />
                         </Button>
                       ) : null}
-                      {f.estado === "solicitado" ? (
+                      {f.estado === "solicitado" && f.tipoDocumento !== "anexo" ? (
                         <Button size="sm" variant="outline" disabled={ocupado} onClick={() => generar(f.id)}>
                           Generar
                         </Button>

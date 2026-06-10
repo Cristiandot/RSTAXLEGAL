@@ -24,6 +24,7 @@ export type InfoEmpresa = {
     jornada: string;
     horas: number | null;
     tipo: string | null;
+    nacionalidad: string;
   }[];
 };
 
@@ -52,7 +53,6 @@ const DATOS_TRABAJADOR = [
   "Teléfono y correo electrónico",
   "AFP",
   "Salud: Fonasa o Isapre (si Isapre, cuál)",
-  "Banco, tipo y número de cuenta para el depósito del sueldo",
   "Foto de la cédula de identidad por ambos lados",
 ];
 
@@ -100,9 +100,23 @@ function ChecklistDatos() {
   );
 }
 
+function NotaMinimos() {
+  return (
+    <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 sm:col-span-3">
+      <strong>Sueldos mínimos de referencia</strong> (Ingreso Mínimo Mensual
+      $539.000 por jornada completa de 42 hrs; proporcional según horas):{" "}
+      <strong>42 hrs → $539.000</strong> · <strong>30 hrs → $385.000</strong> ·{" "}
+      <strong>20 hrs → $256.667</strong>. El sueldo base no puede ser inferior
+      al mínimo proporcional de las horas pactadas.
+    </div>
+  );
+}
+
 export function SolicitudForm({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
   const [enviando, startEnviar] = useTransition();
   const [enviada, setEnviada] = useState(false);
+  const [tipoSolicitud, setTipoSolicitud] = useState<"contrato" | "anexo">("contrato");
+  const [anexoTipo, setAnexoTipo] = useState("renovacion_fijo_a_fijo");
 
   const cargos = useMemo(() => [...new Set(empresa.opciones.map((o) => o.cargo))], [empresa]);
   const [cargo, setCargo] = useState(cargos[0] ?? "");
@@ -113,49 +127,82 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
   const [jornada, setJornada] = useState("");
   const jornadaActual = jornadas.includes(jornada) ? jornada : (jornadas[0] ?? "completa");
 
-  const [tipoContrato, setTipoContrato] = useState("plazo_fijo");
   const [tipoNacionalidad, setTipoNacionalidad] = useState<"chilena" | "extranjera">("chilena");
   const [paisExtranjero, setPaisExtranjero] = useState("");
   const esExtranjero = tipoNacionalidad === "extranjera";
+
+  // Tipos de contrato realmente disponibles para cargo × jornada × nacionalidad
+  const nacBuscada = esExtranjero ? "extranjero" : "chileno";
+  const opcionesCombo = useMemo(
+    () =>
+      empresa.opciones.filter(
+        (o) => o.cargo === cargo && o.jornada === jornadaActual && o.nacionalidad === nacBuscada,
+      ),
+    [empresa, cargo, jornadaActual, nacBuscada],
+  );
+  const comboSinPlantilla = esExtranjero && opcionesCombo.length === 0;
+  const tiposDisponibles = useMemo(() => {
+    const base = opcionesCombo.length > 0
+      ? opcionesCombo
+      : empresa.opciones.filter((o) => o.cargo === cargo && o.jornada === jornadaActual);
+    return [...new Set(base.map((o) => o.tipo).filter(Boolean))] as string[];
+  }, [opcionesCombo, empresa, cargo, jornadaActual]);
+  const [tipoContrato, setTipoContrato] = useState("");
+  const tipoActual = tiposDisponibles.includes(tipoContrato)
+    ? tipoContrato
+    : (tiposDisponibles[0] ?? "plazo_fijo");
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const s = (k: string) => String(fd.get(k) ?? "").trim();
 
+    const base = {
+      tipo_solicitud: tipoSolicitud,
+      nombres: s("nombres"),
+      apellidos: s("apellidos"),
+      rut: s("rut"),
+      rut_provisorio: fd.get("rut_provisorio") === "on",
+      nacionalidad: esExtranjero ? paisExtranjero.trim() || "Extranjera" : "Chilena",
+      observaciones: s("observaciones"),
+    };
+
+    const payload =
+      tipoSolicitud === "anexo"
+        ? {
+            ...base,
+            anexo_tipo: anexoTipo,
+            anexo_detalle: s("anexo_detalle"),
+            fecha_inicio: s("fecha_contrato_original"),
+            fecha_vencimiento: s("fecha_nueva_termino") || null,
+          }
+        : {
+            ...base,
+            fecha_nacimiento: s("fecha_nacimiento") || null,
+            estado_civil: s("estado_civil"),
+            direccion: s("direccion"),
+            comuna: s("comuna"),
+            fono: s("fono"),
+            correo: s("correo"),
+            afp: s("afp"),
+            salud: s("salud") === "Isapre" ? s("isapre_nombre") || "Isapre" : "Fonasa",
+            cargo,
+            jornada_tipo: jornadaActual,
+            horas_semanales: jornadaActual === "parcial" ? s("horas_semanales") : null,
+            tipo_contrato: tipoActual,
+            fecha_inicio: s("fecha_inicio"),
+            fecha_vencimiento: s("fecha_vencimiento") || null,
+            sueldo_base: s("sueldo_base"),
+            movilizacion: s("movilizacion") || "0",
+            colacion: s("colacion") || "0",
+            gratificacion:
+              s("gratificacion") === "anual"
+                ? "Anual (Art. 50 CT, tope 4,75 IMM)"
+                : "Mensual (Art. 50 CT, tope 4,75 IMM prorrateado)",
+          };
+
     startEnviar(async () => {
-      const res = await enviarSolicitud(token, {
-        nombres: s("nombres"),
-        apellidos: s("apellidos"),
-        rut: s("rut"),
-        rut_provisorio: fd.get("rut_provisorio") === "on",
-        nacionalidad: esExtranjero ? paisExtranjero.trim() || "Extranjera" : "Chilena",
-        fecha_nacimiento: s("fecha_nacimiento") || null,
-        estado_civil: s("estado_civil"),
-        direccion: s("direccion"),
-        comuna: s("comuna"),
-        fono: s("fono"),
-        correo: s("correo"),
-        afp: s("afp"),
-        salud: s("salud") === "Isapre" ? s("isapre_nombre") || "Isapre" : "Fonasa",
-        banco: s("banco"),
-        tipo_cuenta: s("tipo_cuenta"),
-        numero_cuenta: s("numero_cuenta"),
-        cargo,
-        jornada_tipo: jornadaActual,
-        horas_semanales: jornadaActual === "parcial" ? s("horas_semanales") : null,
-        tipo_contrato: tipoContrato,
-        fecha_inicio: s("fecha_inicio"),
-        fecha_vencimiento: s("fecha_vencimiento") || null,
-        sueldo_base: s("sueldo_base"),
-        movilizacion: s("movilizacion") || "0",
-        colacion: s("colacion") || "0",
-        gratificacion:
-          s("gratificacion") === "anual"
-            ? "Anual (Art. 50 CT, tope 4,75 IMM)"
-            : "Mensual (Art. 50 CT, tope 4,75 IMM prorrateado)",
-        observaciones: s("observaciones"),
-      });
+      const res = await enviarSolicitud(token, payload);
       if (res.ok) {
         setEnviada(true);
         window.scrollTo({ top: 0 });
@@ -175,11 +222,11 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
           <CardTitle className="font-heading">Solicitud enviada</CardTitle>
           <CardDescription>
             El equipo de RS Tax &amp; Legal recibió la solicitud y preparará el
-            contrato. Te contactaremos si falta algún antecedente.
+            documento. Te contactaremos si falta algún antecedente.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center">
-          <Button variant="outline" onClick={() => { setEnviada(false); }}>
+          <Button variant="outline" onClick={() => setEnviada(false)}>
             Enviar otra solicitud
           </Button>
         </CardContent>
@@ -187,22 +234,41 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
     );
   }
 
+  const esAnexo = tipoSolicitud === "anexo";
+
   return (
     <form onSubmit={onSubmit} className="space-y-5">
       <div className="text-center">
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Solicitud de contrato de trabajo
+          Solicitud de contrato o anexo
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {empresa.razon_social} · Ficha de incorporación del nuevo trabajador
+          {empresa.razon_social} · RS Tax &amp; Legal
         </p>
       </div>
 
-      <ChecklistDatos />
+      <Card className="card-soft border-transparent">
+        <CardContent className="pt-4">
+          <Campo label="¿Qué necesitas solicitar?">
+            <select
+              className={selectCls}
+              value={tipoSolicitud}
+              onChange={(e) => setTipoSolicitud(e.target.value as "contrato" | "anexo")}
+            >
+              <option value="contrato">Contrato nuevo (trabajador que se incorpora)</option>
+              <option value="anexo">Anexo de contrato (trabajador que ya tiene contrato)</option>
+            </select>
+          </Campo>
+        </CardContent>
+      </Card>
+
+      {!esAnexo ? <ChecklistDatos /> : null}
 
       <Card className="card-soft border-transparent">
         <CardHeader>
-          <CardTitle className="text-base">Datos del trabajador</CardTitle>
+          <CardTitle className="text-base">
+            {esAnexo ? "Trabajador (ya contratado)" : "Datos del trabajador"}
+          </CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <Campo label="Nombres"><Input name="nombres" required /></Campo>
@@ -231,117 +297,147 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
                   placeholder="País (ej. Venezuela, Perú, Colombia…)"
                   required
                 />
-                <p className="text-xs text-sky-700">
-                  El contrato incluirá las cláusulas para trabajador extranjero.
-                </p>
+                {!esAnexo ? (
+                  <p className="text-xs text-sky-700">
+                    El contrato incluirá las cláusulas para trabajador extranjero.
+                  </p>
+                ) : null}
               </>
             ) : null}
           </Campo>
-          <Campo label="Fecha de nacimiento"><Input name="fecha_nacimiento" type="date" required /></Campo>
-          <Campo label="Estado civil">
-            <select name="estado_civil" className={selectCls} defaultValue="Soltero(a)">
-              {ESTADOS_CIVILES.map((e) => <option key={e}>{e}</option>)}
-            </select>
-          </Campo>
-          <Campo label="Teléfono"><Input name="fono" inputMode="tel" required /></Campo>
-          <Campo label="Dirección"><Input name="direccion" required /></Campo>
-          <Campo label="Comuna"><Input name="comuna" required /></Campo>
-          <Campo label="Correo electrónico" span2><Input name="correo" type="email" required /></Campo>
-          <Campo label="AFP">
-            <select name="afp" className={selectCls} defaultValue="AFP Modelo">
-              {AFPS.map((a) => <option key={a}>{a}</option>)}
-            </select>
-          </Campo>
-          <Campo label="Salud">
-            <div className="flex gap-2">
-              <select name="salud" className={`${selectCls} flex-1`} defaultValue="Fonasa">
-                <option>Fonasa</option>
-                <option>Isapre</option>
-              </select>
-              <Input name="isapre_nombre" placeholder="Nombre Isapre" className="flex-1" />
-            </div>
-          </Campo>
-          <Campo label="Banco (depósito remuneración)"><Input name="banco" /></Campo>
-          <Campo label="Tipo y N° de cuenta">
-            <div className="flex gap-2">
-              <select name="tipo_cuenta" className={`${selectCls} flex-1`} defaultValue="Cuenta RUT">
-                <option>Cuenta RUT</option>
-                <option>Cuenta Vista</option>
-                <option>Cuenta Corriente</option>
-                <option>Cuenta de Ahorro</option>
-              </select>
-              <Input name="numero_cuenta" placeholder="N°" className="flex-1" />
-            </div>
-          </Campo>
+          {!esAnexo ? (
+            <>
+              <Campo label="Fecha de nacimiento"><Input name="fecha_nacimiento" type="date" required /></Campo>
+              <Campo label="Estado civil">
+                <select name="estado_civil" className={selectCls} defaultValue="Soltero(a)">
+                  {ESTADOS_CIVILES.map((e) => <option key={e}>{e}</option>)}
+                </select>
+              </Campo>
+              <Campo label="Teléfono"><Input name="fono" inputMode="tel" required /></Campo>
+              <Campo label="Dirección"><Input name="direccion" required /></Campo>
+              <Campo label="Comuna"><Input name="comuna" required /></Campo>
+              <Campo label="Correo electrónico" span2><Input name="correo" type="email" required /></Campo>
+              <Campo label="AFP">
+                <select name="afp" className={selectCls} defaultValue="AFP Modelo">
+                  {AFPS.map((a) => <option key={a}>{a}</option>)}
+                </select>
+              </Campo>
+              <Campo label="Salud">
+                <div className="flex gap-2">
+                  <select name="salud" className={`${selectCls} flex-1`} defaultValue="Fonasa">
+                    <option>Fonasa</option>
+                    <option>Isapre</option>
+                  </select>
+                  <Input name="isapre_nombre" placeholder="Nombre Isapre" className="flex-1" />
+                </div>
+              </Campo>
+            </>
+          ) : null}
         </CardContent>
       </Card>
 
-      <Card className="card-soft border-transparent">
-        <CardHeader>
-          <CardTitle className="text-base">Contrato</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
-          <Campo label="Cargo">
-            <select className={selectCls} value={cargo} onChange={(e) => { setCargo(e.target.value); setJornada(""); }}>
-              {cargos.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </Campo>
-          <Campo label="Jornada">
-            <select className={selectCls} value={jornadaActual} onChange={(e) => setJornada(e.target.value)}>
-              {jornadas.map((j) => (
-                <option key={j} value={j}>{j === "completa" ? "Completa (full time)" : "Parcial (part time)"}</option>
-              ))}
-            </select>
-          </Campo>
-          {jornadaActual === "parcial" ? (
-            <Campo label="Horas semanales">
-              <Input name="horas_semanales" type="number" min={1} max={28} placeholder="ej. 21" required />
+      {esAnexo ? (
+        <Card className="card-soft border-transparent">
+          <CardHeader>
+            <CardTitle className="text-base">Anexo solicitado</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <Campo label="Tipo de anexo" span2>
+              <select className={selectCls} value={anexoTipo} onChange={(e) => setAnexoTipo(e.target.value)}>
+                <option value="renovacion_fijo_a_fijo">Renovación de plazo fijo a plazo fijo (nuevo plazo)</option>
+                <option value="renovacion_indefinido">Renovación: pasa a contrato indefinido</option>
+                <option value="otro">Otro (explicar abajo)</option>
+              </select>
             </Campo>
-          ) : null}
-          <Campo label="Tipo de contrato">
-            <select className={selectCls} value={tipoContrato} onChange={(e) => setTipoContrato(e.target.value)}>
-              <option value="plazo_fijo">Plazo fijo</option>
-              <option value="indefinido">Indefinido</option>
-            </select>
-          </Campo>
-          <Campo label="Fecha de inicio"><Input name="fecha_inicio" type="date" required /></Campo>
-          {tipoContrato === "plazo_fijo" ? (
-            <Campo label="Fecha de término"><Input name="fecha_vencimiento" type="date" required /></Campo>
-          ) : null}
-        </CardContent>
-      </Card>
+            <Campo label="Fecha del contrato original">
+              <Input name="fecha_contrato_original" type="date" required />
+            </Campo>
+            {anexoTipo === "renovacion_fijo_a_fijo" ? (
+              <Campo label="Nueva fecha de término">
+                <Input name="fecha_nueva_termino" type="date" required />
+              </Campo>
+            ) : null}
+            <Campo label="¿Qué necesitas que diga este anexo?" span2>
+              <Textarea
+                name="anexo_detalle"
+                rows={3}
+                required={anexoTipo === "otro"}
+                placeholder="Explícalo con palabras simples: por ejemplo, cambio de jornada, cambio de sueldo, cambio de funciones, nuevo horario, etc…"
+              />
+            </Campo>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card className="card-soft border-transparent">
+            <CardHeader>
+              <CardTitle className="text-base">Contrato</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              <Campo label="Cargo">
+                <select className={selectCls} value={cargo} onChange={(e) => { setCargo(e.target.value); setJornada(""); }}>
+                  {cargos.map((c) => <option key={c}>{c}</option>)}
+                </select>
+              </Campo>
+              <Campo label="Jornada">
+                <select className={selectCls} value={jornadaActual} onChange={(e) => setJornada(e.target.value)}>
+                  {jornadas.map((j) => (
+                    <option key={j} value={j}>{j === "completa" ? "Completa (full time)" : "Parcial (part time)"}</option>
+                  ))}
+                </select>
+              </Campo>
+              {jornadaActual === "parcial" ? (
+                <Campo label="Horas semanales">
+                  <Input name="horas_semanales" type="number" min={1} max={28} placeholder="ej. 21" required />
+                </Campo>
+              ) : null}
+              <Campo label="Tipo de contrato">
+                <select className={selectCls} value={tipoActual} onChange={(e) => setTipoContrato(e.target.value)}>
+                  {tiposDisponibles.map((t) => (
+                    <option key={t} value={t}>{t === "plazo_fijo" ? "Plazo fijo" : "Indefinido"}</option>
+                  ))}
+                </select>
+              </Campo>
+              {comboSinPlantilla ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 sm:col-span-2">
+                  Para esta combinación aún no hay modelo de contrato de
+                  extranjero. Puedes enviar la solicitud igual: el equipo de RS
+                  Tax &amp; Legal preparará el modelo al revisarla.
+                </p>
+              ) : null}
+              <Campo label="Fecha de inicio"><Input name="fecha_inicio" type="date" required /></Campo>
+              {tipoActual === "plazo_fijo" ? (
+                <Campo label="Fecha de término"><Input name="fecha_vencimiento" type="date" required /></Campo>
+              ) : null}
+            </CardContent>
+          </Card>
 
-      <Card className="card-soft border-transparent">
-        <CardHeader>
-          <CardTitle className="text-base">Remuneración</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-3">
-          <Campo label="Sueldo base ($)"><Input name="sueldo_base" type="number" min={1} required /></Campo>
-          <Campo label="Movilización ($)"><Input name="movilizacion" type="number" min={0} defaultValue={0} /></Campo>
-          <Campo label="Colación ($)"><Input name="colacion" type="number" min={0} defaultValue={0} /></Campo>
-          <Campo label="Gratificación legal (Art. 50 CT)">
-            <select name="gratificacion" className={selectCls} defaultValue="mensual">
-              <option value="mensual">Mensual (prorrateada mes a mes)</option>
-              <option value="anual">Anual</option>
-            </select>
-          </Campo>
-          {jornadaActual === "parcial" ? (
-            <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 sm:col-span-3">
-              <strong>Referencia sueldo mínimo proporcional</strong> (mínimo
-              $539.000 por 42 hrs semanales): <strong>20 hrs → $256.667</strong>{" "}
-              · <strong>30 hrs → $385.000</strong>. El sueldo base no puede ser
-              inferior al proporcional de las horas pactadas.
-            </div>
-          ) : null}
-          <Campo label="Observaciones" span2>
-            <Textarea
-              name="observaciones"
-              rows={3}
-              placeholder="Si el contrato lleva asignación de pérdida de caja, indícalo aquí (monto). Si lleva bono o comisión, explica cómo se obtiene: porcentaje, metas o tabla de comisiones, y si es fijo o variable."
-            />
-          </Campo>
-        </CardContent>
-      </Card>
+          <Card className="card-soft border-transparent">
+            <CardHeader>
+              <CardTitle className="text-base">Remuneración</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 sm:grid-cols-3">
+              <NotaMinimos />
+              <Campo label="Sueldo base ($)"><Input name="sueldo_base" type="number" min={1} required /></Campo>
+              <Campo label="Movilización ($)"><Input name="movilizacion" type="number" min={0} defaultValue={0} /></Campo>
+              <Campo label="Colación ($)"><Input name="colacion" type="number" min={0} defaultValue={0} /></Campo>
+              <Campo label="Gratificación legal (Art. 50 CT)">
+                <select name="gratificacion" className={selectCls} defaultValue="mensual">
+                  <option value="mensual">Mensual (prorrateada mes a mes)</option>
+                  <option value="anual">Anual</option>
+                </select>
+              </Campo>
+              <Campo label="Observaciones" span2>
+                <Textarea
+                  name="observaciones"
+                  rows={3}
+                  placeholder="Si el contrato lleva asignación de pérdida de caja, indícalo aquí (monto). Si lleva bono o comisión, explica cómo se obtiene: porcentaje, metas o tabla de comisiones, si es fijo o variable, etc…"
+                />
+              </Campo>
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       <div className="flex justify-end">
         <Button type="submit" size="lg" disabled={enviando}>

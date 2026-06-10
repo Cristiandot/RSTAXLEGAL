@@ -119,9 +119,9 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
           fono: s("fono"),
           afp: s("afp"),
           salud: s("salud") === "Isapre" ? s("isapre_nombre") || "Isapre" : "Fonasa",
-          banco: s("banco"),
-          tipoCuenta: s("tipo_cuenta"),
-          numeroCuenta: s("numero_cuenta"),
+          banco: "",
+          tipoCuenta: "",
+          numeroCuenta: "",
         },
         contrato: {
           cargo: cargoActual,
@@ -322,18 +322,6 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
               <Input name="isapre_nombre" placeholder="Nombre Isapre (si aplica)" className="flex-1" />
             </div>
           </Campo>
-          <Campo label="Banco (depósito remuneración)"><Input name="banco" /></Campo>
-          <Campo label="Tipo y N° de cuenta">
-            <div className="flex gap-2">
-              <select name="tipo_cuenta" className={`${selectCls} flex-1`} defaultValue="Cuenta RUT">
-                <option>Cuenta RUT</option>
-                <option>Cuenta Vista</option>
-                <option>Cuenta Corriente</option>
-                <option>Cuenta de Ahorro</option>
-              </select>
-              <Input name="numero_cuenta" placeholder="N°" className="flex-1" />
-            </div>
-          </Campo>
         </CardContent>
       </Card>
 
@@ -395,20 +383,17 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
               <option value="anual">Anual</option>
             </select>
           </Campo>
-          {jornadaActual === "parcial" ? (
-            <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 sm:col-span-3">
-              <strong>Referencia sueldo mínimo proporcional</strong> (mínimo
-              $539.000 por jornada de 42 hrs; regla de tres según horas
-              pactadas): <strong>20 hrs → $256.667</strong> ·{" "}
-              <strong>30 hrs → $385.000</strong>. El sueldo base de un part
-              time no puede ser inferior al proporcional que corresponda.
-            </div>
-          ) : null}
+          <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 sm:col-span-3">
+            <strong>Sueldos mínimos de referencia</strong> (IMM $539.000 por 42
+            hrs; proporcional según horas): <strong>42 hrs → $539.000</strong> ·{" "}
+            <strong>30 hrs → $385.000</strong> ·{" "}
+            <strong>20 hrs → $256.667</strong>.
+          </div>
           <Campo label="Observaciones" span2>
             <Textarea
               name="observaciones"
               rows={3}
-              placeholder="Si el contrato lleva asignación de pérdida de caja, indícalo aquí (monto). Si lleva bono o comisión variable, explica cómo se obtiene: porcentaje, metas o tabla de comisiones, y si es fijo o variable."
+              placeholder="Si el contrato lleva asignación de pérdida de caja, indícalo aquí (monto). Si lleva bono o comisión, explica cómo se obtiene: porcentaje, metas o tabla de comisiones, si es fijo o variable, etc…"
             />
           </Campo>
         </CardContent>
