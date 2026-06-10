@@ -10,10 +10,10 @@ export const metadata = { title: "Contratos — RS Tax & Legal" };
 export default async function ContratosPage() {
   const supabase = await createClient();
 
-  // Empresas con plantillas de contrato (para el link del Form de solicitud)
+  // Empresas con plantillas de contrato (para el link público de solicitud)
   const { data: conPlantillas } = await supabase
     .from("plantillas_contrato")
-    .select("cliente_id, clientes(id, razon_social, form_solicitud_url)")
+    .select("cliente_id, clientes(id, razon_social, form_token)")
     .eq("tipo_documento", "contrato")
     .eq("activo", true)
     .not("cliente_id", "is", null);
@@ -23,13 +23,13 @@ export default async function ContratosPage() {
     const cli = p.clientes as unknown as {
       id: string;
       razon_social: string;
-      form_solicitud_url: string | null;
+      form_token: string | null;
     } | null;
     if (cli && !empresasMap.has(cli.id)) {
       empresasMap.set(cli.id, {
         id: cli.id,
         razonSocial: cli.razon_social,
-        formUrl: cli.form_solicitud_url,
+        formToken: cli.form_token,
       });
     }
   }

@@ -4,11 +4,11 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ClipboardCopy, Download, FilePlus2, Link2, Pencil, Search } from "lucide-react";
+import { ClipboardCopy, Download, FilePlus2, Link2, Search } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import {
   cambiarEstadoContrato,
-  guardarFormUrl,
+  generarContrato,
   linkDescargaContrato,
 } from "./actions";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ import {
 export type EmpresaForm = {
   id: string;
   razonSocial: string;
-  formUrl: string | null;
+  formToken: string | null;
 };
 
 export type ContratoRow = {
@@ -64,65 +64,25 @@ const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function FormUrlEmpresa({ empresa }: { empresa: EmpresaForm }) {
-  const router = useRouter();
-  const [editando, setEditando] = useState(false);
-  const [url, setUrl] = useState(empresa.formUrl ?? "");
-  const [guardando, startGuardar] = useTransition();
-
-  function guardar() {
-    startGuardar(async () => {
-      const res = await guardarFormUrl(empresa.id, url);
-      if (res.ok) {
-        toast.success("Link guardado");
-        setEditando(false);
-        router.refresh();
-      } else toast.error(res.error ?? "Error");
-    });
-  }
-
+  if (!empresa.formToken) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
       <Link2 className="size-4 shrink-0 text-[var(--brand-teal)]" />
       <span className="max-w-[220px] truncate font-medium" title={empresa.razonSocial}>
         {empresa.razonSocial}
       </span>
-      {editando ? (
-        <>
-          <Input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://forms.office.com/…"
-            className="h-8 w-72"
-          />
-          <Button size="sm" onClick={guardar} disabled={guardando}>
-            Guardar
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setEditando(false)}>
-            Cancelar
-          </Button>
-        </>
-      ) : empresa.formUrl ? (
-        <>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              navigator.clipboard.writeText(empresa.formUrl!);
-              toast.success("Link copiado — pégalo al cliente");
-            }}
-          >
-            <ClipboardCopy className="size-3.5" />
-            Copiar link del Form
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setEditando(true)} title="Editar link">
-            <Pencil className="size-3.5" />
-          </Button>
-        </>
-      ) : (
-        <Button size="sm" variant="outline" onClick={() => setEditando(true)}>
-          Agregar link del Form
-        </Button>
-      )}
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          const url = `${window.location.origin}/solicitud/${empresa.formToken}`;
+          navigator.clipboard.writeText(url);
+          toast.success("Link de solicitud copiado — pégaselo al cliente");
+        }}
+      >
+        <ClipboardCopy className="size-3.5" />
+        Copiar link de solicitud
+      </Button>
     </div>
   );
 }
@@ -165,6 +125,16 @@ export function ContratosClient({
       const res = await linkDescargaContrato(id);
       if (res.ok && res.url) window.open(res.url, "_blank");
       else toast.error(res.error ?? "Error al descargar");
+    });
+  }
+
+  function generar(id: string) {
+    startAccion(async () => {
+      const res = await generarContrato(id);
+      if (res.ok) {
+        toast.success("Documento generado");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al generar");
     });
   }
 
@@ -267,6 +237,11 @@ export function ContratosClient({
                       {f.tieneDocumento ? (
                         <Button size="sm" variant="ghost" disabled={ocupado} onClick={() => descargar(f.id)} title="Descargar .docx">
                           <Download className="size-4" />
+                        </Button>
+                      ) : null}
+                      {f.estado === "solicitado" ? (
+                        <Button size="sm" variant="outline" disabled={ocupado} onClick={() => generar(f.id)}>
+                          Generar
                         </Button>
                       ) : null}
                       {f.estado === "generado" ? (

@@ -34,7 +34,9 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const esRutaPublica =
-    pathname.startsWith("/login") || pathname.startsWith("/auth");
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/auth") ||
+    pathname.startsWith("/solicitud"); // formulario público de clientes (tokenizado)
 
   if (!user && !esRutaPublica) {
     const url = request.nextUrl.clone();
