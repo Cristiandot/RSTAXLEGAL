@@ -1,10 +1,38 @@
 import { createClient } from "@/lib/supabase/server";
-import { ContratosClient, type ContratoRow } from "./contratos-client";
+import {
+  ContratosClient,
+  type ContratoRow,
+  type EmpresaForm,
+} from "./contratos-client";
 
 export const metadata = { title: "Contratos — RS Tax & Legal" };
 
 export default async function ContratosPage() {
   const supabase = await createClient();
+
+  // Empresas con plantillas de contrato (para el link del Form de solicitud)
+  const { data: conPlantillas } = await supabase
+    .from("plantillas_contrato")
+    .select("cliente_id, clientes(id, razon_social, form_solicitud_url)")
+    .eq("tipo_documento", "contrato")
+    .eq("activo", true)
+    .not("cliente_id", "is", null);
+
+  const empresasMap = new Map<string, EmpresaForm>();
+  for (const p of conPlantillas ?? []) {
+    const cli = p.clientes as unknown as {
+      id: string;
+      razon_social: string;
+      form_solicitud_url: string | null;
+    } | null;
+    if (cli && !empresasMap.has(cli.id)) {
+      empresasMap.set(cli.id, {
+        id: cli.id,
+        razonSocial: cli.razon_social,
+        formUrl: cli.form_solicitud_url,
+      });
+    }
+  }
 
   const { data, error } = await supabase
     .from("contratos")
@@ -40,7 +68,11 @@ export default async function ContratosPage() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
-      <ContratosClient filas={filas} errorCarga={error?.message ?? null} />
+      <ContratosClient
+        filas={filas}
+        empresas={[...empresasMap.values()]}
+        errorCarga={error?.message ?? null}
+      />
     </main>
   );
 }

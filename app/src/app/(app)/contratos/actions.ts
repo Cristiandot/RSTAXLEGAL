@@ -40,6 +40,25 @@ export async function cambiarEstadoContrato(
   return { ok: true };
 }
 
+/** Guarda el link del Microsoft Form de solicitud de un cliente. */
+export async function guardarFormUrl(
+  clienteId: string,
+  url: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const limpio = url.trim();
+  if (limpio && !/^https:\/\//.test(limpio)) {
+    return { ok: false, error: "El link debe comenzar con https://" };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("clientes")
+    .update({ form_solicitud_url: limpio || null })
+    .eq("id", clienteId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/contratos");
+  return { ok: true };
+}
+
 /** Genera un link firmado (1 hora) para descargar el documento. */
 export async function linkDescargaContrato(
   contratoId: string,

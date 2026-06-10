@@ -76,6 +76,9 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
   const [jornadaTipo, setJornadaTipo] = useState("");
   const jornadaActual = jornadaTipo || jornadas[0] || "completa";
 
+  const [nacionalidad, setNacionalidad] = useState("Chilena");
+  const esExtranjero = !nacionalidad.trim().toLowerCase().startsWith("chilen");
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!empresa) return;
@@ -125,7 +128,7 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
           fechaVencimiento: s("fecha_vencimiento") || null,
           jornadaTipo: jornadaActual as "completa" | "parcial",
           horasSemanales: jornadaActual === "parcial" ? n("horas_semanales") || null : null,
-          lugarTrabajo: s("lugar_trabajo"),
+          lugarTrabajo: "",
           sueldoBase: n("sueldo_base"),
           movilizacion: n("movilizacion"),
           colacion: n("colacion"),
@@ -264,7 +267,21 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
             <Checkbox id="rut_provisorio" name="rut_provisorio" />
             <Label htmlFor="rut_provisorio" className="text-xs">RUT provisorio / en trámite (extranjero)</Label>
           </div>
-          <Campo label="Nacionalidad"><Input name="nacionalidad" defaultValue="Chilena" required /></Campo>
+          <Campo label="Nacionalidad">
+            <Input
+              name="nacionalidad"
+              value={nacionalidad}
+              onChange={(e) => setNacionalidad(e.target.value)}
+              required
+            />
+            {esExtranjero ? (
+              <p className="text-xs text-sky-700">
+                Trabajador extranjero: se usará la plantilla con las cláusulas
+                especiales (vigencia sujeta a visa/permiso, régimen previsional
+                Ley 18.156 e impuesto a la renta sobre 13,5 UTM).
+              </p>
+            ) : null}
+          </Campo>
           <Campo label="Fecha de nacimiento"><Input name="fecha_nacimiento" type="date" /></Campo>
           <Campo label="Estado civil">
             <select name="estado_civil" className={selectCls} defaultValue="Soltero(a)">
@@ -338,9 +355,9 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
           </Campo>
           <Campo label="Fecha de inicio"><Input name="fecha_inicio" type="date" required /></Campo>
           <Campo label="Vencimiento (si plazo fijo)"><Input name="fecha_vencimiento" type="date" /></Campo>
-          <Campo label="Lugar de trabajo (vacío = domicilio empresa)" span2>
-            <Input name="lugar_trabajo" />
-          </Campo>
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            Lugar de trabajo: el domicilio de la empresa ({empresa?.domicilio ?? "—"}).
+          </p>
         </CardContent>
       </Card>
 
@@ -356,8 +373,21 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
           <Campo label="Sueldo base ($)"><Input name="sueldo_base" type="number" min={1} required /></Campo>
           <Campo label="Movilización ($)"><Input name="movilizacion" type="number" min={0} defaultValue={0} /></Campo>
           <Campo label="Colación ($)"><Input name="colacion" type="number" min={0} defaultValue={0} /></Campo>
+          {jornadaActual === "parcial" ? (
+            <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 sm:col-span-3">
+              <strong>Referencia sueldo mínimo proporcional</strong> (mínimo
+              $539.000 por jornada de 42 hrs; regla de tres según horas
+              pactadas): <strong>20 hrs → $256.667</strong> ·{" "}
+              <strong>30 hrs → $385.000</strong>. El sueldo base de un part
+              time no puede ser inferior al proporcional que corresponda.
+            </div>
+          ) : null}
           <Campo label="Observaciones" span2>
-            <Textarea name="observaciones" rows={2} />
+            <Textarea
+              name="observaciones"
+              rows={3}
+              placeholder="Si el contrato lleva asignación de pérdida de caja, indícalo aquí (monto). Si lleva bono o comisión variable, explica cómo se obtiene: porcentaje, metas o tabla de comisiones, y si es fijo o variable."
+            />
           </Campo>
         </CardContent>
       </Card>
