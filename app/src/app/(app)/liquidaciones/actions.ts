@@ -10,6 +10,7 @@ export type GuardarLiquidacionInput = {
   modalidad: string;
   fechaPreviredListoPago: string | null;
   fechaPreviredPagado: string | null;
+  fechaDnpDeclarado: string | null;
   monto: string | null;
   observaciones: string | null;
   origResponsableDefaultId: string | null;
@@ -32,6 +33,7 @@ export async function guardarLiquidacion(
       responsable_id: input.responsableId,
       fecha_previred_listo_pago: input.fechaPreviredListoPago,
       fecha_previred_pagado: input.fechaPreviredPagado,
+      fecha_dnp_declarado: input.fechaDnpDeclarado,
       monto_previred_total: input.monto,
       observaciones: input.observaciones,
     })

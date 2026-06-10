@@ -23,6 +23,7 @@ export type LiquidacionRow = {
   fecha_previred_presentada: string | null;
   fecha_previred_listo_pago: string | null;
   fecha_previred_pagado: string | null;
+  fecha_dnp_declarado: string | null;
   monto_previred_total: number | string | null;
   observaciones: string | null;
 };
@@ -50,6 +51,7 @@ export function claseEstado(estado: string): string {
   switch (estado) {
     case "Cerrado":
     case "Previred pagado":
+    case "DNP declarado":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "Sin iniciar":
       return "border-slate-200 bg-slate-100 text-slate-600";
@@ -64,7 +66,7 @@ export function claseEstado(estado: string): string {
 
 /** Clase de color para la celda de días restantes. */
 export function claseDias(estado: string, dias: number | null): string {
-  if (estado === "Cerrado" || estado === "Previred pagado")
+  if (estado === "Cerrado" || estado === "Previred pagado" || estado === "DNP declarado")
     return "text-muted-foreground";
   if (dias === null) return "text-muted-foreground";
   if (dias <= 5) return "font-semibold text-red-600";

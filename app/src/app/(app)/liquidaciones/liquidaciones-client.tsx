@@ -45,6 +45,7 @@ const ESTADOS = [
   "Envío previred",
   "Previred listo para pago RS",
   "Previred pagado",
+  "DNP declarado",
 ];
 
 // Pasos marcables con checkbox inline (columna en BD → etiqueta de columna)
@@ -83,6 +84,7 @@ export function LiquidacionesClient({
   const [modF, setModF] = useState("");
   const [respF, setRespF] = useState("");
   const [editando, setEditando] = useState<LiquidacionRow | null>(null);
+  const [modalidadModal, setModalidadModal] = useState("pago");
   const [guardando, startGuardar] = useTransition();
   const [marcando, startMarcar] = useTransition();
 
@@ -109,7 +111,7 @@ export function LiquidacionesClient({
         case "responsable": return c.responsable;
         case "plazo": return c.plazo_previred;
         case "dias": return c.dias_restantes_previred;
-        case "pagado": return c.fecha_previred_pagado;
+        case "pagado": return c.fecha_previred_pagado ?? c.fecha_dnp_declarado;
         case "monto": return c.monto_previred_total !== null ? Number(c.monto_previred_total) : null;
         default: return null;
       }
@@ -133,10 +135,15 @@ export function LiquidacionesClient({
       valor: filas.filter((c) => c.estado === "Previred pagado").length,
     },
     {
+      label: "DNP declarados",
+      valor: filas.filter((c) => c.estado === "DNP declarado").length,
+    },
+    {
       label: "Plazo ≤ 5 días",
       valor: filas.filter(
         (c) =>
           c.estado !== "Previred pagado" &&
+          c.estado !== "DNP declarado" &&
           c.dias_restantes_previred !== null &&
           c.dias_restantes_previred <= 5,
       ).length,
@@ -168,6 +175,7 @@ export function LiquidacionesClient({
         modalidad: String(fd.get("modalidad") ?? "pago"),
         fechaPreviredListoPago: get("fecha_previred_listo_pago"),
         fechaPreviredPagado: get("fecha_previred_pagado"),
+        fechaDnpDeclarado: get("fecha_dnp_declarado"),
         monto: get("monto"),
         observaciones: get("observaciones"),
         origResponsableDefaultId: ciclo.responsable_default_id,
@@ -198,7 +206,7 @@ export function LiquidacionesClient({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {resumen.map((r) => (
           <ResumenCard key={r.label} label={r.label} valor={r.valor} />
         ))}
@@ -296,7 +304,7 @@ export function LiquidacionesClient({
                   {p.label}
                 </TableHead>
               ))}
-              <ThSort col="pagado" orden={orden} setOrden={setOrden}>Pagado</ThSort>
+              <ThSort col="pagado" orden={orden} setOrden={setOrden}>Pagado / DNP</ThSort>
               <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Monto</ThSort>
             </TableRow>
           </TableHeader>
@@ -314,7 +322,10 @@ export function LiquidacionesClient({
               filtradas.map((c) => (
                 <TableRow
                   key={c.ciclo_id}
-                  onClick={() => setEditando(c)}
+                  onClick={() => {
+                    setModalidadModal(c.modalidad_previred || "pago");
+                    setEditando(c);
+                  }}
                   className="cursor-pointer"
                 >
                   <TableCell className="font-medium">
@@ -359,7 +370,7 @@ export function LiquidacionesClient({
                       />
                     </TableCell>
                   ))}
-                  <TableCell>{formatFecha(c.fecha_previred_pagado)}</TableCell>
+                  <TableCell>{formatFecha(c.fecha_previred_pagado ?? c.fecha_dnp_declarado)}</TableCell>
                   <TableCell className="text-right">
                     {formatMonto(c.monto_previred_total)}
                   </TableCell>
@@ -413,7 +424,8 @@ export function LiquidacionesClient({
                   id="modalidad"
                   name="modalidad"
                   className={selectCls}
-                  defaultValue={editando.modalidad_previred || "pago"}
+                  value={modalidadModal}
+                  onChange={(e) => setModalidadModal(e.target.value)}
                 >
                   <option value="pago">Pago (hasta día 13)</option>
                   <option value="dnp">DNP (hasta día 10)</option>
@@ -436,36 +448,65 @@ export function LiquidacionesClient({
                 </select>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="fecha_previred_listo_pago">
-                  Previred listo para pago RS
-                </Label>
-                <Input
-                  id="fecha_previred_listo_pago"
-                  name="fecha_previred_listo_pago"
-                  type="date"
-                  defaultValue={editando.fecha_previred_listo_pago ?? ""}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="monto">Monto de pago</Label>
-                <Input
-                  id="monto"
-                  name="monto"
-                  type="number"
-                  inputMode="numeric"
-                  defaultValue={editando.monto_previred_total ?? ""}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="fecha_previred_pagado">Previred pagado</Label>
-                <Input
-                  id="fecha_previred_pagado"
-                  name="fecha_previred_pagado"
-                  type="date"
-                  defaultValue={editando.fecha_previred_pagado ?? ""}
-                />
-              </div>
+              {modalidadModal === "dnp" ? (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="fecha_dnp_declarado">DNP declarado</Label>
+                    <Input
+                      id="fecha_dnp_declarado"
+                      name="fecha_dnp_declarado"
+                      type="date"
+                      defaultValue={editando.fecha_dnp_declarado ?? ""}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="monto">Monto declarado</Label>
+                    <Input
+                      id="monto"
+                      name="monto"
+                      type="number"
+                      inputMode="numeric"
+                      defaultValue={editando.monto_previred_total ?? ""}
+                    />
+                  </div>
+                  <input type="hidden" name="fecha_previred_listo_pago" value={editando.fecha_previred_listo_pago ?? ""} />
+                  <input type="hidden" name="fecha_previred_pagado" value={editando.fecha_previred_pagado ?? ""} />
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="fecha_previred_listo_pago">
+                      Previred listo para pago RS
+                    </Label>
+                    <Input
+                      id="fecha_previred_listo_pago"
+                      name="fecha_previred_listo_pago"
+                      type="date"
+                      defaultValue={editando.fecha_previred_listo_pago ?? ""}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="monto">Monto de pago</Label>
+                    <Input
+                      id="monto"
+                      name="monto"
+                      type="number"
+                      inputMode="numeric"
+                      defaultValue={editando.monto_previred_total ?? ""}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="fecha_previred_pagado">Previred pagado</Label>
+                    <Input
+                      id="fecha_previred_pagado"
+                      name="fecha_previred_pagado"
+                      type="date"
+                      defaultValue={editando.fecha_previred_pagado ?? ""}
+                    />
+                  </div>
+                  <input type="hidden" name="fecha_dnp_declarado" value={editando.fecha_dnp_declarado ?? ""} />
+                </>
+              )}
 
               <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="observaciones">Observaciones</Label>
