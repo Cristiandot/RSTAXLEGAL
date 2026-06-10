@@ -430,6 +430,11 @@ export function LiquidacionesClient({
                   <option value="pago">Pago (hasta día 13)</option>
                   <option value="dnp">DNP (hasta día 10)</option>
                 </select>
+                <p className="text-xs text-muted-foreground">
+                  {modalidadModal === "dnp"
+                    ? "Modalidad DNP: declara sin pago — registra abajo la fecha de declaración."
+                    : "¿Este cliente declara sin pagar? Cambia la modalidad a DNP y aparecerá el campo «DNP declarado»."}
+                </p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="responsable">Responsable</Label>
