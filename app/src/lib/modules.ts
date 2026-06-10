@@ -76,13 +76,13 @@ export const MODULOS: SeccionModulos[] = [
     seccion: "Gestiones",
     modulos: [
       {
-        key: "contrato-nuevo",
-        label: "Contrato nuevo",
+        key: "contratos",
+        label: "Contratos",
         descripcion:
-          "Genera un contrato de trabajo desde la plantilla del cliente y los datos del empleado.",
-        href: "/contratos/nuevo",
+          "Solicitud, generación desde plantilla aprobada y revisión de contratos de trabajo.",
+        href: "/contratos",
         icon: FilePlus2,
-        estado: "desarrollo",
+        estado: "activo",
       },
     ],
   },
