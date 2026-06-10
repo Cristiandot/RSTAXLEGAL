@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Search, CheckCircle2, AlertTriangle } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { opcionesPeriodo } from "@/lib/periodos";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import {
   claseDias,
   claseEstado,
@@ -68,9 +70,11 @@ export function F29Client({
   const [editando, setEditando] = useState<F29Row | null>(null);
   const [guardando, startGuardar] = useTransition();
 
+  const [orden, setOrden] = useState<Orden>(null);
+
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return filas.filter((c) => {
+    const out = filas.filter((c) => {
       if (q) {
         const t = `${c.razon_social} ${c.rut_empresa ?? ""}`.toLowerCase();
         if (!t.includes(q)) return false;
@@ -81,7 +85,24 @@ export function F29Client({
       if (respF && c.responsable !== respF) return false;
       return true;
     });
-  }, [filas, buscar, estadoF, concilF, respF]);
+    if (!orden) return out;
+    const valor = (c: F29Row): unknown => {
+      switch (orden.col) {
+        case "cliente": return c.razon_social;
+        case "concil": return c.conciliacion_ok ? 0 : 1; // OK primero en asc
+        case "estado": return c.estado;
+        case "responsable": return c.responsable;
+        case "plazo": return c.plazo_f29;
+        case "dias": return c.dias_restantes_f29;
+        case "armado": return c.fecha_f29_armado;
+        case "presentado": return c.fecha_f29_presentado;
+        case "monto": return c.monto_a_pagar !== null ? Number(c.monto_a_pagar) : null;
+        case "folio": return c.folio_f29;
+        default: return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
+  }, [filas, buscar, estadoF, concilF, respF, orden]);
 
   const resumen = [
     { label: "Total", valor: filas.length },
@@ -236,17 +257,17 @@ export function F29Client({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[220px]">Cliente</TableHead>
+              <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[220px]">Cliente</ThSort>
               <TableHead>RUT</TableHead>
-              <TableHead>Conciliación</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Responsable</TableHead>
-              <TableHead>Plazo</TableHead>
-              <TableHead className="text-center">Días</TableHead>
-              <TableHead>Armado</TableHead>
-              <TableHead>Presentado</TableHead>
-              <TableHead className="text-right">Monto</TableHead>
-              <TableHead>Folio</TableHead>
+              <ThSort col="concil" orden={orden} setOrden={setOrden}>Conciliación</ThSort>
+              <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
+              <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
+              <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>
+              <ThSort col="dias" orden={orden} setOrden={setOrden} className="text-center">Días</ThSort>
+              <ThSort col="armado" orden={orden} setOrden={setOrden}>Armado</ThSort>
+              <ThSort col="presentado" orden={orden} setOrden={setOrden}>Presentado</ThSort>
+              <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Monto</ThSort>
+              <ThSort col="folio" orden={orden} setOrden={setOrden}>Folio</ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>

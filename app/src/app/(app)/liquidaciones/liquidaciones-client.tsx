@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Search } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { opcionesPeriodo } from "@/lib/periodos";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import {
   claseDias,
   claseEstado,
@@ -84,9 +86,11 @@ export function LiquidacionesClient({
   const [guardando, startGuardar] = useTransition();
   const [marcando, startMarcar] = useTransition();
 
+  const [orden, setOrden] = useState<Orden>(null);
+
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return filas.filter((c) => {
+    const out = filas.filter((c) => {
       if (q) {
         const t = `${c.razon_social} ${c.rut_empresa ?? ""} ${c.previred_rut ?? ""}`.toLowerCase();
         if (!t.includes(q)) return false;
@@ -96,7 +100,22 @@ export function LiquidacionesClient({
       if (respF && c.responsable !== respF) return false;
       return true;
     });
-  }, [filas, buscar, estadoF, modF, respF]);
+    if (!orden) return out;
+    const valor = (c: LiquidacionRow): unknown => {
+      switch (orden.col) {
+        case "cliente": return c.razon_social;
+        case "modalidad": return c.modalidad_previred;
+        case "estado": return c.estado;
+        case "responsable": return c.responsable;
+        case "plazo": return c.plazo_previred;
+        case "dias": return c.dias_restantes_previred;
+        case "pagado": return c.fecha_previred_pagado;
+        case "monto": return c.monto_previred_total !== null ? Number(c.monto_previred_total) : null;
+        default: return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
+  }, [filas, buscar, estadoF, modF, respF, orden]);
 
   const resumen = [
     { label: "Total", valor: filas.length },
@@ -265,20 +284,20 @@ export function LiquidacionesClient({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[220px]">Cliente</TableHead>
+              <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[220px]">Cliente</ThSort>
               <TableHead>RUT Previred</TableHead>
-              <TableHead>Modalidad</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Responsable</TableHead>
-              <TableHead>Plazo</TableHead>
-              <TableHead className="text-center">Días</TableHead>
+              <ThSort col="modalidad" orden={orden} setOrden={setOrden}>Modalidad</ThSort>
+              <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
+              <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
+              <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>
+              <ThSort col="dias" orden={orden} setOrden={setOrden} className="text-center">Días</ThSort>
               {PASOS.map((p) => (
                 <TableHead key={p.columna} className="text-center">
                   {p.label}
                 </TableHead>
               ))}
-              <TableHead>Pagado</TableHead>
-              <TableHead className="text-right">Monto</TableHead>
+              <ThSort col="pagado" orden={orden} setOrden={setOrden}>Pagado</ThSort>
+              <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Monto</ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>
