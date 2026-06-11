@@ -114,6 +114,9 @@ Migrar los 4 HTML standalone a un proyecto Next.js + TypeScript + Tailwind + sha
 
 ## Pendientes operativos
 
+- ⏳ **PRIORIDAD — Cargar `ANTHROPIC_API_KEY` en Vercel** (proyecto rstaxlegal-panel → Settings → Environment Variables → Production → Redeploy). Cristian tiene solicitud enviada para unirse a la org "RS Tax & Legal" en console.anthropic.com (alternativa: crear org propia + billing $5). **Esta key activa todo el pipeline de redacción IA ya cableado y desplegado**: (a) descripción de hechos de amonestaciones → párrafo formal en la carta; (b) "otras consideraciones remuneracionales" del cliente → cláusula adicional formal en el contrato. Sin la key, fallback al comportamiento manual (texto tal cual / solo cláusulas del equipo). Visión de Cristian: TODO texto libre del cliente pasa por IA para que los documentos salgan listos para revisar y enviar.
+- ⏳ `RESEND_API_KEY` en Vercel (activa envío de documentos por correo con un click).
+
 - Conseguir RUT y clave SII de Distribuidora Red Barrera e Inmobiliaria Barrera Álvarez.
 - Asignar responsables F29 a los 123 ciclos (Solange o Danilo, definir con contador jefe).
 - Marcar `es_profesional_salud=TRUE` en los clientes que correspondan.
