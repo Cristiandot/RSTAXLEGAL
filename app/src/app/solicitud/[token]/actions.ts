@@ -300,6 +300,54 @@ export async function eliminarNovedad(
   return { ok: true };
 }
 
+/**
+ * Edita una novedad ya cargada (solo del propio cliente, origen 'cliente' y
+ * mes abierto — lo valida la RPC). El trabajador no se cambia: para eso se
+ * elimina y se crea de nuevo.
+ */
+export async function actualizarNovedad(
+  token: string,
+  id: string,
+  n: Omit<NovedadInput, "trabajador_id" | "periodo">,
+): Promise<{ ok: boolean; error?: string }> {
+  const def = TIPOS_NOVEDAD.find((t) => t.value === n.tipo);
+  if (!def) return { ok: false, error: "Tipo de novedad no válido." };
+  if (def.campos === "horas") {
+    if (!n.fecha) return { ok: false, error: "Indica la fecha." };
+    if (!n.cantidad || Number(n.cantidad) <= 0) {
+      return { ok: false, error: "Indica las horas (mayor a 0)." };
+    }
+  }
+  if (def.campos === "rango") {
+    if (!n.fecha) return { ok: false, error: "Indica el primer día." };
+    if (!n.fecha_hasta) return { ok: false, error: "Indica el último día." };
+    if (n.fecha_hasta < n.fecha) {
+      return { ok: false, error: "El término no puede ser anterior al inicio." };
+    }
+  }
+  if (def.campos === "monto") {
+    if (!n.monto || Number(n.monto) <= 0) {
+      return { ok: false, error: "Indica el monto en pesos (mayor a 0)." };
+    }
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("actualizar_novedad_remuneracion", {
+    p_token: token,
+    p_id: id,
+    p: {
+      tipo: n.tipo,
+      fecha: n.fecha || null,
+      fecha_hasta: def.campos === "rango" ? n.fecha_hasta || null : null,
+      cantidad: def.campos === "horas" ? n.cantidad : null,
+      monto: def.campos === "monto" ? n.monto : null,
+      comentario: n.comentario || null,
+    },
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function cerrarPeriodoRemuneraciones(
   token: string,
   periodo: string,

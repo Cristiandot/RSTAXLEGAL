@@ -115,7 +115,7 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
                   <CardTitle className="text-base">Detalle remuneraciones</CardTitle>
                   <CardDescription className="mt-1">
                     Novedades del mes para las liquidaciones: horas extra, turnos
-                    en feriados y domingos, licencias médicas, anticipos y bonos.
+                    en feriados y domingos (si aplica), anticipos y bonos.
                     Lo que ya pediste por el panel de solicitudes (permisos,
                     vacaciones, finiquitos) se carga solo — no lo repites acá.
                   </CardDescription>

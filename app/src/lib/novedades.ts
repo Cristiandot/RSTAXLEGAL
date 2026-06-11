@@ -11,6 +11,8 @@ export type TipoNovedad = {
   /** Qué campos pide: horas (fecha + cantidad), rango (desde/hasta), monto ($). */
   campos: "horas" | "rango" | "monto";
   hint?: string;
+  /** false = no se ofrece en el desplegable del portal del cliente. */
+  enPortal?: boolean;
 };
 
 export const TIPOS_NOVEDAD: TipoNovedad[] = [
@@ -22,21 +24,24 @@ export const TIPOS_NOVEDAD: TipoNovedad[] = [
   },
   {
     value: "feriado",
-    label: "Horas trabajadas en día feriado",
+    label: "Horas trabajadas en día feriado (si aplica)",
     campos: "horas",
-    hint: "Se pagan con el recargo pactado de la empresa.",
+    hint: "El recargo no aplica a todos los trabajadores — depende del contrato. El equipo lo valida al liquidar.",
   },
   {
     value: "domingo",
-    label: "Horas trabajadas en día domingo",
+    label: "Horas trabajadas en día domingo (si aplica)",
     campos: "horas",
-    hint: "Se pagan con el recargo pactado de la empresa.",
+    hint: "El recargo no aplica a todos los trabajadores — depende del contrato. El equipo lo valida al liquidar.",
   },
   {
+    // Se mantiene en el catálogo para mostrar registros históricos y para el
+    // equipo; los clientes ya no la informan por el portal (decisión 11-06-2026).
     value: "licencia",
     label: "Licencia médica",
     campos: "rango",
     hint: "Indica desde y hasta según el documento de la licencia.",
+    enPortal: false,
   },
   {
     value: "anticipo",

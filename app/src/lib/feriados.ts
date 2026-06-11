@@ -16,6 +16,39 @@
 export const FERIADOS_DESDE = 2026;
 export const FERIADOS_HASTA = 2028;
 
+/**
+ * Feriados obligatorios e IRRENUNCIABLES para los trabajadores del comercio
+ * (Ley 19.973): 1 de enero, 1 de mayo, 18 y 19 de septiembre y 25 de
+ * diciembre. Se marcan por MM-DD porque se repiten todos los años.
+ */
+export const FERIADOS_IRRENUNCIABLES_MM_DD = new Set([
+  "01-01",
+  "05-01",
+  "09-18",
+  "09-19",
+  "12-25",
+]);
+
+export type FeriadoMes = {
+  fecha: string; // ISO YYYY-MM-DD
+  dia: number;
+  nombre: string;
+  irrenunciable: boolean;
+};
+
+/** Feriados legales de un mes (periodo YYYY-MM), con flag de irrenunciable. */
+export function feriadosDelMes(periodo: string): FeriadoMes[] {
+  return Object.entries(FERIADOS_CHILE)
+    .filter(([fecha]) => fecha.startsWith(periodo + "-"))
+    .map(([fecha, nombre]) => ({
+      fecha,
+      dia: Number(fecha.slice(8, 10)),
+      nombre,
+      irrenunciable: FERIADOS_IRRENUNCIABLES_MM_DD.has(fecha.slice(5)),
+    }))
+    .sort((a, b) => a.dia - b.dia);
+}
+
 export const FERIADOS_CHILE: Record<string, string> = {
   // 2026
   "2026-01-01": "Año Nuevo",
