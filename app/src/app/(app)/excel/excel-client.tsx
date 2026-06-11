@@ -11,6 +11,7 @@ import {
   Lock,
   LockOpen,
   Plus,
+  Send,
   Trash2,
 } from "lucide-react";
 import {
@@ -54,6 +55,7 @@ function nombrePeriodo(p: string): string {
 export type EmpresaExcel = {
   clienteId: string;
   razonSocial: string;
+  correo: string | null;
   estado: "abierto" | "cerrado";
   trabajadores: { id: string; nombre: string }[];
   novedades: {
@@ -278,10 +280,29 @@ export function ExcelClient({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => generarProximamente("Excel de liquidaciones")}
+                    onClick={() => generarProximamente("Documentos de liquidaciones (PDF)")}
                   >
                     <FileSpreadsheet className="size-3.5" />
-                    Generar Excel liquidaciones
+                    Generar documentos liquidaciones
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    title={e.correo ?? "Sin correo asociado"}
+                    onClick={() => {
+                      if (!e.correo) {
+                        toast.error(
+                          "Esta empresa no tiene correo asociado — cárgalo en la ficha del cliente.",
+                        );
+                        return;
+                      }
+                      toast.info(
+                        `Envío a ${e.correo}: disponible próximamente — requiere los documentos generados (y RESEND_API_KEY en Vercel).`,
+                      );
+                    }}
+                  >
+                    <Send className="size-3.5" />
+                    Enviar cliente
                   </Button>
                   <Button
                     variant="outline"
@@ -309,7 +330,8 @@ export function ExcelClient({
                 {e.trabajadores.length} trabajador{e.trabajadores.length === 1 ? "" : "es"} activo
                 {e.trabajadores.length === 1 ? "" : "s"} · {e.novedades.length} novedad
                 {e.novedades.length === 1 ? "" : "es"} · {e.gestiones.length} gestión
-                {e.gestiones.length === 1 ? "" : "es"} del panel este mes
+                {e.gestiones.length === 1 ? "" : "es"} del panel este mes ·{" "}
+                {e.correo ? `envíos a ${e.correo}` : "sin correo asociado ⚠"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

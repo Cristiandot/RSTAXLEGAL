@@ -21,7 +21,7 @@ export default async function ExcelPage({
   const [trabRes, novRes, perRes, gesRes] = await Promise.all([
     supabase
       .from("trabajadores")
-      .select("id, cliente_id, nombres, apellidos, activo, clientes(razon_social)")
+      .select("id, cliente_id, nombres, apellidos, activo, clientes(razon_social, correo_empresa)")
       .order("apellidos")
       .limit(2000),
     supabase
@@ -57,12 +57,17 @@ export default async function ExcelPage({
   });
 
   const empresas = new Map<string, EmpresaExcel>();
-  function empresaDe(clienteId: string, razonSocial: string): EmpresaExcel {
+  function empresaDe(
+    clienteId: string,
+    razonSocial: string,
+    correo: string | null,
+  ): EmpresaExcel {
     let e = empresas.get(clienteId);
     if (!e) {
       e = {
         clienteId,
         razonSocial,
+        correo,
         estado: "abierto",
         trabajadores: [],
         novedades: [],
@@ -74,8 +79,11 @@ export default async function ExcelPage({
   }
 
   for (const t of trabRes.data ?? []) {
-    const cli = t.clientes as unknown as { razon_social: string } | null;
-    const e = empresaDe(t.cliente_id, cli?.razon_social ?? "—");
+    const cli = t.clientes as unknown as {
+      razon_social: string;
+      correo_empresa: string | null;
+    } | null;
+    const e = empresaDe(t.cliente_id, cli?.razon_social ?? "—", cli?.correo_empresa ?? null);
     if (t.activo) {
       e.trabajadores.push({ id: t.id, nombre: `${t.apellidos} ${t.nombres}` });
     }
