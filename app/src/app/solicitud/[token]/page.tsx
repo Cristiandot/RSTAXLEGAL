@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
-import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
+import { type InfoEmpresa } from "./solicitud-form";
+import { PortalCliente } from "./portal";
 
 export const metadata = { title: "Portal de solicitudes — RS Tax & Legal" };
 
@@ -40,7 +41,7 @@ export default async function SolicitudPage({
             </p>
           </div>
         ) : (
-          <SolicitudForm
+          <PortalCliente
             token={token}
             empresa={{ ...info, trabajadores: info.trabajadores ?? [] }}
           />
@@ -48,7 +49,8 @@ export default async function SolicitudPage({
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
           Rodríguez Samith Tax &amp; Legal · Viña del Mar · Los datos se tratan
-          conforme a la Ley 21.719 y se usan solo para elaborar el contrato.
+          conforme a la Ley 21.719 y se usan solo para las gestiones laborales
+          de la empresa.
         </p>
       </div>
     </main>
