@@ -3,7 +3,10 @@ import {
   GitCompareArrows,
   FileText,
   FilePlus2,
-  Inbox,
+  FileSignature,
+  FileWarning,
+  CalendarDays,
+  Clock4,
   Building2,
   Users,
   Table2,
@@ -97,12 +100,39 @@ export const MODULOS: SeccionModulos[] = [
         estado: "activo",
       },
       {
-        key: "gestiones",
-        label: "Gestiones RRHH",
+        key: "anexos",
+        label: "Anexos",
         descripcion:
-          "Amonestaciones, finiquitos y vacaciones solicitadas por los clientes desde su portal.",
-        href: "/gestiones",
-        icon: Inbox,
+          "Anexos de contrato solicitados por los clientes: renovaciones, cambios de jornada y otros.",
+        href: "/anexos",
+        icon: FileSignature,
+        estado: "activo",
+      },
+      {
+        key: "amonestaciones",
+        label: "Carta amonestación",
+        descripcion:
+          "Amonestaciones solicitadas por los clientes, con generación automática de la carta.",
+        href: "/amonestaciones",
+        icon: FileWarning,
+        estado: "activo",
+      },
+      {
+        key: "vacaciones",
+        label: "Vacaciones",
+        descripcion:
+          "Papeletas de vacaciones solicitadas por los clientes desde su portal.",
+        href: "/vacaciones",
+        icon: CalendarDays,
+        estado: "activo",
+      },
+      {
+        key: "permisos",
+        label: "Permisos",
+        descripcion:
+          "Permisos con y sin goce solicitados por los clientes. No descuentan vacaciones.",
+        href: "/permisos",
+        icon: Clock4,
         estado: "activo",
       },
       {

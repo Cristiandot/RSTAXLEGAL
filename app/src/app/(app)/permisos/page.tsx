@@ -1,14 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
-import { GestionesClient, type GestionRow } from "./gestiones-client";
+import { GestionesClient, type GestionRow } from "../gestiones/gestiones-client";
 
-export const metadata = { title: "Gestiones RRHH — RS Tax & Legal" };
+export const metadata = { title: "Permisos — RS Tax & Legal" };
 
-export default async function GestionesPage() {
+export default async function PermisosPage() {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("solicitudes_rrhh")
     .select("id, tipo, trabajador_nombre, trabajador_rut, correo_contacto, datos, estado, observaciones, created_at, clientes(razon_social)")
+    .eq("tipo", "permiso")
     .order("created_at", { ascending: false })
     .limit(300);
 
@@ -30,7 +31,13 @@ export default async function GestionesPage() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
-      <GestionesClient filas={filas} errorCarga={error?.message ?? null} />
+      <GestionesClient
+        filas={filas}
+        errorCarga={error?.message ?? null}
+        titulo="Permisos"
+        descripcion="Permisos con y sin goce solicitados por los clientes desde su portal. No descuentan saldo de vacaciones."
+        tipoFijo="permiso"
+      />
     </main>
   );
 }

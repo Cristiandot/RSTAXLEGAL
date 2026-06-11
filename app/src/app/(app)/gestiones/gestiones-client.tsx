@@ -177,9 +177,17 @@ function detalle(g: GestionRow): [string, string][] {
 export function GestionesClient({
   filas,
   errorCarga,
+  titulo = "Gestiones RRHH",
+  descripcion = "Solicitadas por los clientes desde su portal. Flujo: revisar → aprobar → enviar al correo de contacto.",
+  tipoFijo,
 }: {
   filas: GestionRow[];
   errorCarga: string | null;
+  /** Título del módulo (cada tipo de gestión tiene su propia ruta). */
+  titulo?: string;
+  descripcion?: string;
+  /** Si viene, la bandeja es de un solo tipo y se oculta el filtro de tipo. */
+  tipoFijo?: string;
 }) {
   const router = useRouter();
   const [buscar, setBuscar] = useState("");
@@ -228,10 +236,9 @@ export function GestionesClient({
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">Gestiones RRHH</h1>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">{titulo}</h1>
         <p className="text-sm text-muted-foreground">
-          Amonestaciones, finiquitos, vacaciones y permisos solicitados por los clientes.
-          Flujo: revisar → aprobar → enviar al correo de contacto.
+          {descripcion}
           {pendientes > 0 ? ` · ${pendientes} pendiente${pendientes > 1 ? "s" : ""} de revisión.` : ""}
         </p>
       </div>
@@ -246,13 +253,15 @@ export function GestionesClient({
             onChange={(e) => setBuscar(e.target.value)}
           />
         </div>
-        <select aria-label="Tipo" className={selectCls} value={tipoF} onChange={(e) => setTipoF(e.target.value)}>
-          <option value="">Todos los tipos</option>
-          <option value="amonestacion">Amonestación</option>
-          <option value="finiquito">Finiquito / despido</option>
-          <option value="vacaciones">Vacaciones</option>
-          <option value="permiso">Permiso</option>
-        </select>
+        {!tipoFijo ? (
+          <select aria-label="Tipo" className={selectCls} value={tipoF} onChange={(e) => setTipoF(e.target.value)}>
+            <option value="">Todos los tipos</option>
+            <option value="amonestacion">Amonestación</option>
+            <option value="finiquito">Finiquito / despido</option>
+            <option value="vacaciones">Vacaciones</option>
+            <option value="permiso">Permiso</option>
+          </select>
+        ) : null}
         <select aria-label="Estado" className={selectCls} value={estadoF} onChange={(e) => setEstadoF(e.target.value)}>
           <option value="">Todos los estados</option>
           <option value="solicitada">Solicitada</option>

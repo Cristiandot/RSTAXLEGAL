@@ -107,10 +107,17 @@ export function ContratosClient({
   filas,
   empresas,
   errorCarga,
+  titulo = "Contratos",
+  descripcion = "Solicitudes, generación y revisión. Flujo: generado → aprobado → enviado.",
+  mostrarHerramientasContrato = true,
 }: {
   filas: ContratoRow[];
   empresas: EmpresaForm[];
   errorCarga: string | null;
+  titulo?: string;
+  descripcion?: string;
+  /** Botón "Contrato nuevo" + links de solicitud (solo en el módulo Contratos). */
+  mostrarHerramientasContrato?: boolean;
 }) {
   const router = useRouter();
   const [buscar, setBuscar] = useState("");
@@ -190,18 +197,18 @@ export function ContratosClient({
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">Contratos</h1>
-          <p className="text-sm text-muted-foreground">
-            Solicitudes, generación y revisión. Flujo: generado → aprobado → enviado.
-          </p>
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">{titulo}</h1>
+          <p className="text-sm text-muted-foreground">{descripcion}</p>
         </div>
-        <Button render={<Link href="/contratos/nuevo" />}>
-          <FilePlus2 className="size-4" />
-          Contrato nuevo
-        </Button>
+        {mostrarHerramientasContrato ? (
+          <Button render={<Link href="/contratos/nuevo" />}>
+            <FilePlus2 className="size-4" />
+            Contrato nuevo
+          </Button>
+        ) : null}
       </div>
 
-      {empresas.length > 0 ? (
+      {mostrarHerramientasContrato && empresas.length > 0 ? (
         <div className="space-y-2">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
             Formularios de solicitud por cliente (Microsoft Forms)
