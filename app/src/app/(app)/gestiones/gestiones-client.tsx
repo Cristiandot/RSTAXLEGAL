@@ -101,24 +101,43 @@ function detalle(g: GestionRow): [string, string][] {
     return filas;
   }
   if (g.tipo === "finiquito") {
-    return [
-      ["Fecha de ingreso", formatFecha(d.fecha_ingreso)],
-      ["Último día trabajado", formatFecha(d.fecha_termino)],
+    const filas: [string, string][] = [
       ["Causal", CAUSAL_LABEL[d.causal ?? ""] ?? d.causal ?? "—"],
-      ["Sueldo base", formatMonto(d.sueldo_base)],
-      ["Otros pagos mensuales promedio", formatMonto(d.otras_remuneraciones)],
-      ["Días de vacaciones tomados", d.vacaciones_dias_tomados ?? "—"],
-      ["Aviso 30 días (Art. 161)", SI_NO[d.aviso_30_dias ?? ""] ?? "—"],
-      ["Licencia médica vigente", SI_NO[d.licencia_vigente ?? ""] ?? "—"],
-      [
+      ["Fecha de aviso del despido", formatFecha(d.fecha_aviso)],
+      ["Término de la relación laboral", formatFecha(d.fecha_termino)],
+    ];
+    if (d.aviso_modalidad) {
+      filas.push([
+        "Mes de aviso (Art. 162)",
+        d.aviso_modalidad === "avisar_30"
+          ? "Avisará con 30 días de anticipación"
+          : d.aviso_modalidad === "pagar_mes"
+            ? "Pagará el mes de aviso (indemnización sustitutiva)"
+            : d.aviso_modalidad,
+      ]);
+    }
+    // solicitudes antiguas (formulario con datos de cálculo y screening)
+    if (d.fecha_ingreso) filas.unshift(["Fecha de ingreso", formatFecha(d.fecha_ingreso)]);
+    if (d.sueldo_base) filas.push(["Sueldo base", formatMonto(d.sueldo_base)]);
+    if (d.otras_remuneraciones && d.otras_remuneraciones !== "0") {
+      filas.push(["Otros pagos mensuales promedio", formatMonto(d.otras_remuneraciones)]);
+    }
+    if (d.vacaciones_dias_tomados !== undefined) {
+      filas.push(["Días de vacaciones tomados", d.vacaciones_dias_tomados ?? "—"]);
+    }
+    if (d.aviso_30_dias) filas.push(["Aviso 30 días (Art. 161)", SI_NO[d.aviso_30_dias] ?? "—"]);
+    if (d.licencia_vigente) filas.push(["Licencia médica vigente", SI_NO[d.licencia_vigente] ?? "—"]);
+    if (d.fuero) {
+      filas.push([
         "Fuero",
         d.fuero === "embarazo"
           ? "⚠ Fuero maternal"
           : d.fuero === "sindical"
             ? "⚠ Fuero sindical"
-            : (SI_NO[d.fuero ?? ""] ?? "—"),
-      ],
-    ];
+            : (SI_NO[d.fuero] ?? "—"),
+      ]);
+    }
+    return filas;
   }
   return [
     ["Primer día de vacaciones", formatFecha(d.fecha_inicio)],

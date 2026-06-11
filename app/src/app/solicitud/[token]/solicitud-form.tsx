@@ -227,15 +227,10 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               }
             : gestion === "finiquito"
               ? {
-                  fecha_ingreso: s("fecha_ingreso"),
-                  fecha_termino: s("fecha_termino"),
                   causal: s("causal"),
-                  sueldo_base: s("sueldo_base"),
-                  otras_remuneraciones: s("otras_remuneraciones") || "0",
-                  aviso_30_dias: s("aviso_30_dias"),
-                  vacaciones_dias_tomados: s("vacaciones_dias_tomados"),
-                  licencia_vigente: s("licencia_vigente"),
-                  fuero: s("fuero"),
+                  fecha_aviso: s("fecha_aviso"),
+                  fecha_termino: s("fecha_termino"),
+                  aviso_modalidad: s("aviso_modalidad"),
                 }
               : {
                   fecha_inicio: s("fecha_inicio_vac"),
@@ -664,25 +659,14 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
       {gestion === "finiquito" ? (
         <Card className="card-soft border-transparent">
           <CardHeader>
-            <CardTitle className="text-base">Finiquito / cálculo de despido</CardTitle>
+            <CardTitle className="text-base">Finiquito / despido</CardTitle>
             <CardDescription>
-              Con estos datos haremos el cálculo. Lo revisamos, lo aprobamos y te
-              lo enviamos al correo antes de cualquier paso.
+              Solo necesitamos saber quién, la causal y las fechas — el cálculo
+              lo hacemos nosotros con la información que ya tenemos y te lo
+              enviamos para revisión antes de cualquier paso.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
-            <Campo label="Fecha de ingreso del trabajador">
-              <Input
-                key={trabajadorSel}
-                name="fecha_ingreso"
-                type="date"
-                defaultValue={trabajador?.fecha_inicio ?? ""}
-                required
-              />
-            </Campo>
-            <Campo label="Último día trabajado (o fecha prevista)">
-              <Input name="fecha_termino" type="date" required />
-            </Campo>
             <Campo label="Motivo del término" span2>
               <select name="causal" className={selectCls} value={causal} onChange={(e) => setCausal(e.target.value)} required>
                 <option value="">Selecciona…</option>
@@ -695,40 +679,28 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
                 <option value="no_seguro">No estoy seguro (explicar en observaciones)</option>
               </select>
             </Campo>
-            <Campo label="Sueldo base actual ($)">
-              <Input name="sueldo_base" type="number" min={1} required />
-            </Campo>
-            <Campo label="Otros pagos mensuales promedio ($: bonos, comisiones…)">
-              <Input name="otras_remuneraciones" type="number" min={0} defaultValue={0} />
-            </Campo>
-            <Campo label="Días de vacaciones que SE HA TOMADO (0 si ninguno)">
-              <Input name="vacaciones_dias_tomados" type="number" min={0} required />
-            </Campo>
             {causal === "necesidades_empresa" ? (
-              <Campo label="¿Se le avisó con 30 días de anticipación?">
-                <select name="aviso_30_dias" className={selectCls} defaultValue="no">
-                  <option value="no">No (corresponde mes de aviso)</option>
-                  <option value="si">Sí, se avisó por escrito</option>
+              <Campo label="Esta causal lleva mes de aviso — ¿cómo lo harás?" span2>
+                <select name="aviso_modalidad" className={selectCls} defaultValue="" required>
+                  <option value="">Selecciona…</option>
+                  <option value="avisar_30">Voy a avisar con 30 días de anticipación</option>
+                  <option value="pagar_mes">Voy a pagar el mes de aviso (indemnización sustitutiva)</option>
                 </select>
               </Campo>
             ) : (
-              <input type="hidden" name="aviso_30_dias" value="" />
+              <input type="hidden" name="aviso_modalidad" value="" />
             )}
-            <Campo label="¿Tiene licencia médica vigente?">
-              <select name="licencia_vigente" className={selectCls} defaultValue="no">
-                <option value="no">No</option>
-                <option value="si">Sí</option>
-                <option value="no_se">No estoy seguro</option>
-              </select>
+            <Campo label="Fecha de aviso del despido">
+              <Input name="fecha_aviso" type="date" required />
             </Campo>
-            <Campo label="¿Tiene algún fuero?">
-              <select name="fuero" className={selectCls} defaultValue="no">
-                <option value="no">No</option>
-                <option value="embarazo">Fuero maternal (embarazo / postnatal)</option>
-                <option value="sindical">Fuero sindical</option>
-                <option value="no_se">No estoy seguro</option>
-              </select>
+            <Campo label="Fecha de término de la relación laboral">
+              <Input name="fecha_termino" type="date" required />
             </Campo>
+            <p className="rounded-lg border border-sky-200 bg-sky-50 p-2.5 text-xs text-sky-800 sm:col-span-2">
+              No hay problema con que la fecha de aviso y la de término sean el
+              mismo día — por ejemplo, si es por vencimiento del plazo, o si es
+              otra causal pero estás dispuesto a pagar el mes de aviso.
+            </p>
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 sm:col-span-2">
               Importante: no comuniques el despido al trabajador hasta que el
               equipo legal revise esta solicitud — hay causales y fueros que

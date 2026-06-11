@@ -115,14 +115,11 @@ export async function enviarGestion(
     }
   }
   if (g.tipo === "finiquito") {
-    if (!g.datos.fecha_ingreso) return { ok: false, error: "Indica la fecha de ingreso del trabajador." };
-    if (!g.datos.fecha_termino) return { ok: false, error: "Indica el último día trabajado (o fecha de término prevista)." };
     if (!g.datos.causal) return { ok: false, error: "Indica la causal de término." };
-    if (!g.datos.sueldo_base || Number(g.datos.sueldo_base) <= 0) {
-      return { ok: false, error: "Indica el sueldo base actual." };
-    }
-    if (g.datos.vacaciones_dias_tomados === "" || g.datos.vacaciones_dias_tomados === undefined) {
-      return { ok: false, error: "Indica cuántos días de vacaciones se ha tomado (0 si ninguno)." };
+    if (!g.datos.fecha_aviso) return { ok: false, error: "Indica la fecha de aviso del despido." };
+    if (!g.datos.fecha_termino) return { ok: false, error: "Indica la fecha de término de la relación laboral." };
+    if (g.datos.causal === "necesidades_empresa" && !g.datos.aviso_modalidad) {
+      return { ok: false, error: "Indica si avisarás con 30 días de anticipación o pagarás el mes de aviso." };
     }
   }
   if (g.tipo === "vacaciones") {
