@@ -131,6 +131,7 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
   const [enviada, setEnviada] = useState(false);
   const [gestion, setGestion] = useState<TipoGestion>("contrato");
   const [anexoTipo, setAnexoTipo] = useState("renovacion_fijo_a_fijo");
+  const [anexoHoras, setAnexoHoras] = useState("");
   const [causal, setCausal] = useState("");
 
   const cargos = useMemo(() => [...new Set(empresa.opciones.map((o) => o.cargo))], [empresa]);
@@ -243,6 +244,9 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               anexo_detalle: s("anexo_detalle"),
               fecha_inicio: s("fecha_contrato_original"),
               fecha_vencimiento: s("fecha_nueva_termino") || null,
+              anexo_horas: anexoTipo === "cambio_jornada" ? s("anexo_horas") : null,
+              anexo_fecha_cambio:
+                anexoTipo === "cambio_jornada" ? s("anexo_fecha_cambio") : null,
             }
           : {
               ...base,
@@ -468,6 +472,7 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               <select className={selectCls} value={anexoTipo} onChange={(e) => setAnexoTipo(e.target.value)}>
                 <option value="renovacion_fijo_a_fijo">Renovación de plazo fijo a plazo fijo (nuevo plazo)</option>
                 <option value="renovacion_indefinido">Renovación: pasa a contrato indefinido</option>
+                <option value="cambio_jornada">Cambio de jornada (de completa a parcial, o cambio de horas)</option>
                 <option value="otro">Otro (explicar abajo)</option>
               </select>
             </Campo>
@@ -478,6 +483,33 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               <Campo label="Nueva fecha de término">
                 <Input name="fecha_nueva_termino" type="date" required />
               </Campo>
+            ) : null}
+            {anexoTipo === "cambio_jornada" ? (
+              <>
+                <Campo label="Nuevas horas semanales">
+                  <Input
+                    name="anexo_horas"
+                    type="number"
+                    min={1}
+                    max={42}
+                    required
+                    value={anexoHoras}
+                    onChange={(e) => setAnexoHoras(e.target.value)}
+                    placeholder="ej. 20"
+                  />
+                </Campo>
+                <Campo label="Desde qué fecha rige la nueva jornada">
+                  <Input name="anexo_fecha_cambio" type="date" required />
+                </Campo>
+                {Number(anexoHoras) > 28 ? (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800 sm:col-span-2">
+                    Sobre 28 horas semanales ya no es jornada parcial legal (el
+                    tope es 2/3 de 42 hrs, Art. 40 bis CT). Podemos hacerlo
+                    igual como reducción de jornada ordinaria — el equipo legal
+                    lo revisará.
+                  </p>
+                ) : null}
+              </>
             ) : null}
             <Campo label="¿Qué necesitas que diga este anexo?" span2>
               <Textarea

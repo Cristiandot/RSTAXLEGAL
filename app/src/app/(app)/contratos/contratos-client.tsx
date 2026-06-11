@@ -46,6 +46,7 @@ export type ContratoRow = {
   tipoDocumento: string;
   anexoTipo: string | null;
   anexoDetalle: string | null;
+  jornadaHoras: number | null;
   clausulasAdicionales: string | null;
   tipoContrato: string;
   cargo: string | null;
@@ -280,7 +281,9 @@ export function ContratosClient({
                           ? "renovación fijo a fijo"
                           : f.anexoTipo === "renovacion_indefinido"
                             ? "renovación a indefinido"
-                            : "otro"}
+                            : f.anexoTipo === "cambio_jornada"
+                              ? `cambio de jornada${f.jornadaHoras ? ` (${f.jornadaHoras} h/sem)` : ""}`
+                              : "otro"}
                       </span>
                     ) : f.tipoContrato === "plazo_fijo" ? (
                       "Plazo fijo"

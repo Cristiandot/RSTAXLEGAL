@@ -38,6 +38,14 @@ export async function enviarSolicitud(
     if (datos.anexo_tipo === "otro" && !datos.anexo_detalle) {
       return { ok: false, error: "Explica qué necesitas que diga el anexo." };
     }
+    if (datos.anexo_tipo === "cambio_jornada") {
+      if (!datos.anexo_horas || Number(datos.anexo_horas) <= 0) {
+        return { ok: false, error: "Indica las nuevas horas semanales." };
+      }
+      if (!datos.anexo_fecha_cambio) {
+        return { ok: false, error: "Indica desde qué fecha rige la nueva jornada." };
+      }
+    }
   } else {
     if (!datos.fecha_inicio) {
       return { ok: false, error: "La fecha de inicio es obligatoria." };
