@@ -159,15 +159,15 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
     [vacInicio, vacFin],
   );
 
-  // Permiso: el catálogo fija el goce en los legales; en el resto lo elige el cliente.
+  // Permiso: el goce sale del catálogo (fijado por ley en los legales, default
+  // en los convencionales) — el cliente no lo elige, solo se le explica el efecto.
   const [permisoTipo, setPermisoTipo] = useState("sin_goce");
-  const [permisoGoce, setPermisoGoce] = useState("sin");
   const [permisoUnidad, setPermisoUnidad] = useState<"dias" | "horas">("dias");
   const [perDesde, setPerDesde] = useState("");
   const [perHasta, setPerHasta] = useState("");
   const permisoDef = TIPOS_PERMISO.find((t) => t.value === permisoTipo) ?? TIPOS_PERMISO[0];
   const goceFijo = permisoDef.goce !== null;
-  const goceActual = goceFijo ? (permisoDef.goce as string) : permisoGoce;
+  const goceActual = permisoDef.goce ?? permisoDef.goceDefault;
   const calcPermiso = useMemo(() => {
     if (permisoUnidad !== "dias" || !perDesde || !perHasta) return null;
     return calcularVacaciones(perDesde, perHasta);
@@ -836,11 +836,7 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               <select
                 className={selectCls}
                 value={permisoTipo}
-                onChange={(e) => {
-                  const def = TIPOS_PERMISO.find((t) => t.value === e.target.value);
-                  setPermisoTipo(e.target.value);
-                  setPermisoGoce(def?.goce ?? def?.goceDefault ?? "sin");
-                }}
+                onChange={(e) => setPermisoTipo(e.target.value)}
                 required
               >
                 {TIPOS_PERMISO.map((t) => (
@@ -851,23 +847,14 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
                 <p className="text-xs text-muted-foreground">{permisoDef.nota}</p>
               ) : null}
             </Campo>
-            <Campo label="¿Con o sin goce de remuneraciones?">
-              <select
-                className={selectCls}
-                value={goceActual}
-                onChange={(e) => setPermisoGoce(e.target.value)}
-                disabled={goceFijo}
-              >
-                <option value="con">Con goce (pagado)</option>
-                <option value="sin">Sin goce (se descuenta)</option>
-              </select>
-              {goceFijo ? (
-                <p className="text-xs text-muted-foreground">
-                  Este tipo de permiso {permisoDef.goce === "con" ? "es con goce" : "es sin goce"} —
-                  no se puede cambiar.
-                </p>
-              ) : null}
-            </Campo>
+            <p className="rounded-lg border border-sky-200 bg-sky-50 p-2.5 text-xs text-sky-800 sm:col-span-2">
+              {goceActual === "sin"
+                ? "Este permiso es sin goce de remuneraciones: el o los días se descontarán de la remuneración del mes (no de las vacaciones)."
+                : "Este permiso es con goce de remuneraciones: el o los días se pagan normal, sin descuento de remuneración ni de vacaciones."}
+              {!goceFijo
+                ? " Si con el trabajador lo acordaron distinto, indícalo en observaciones."
+                : ""}
+            </p>
             <Campo label="¿Día(s) completo(s) u horas?">
               <select
                 className={selectCls}
