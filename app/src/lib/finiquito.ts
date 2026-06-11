@@ -84,6 +84,13 @@ export type EntradaFiniquito = {
   movilizacion: number;
   /** Incluir colación/movilización en la base Art. 172 (criterio CS). */
   incluirNoImponiblesEnBase: boolean;
+  /**
+   * Incluir la gratificación en la base del feriado (Art. 71). El criterio
+   * estándar la EXCLUYE (la remuneración íntegra del trabajador con sueldo
+   * fijo es el sueldo; la gratificación es remuneración distinta, Art. 42);
+   * hay jurisprudencia que la incluye cuando se paga mensual fija.
+   */
+  incluirGratificacionEnVacaciones: boolean;
   /** Valor UF para el tope de 90 UF; null = sin tope (advertencia en notas). */
   ufValor: number | null;
   zonaExtrema: boolean; // feriado anual de 20 días hábiles (Art. 67 inc. 2)
@@ -247,7 +254,10 @@ export function calcularFiniquito(e: EntradaFiniquito): ResultadoFiniquito {
       e.diasObtenidosManual !== null
         ? e.diasObtenidosManual
         : servicio.anios * factorAnual;
-    proporcionales = (servicio.meses + servicio.dias / 30) * factorMensual;
+    // Redondeado a 2 decimales ANTES de valorizar: se paga exactamente el
+    // número de días que se muestra (misma práctica de los simuladores).
+    proporcionales =
+      Math.round((servicio.meses + servicio.dias / 30) * factorMensual * 100) / 100;
     if (e.diasObtenidosManual === null && servicio.anios >= 13) {
       notas.push(
         "Más de 13 años de servicio: revisar feriado progresivo (Art. 68 — 1 día hábil extra por cada 3 años sobre los primeros 10, contando también empleadores anteriores). Ajustar en 'días obtenidos' si aplica.",
@@ -275,9 +285,19 @@ export function calcularFiniquito(e: EntradaFiniquito): ResultadoFiniquito {
   }
   const diasCorridosPago = saldoHabiles + diasInhabiles;
 
-  // El feriado se paga con la remuneración íntegra (Art. 71): estipendios
-  // imponibles mensuales; colación/movilización no se consideran acá.
-  const valorDia = (e.sueldoBase + e.gratificacion + e.otrasImponibles) / 30;
+  // El feriado se paga con la remuneración íntegra (Art. 71): sueldo fijo +
+  // promedio de remuneraciones variables. La gratificación queda fuera por
+  // defecto; colación/movilización no se consideran acá.
+  const valorDia =
+    (e.sueldoBase +
+      e.otrasImponibles +
+      (e.incluirGratificacionEnVacaciones ? e.gratificacion : 0)) /
+    30;
+  if (e.incluirGratificacionEnVacaciones && e.gratificacion > 0) {
+    notas.push(
+      "Gratificación incluida en la base del feriado (Art. 71) — criterio jurisprudencial para gratificación mensual fija; el criterio estándar la excluye.",
+    );
+  }
   const montoVacaciones = redondear(valorDia * diasCorridosPago);
   if (!coberturaFeriados) {
     notas.push(

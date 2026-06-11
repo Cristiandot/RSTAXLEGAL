@@ -132,6 +132,7 @@ export function CalculadoraClient({
   const [colacion, setColacion] = useState(guardado?.colacion ?? 0);
   const [movilizacion, setMovilizacion] = useState(guardado?.movilizacion ?? 0);
   const [incluirNoImp, setIncluirNoImp] = useState(guardado?.incluirNoImponiblesEnBase ?? true);
+  const [gratEnVac, setGratEnVac] = useState(guardado?.incluirGratificacionEnVacaciones ?? false);
   const [gratMode, setGratMode] = useState<"sin" | "legal" | "manual">(
     guardado ? (guardado.gratificacion === 0 ? "sin" : "manual") : "legal",
   );
@@ -180,6 +181,7 @@ export function CalculadoraClient({
       colacion,
       movilizacion,
       incluirNoImponiblesEnBase: incluirNoImp,
+      incluirGratificacionEnVacaciones: gratEnVac,
       ufValor,
       zonaExtrema,
       diasTomados,
@@ -187,7 +189,7 @@ export function CalculadoraClient({
       remuneracionPendiente: remPendiente,
       descuentoAfc,
     }),
-    [causal, fechaInicio, fechaTermino, avisoCon30, sueldoBase, gratificacion, otras, colacion, movilizacion, incluirNoImp, ufValor, zonaExtrema, diasTomados, obtenidosManual, remPendiente, descuentoAfc],
+    [causal, fechaInicio, fechaTermino, avisoCon30, sueldoBase, gratificacion, otras, colacion, movilizacion, incluirNoImp, gratEnVac, ufValor, zonaExtrema, diasTomados, obtenidosManual, remPendiente, descuentoAfc],
   );
 
   const r = useMemo(() => calcularFiniquito(entrada), [entrada]);
@@ -392,12 +394,20 @@ export function CalculadoraClient({
                 />
               </Campo>
             </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={gratEnVac} onCheckedChange={(v) => setGratEnVac(v === true)} />
+              Incluir gratificación en la base del feriado (criterio estándar: solo sueldo
+              fijo + variables, Art. 71)
+            </label>
             <div className="grid grid-cols-2 gap-x-6 text-sm sm:grid-cols-4">
               <Linea label="Pendientes" valor={fmtDias(Math.max(0, r.vacaciones.obtenidos - r.vacaciones.tomados))} />
               <Linea label="Proporcionales" valor={fmtDias(r.vacaciones.proporcionales)} />
               <Linea label="Días inhábiles" valor={fmtDias(r.vacaciones.diasInhabiles)} />
               <Linea label="Total a pagar (corridos)" valor={fmtDias(r.vacaciones.diasCorridosPago)} fuerte />
             </div>
+            <p className="text-xs text-muted-foreground">
+              Valor día feriado: <span className="font-medium text-foreground">{formatMonto(Math.round(r.vacaciones.valorDia))}</span>
+            </p>
           </SeccionCard>
 
           <SeccionCard titulo="Otros montos">
