@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generarDocx, fechaLarga } from "@/lib/generar-docx";
+import { redactarHechosFormales } from "@/lib/redactar-hechos";
 
 export type ResultadoCarta = {
   ok: boolean;
@@ -72,6 +73,14 @@ export async function generarYSubirCartaAmonestacion(
     descripcion?: string;
   };
 
+  // La descripción del cliente pasa por Claude para corregir ortografía y
+  // darle redacción formal (sin inventar hechos). Si no hay API key o falla,
+  // se usa el texto original tal cual. El original queda en datos.descripcion.
+  const { texto: descripcionFormal } = await redactarHechosFormales(
+    datos.descripcion ?? "",
+    g.trabajador_nombre ?? "",
+  );
+
   const hoy = new Date().toISOString().slice(0, 10);
   const variables: Record<string, string> = {
     CIUDAD_FIRMA:
@@ -87,7 +96,7 @@ export async function generarYSubirCartaAmonestacion(
     NOMBRE_REP_LEGAL: repLegal,
     FECHA_HECHOS: fechaLarga(datos.fecha_hechos),
     MOTIVO_TEXTO: MOTIVO_TEXTO[datos.motivo ?? ""] ?? MOTIVO_TEXTO.otro,
-    DESCRIPCION_HECHOS: datos.descripcion ?? "",
+    DESCRIPCION_HECHOS: descripcionFormal,
   };
 
   let buffer: Buffer;
