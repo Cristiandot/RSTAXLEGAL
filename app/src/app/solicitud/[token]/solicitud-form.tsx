@@ -642,7 +642,7 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               </Campo>
               {jornadaActual === "parcial" ? (
                 <Campo label="Horas semanales">
-                  <Input name="horas_semanales" type="number" min={1} max={28} placeholder="ej. 21" required />
+                  <Input name="horas_semanales" type="number" min={1} max={28} placeholder="máx. 28 (jornada parcial)" required />
                 </Campo>
               ) : null}
               <Campo label="Tipo de contrato">

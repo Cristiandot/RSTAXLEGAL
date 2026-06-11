@@ -358,7 +358,7 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
           </Campo>
           {jornadaActual === "parcial" ? (
             <Campo label="Horas semanales (part time)">
-              <Input name="horas_semanales" type="number" min={1} max={28} placeholder="ej. 21" />
+              <Input name="horas_semanales" type="number" min={1} max={28} placeholder="máx. 28 (jornada parcial)" />
             </Campo>
           ) : null}
           <Campo label="Tipo de contrato">
