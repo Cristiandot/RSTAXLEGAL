@@ -1,0 +1,62 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import type { EntradaFiniquito } from "@/lib/finiquito";
+
+export type ResumenCalculo = {
+  total: number;
+  remuneracionPendiente: number;
+  indemAviso: number;
+  indemAnios: number;
+  vacacionesMonto: number;
+  vacacionesDias: number;
+  descuentoAfc: number;
+  baseIndemnizatoria: number;
+  aniosComputables: number;
+  ufValor: number | null;
+  periodoUf: string | null;
+};
+
+/**
+ * Persiste el cálculo dentro de `datos.calculo_finiquito` de la solicitud,
+ * sin tocar el resto de los campos que mandó el cliente. La auditoría queda
+ * en `audit_log` vía trigger.
+ */
+export async function guardarCalculoFiniquito(
+  gestionId: string,
+  entrada: EntradaFiniquito,
+  resumen: ResumenCalculo,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+
+  const { data: gestion, error: errSel } = await supabase
+    .from("solicitudes_rrhh")
+    .select("id, tipo, datos")
+    .eq("id", gestionId)
+    .maybeSingle();
+  if (errSel) return { ok: false, error: errSel.message };
+  if (!gestion) return { ok: false, error: "No se encontró la solicitud." };
+  if (gestion.tipo !== "finiquito") {
+    return { ok: false, error: "La solicitud no es de tipo finiquito." };
+  }
+
+  const datos = (gestion.datos ?? {}) as Record<string, unknown>;
+  const { error } = await supabase
+    .from("solicitudes_rrhh")
+    .update({
+      datos: {
+        ...datos,
+        calculo_finiquito: {
+          entrada,
+          resumen,
+          calculado_en: new Date().toISOString(),
+        },
+      },
+    })
+    .eq("id", gestionId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/finiquitos");
+  return { ok: true };
+}

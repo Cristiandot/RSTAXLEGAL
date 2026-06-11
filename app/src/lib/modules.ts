@@ -10,6 +10,7 @@ import {
   BarChart3,
   UserCog,
   TrendingUp,
+  Calculator,
   type LucideIcon,
 } from "lucide-react";
 
@@ -102,6 +103,15 @@ export const MODULOS: SeccionModulos[] = [
           "Amonestaciones, finiquitos y vacaciones solicitadas por los clientes desde su portal.",
         href: "/gestiones",
         icon: Inbox,
+        estado: "activo",
+      },
+      {
+        key: "finiquitos",
+        label: "Finiquitos",
+        descripcion:
+          "Solicitudes de término del portal y calculadora de indemnizaciones con indicadores Previred.",
+        href: "/finiquitos",
+        icon: Calculator,
         estado: "activo",
       },
     ],
