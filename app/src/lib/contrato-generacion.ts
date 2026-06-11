@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generarDocx, fechaLarga, montoCLP } from "@/lib/generar-docx";
 import { montoEnPalabras } from "@/lib/numero-palabras";
+import { redactarClausulasContrato } from "@/lib/redactar-hechos";
 
 export type ResultadoGeneracion = {
   ok: boolean;
@@ -97,6 +98,15 @@ export async function generarYSubirContrato(
 
   const perdidaCaja = Number(rem.perdida_caja ?? 0);
 
+  // Las "otras consideraciones remuneracionales" del cliente (texto libre,
+  // a menudo mal redactado) pasan por la IA y entran al contrato como
+  // cláusula adicional formal. Sin API key: solo van las cláusulas del
+  // equipo, como antes, y lo del cliente queda en observaciones.
+  const { texto: clausulasFinales } = await redactarClausulasContrato(
+    (con.observaciones as string) ?? "",
+    (con.clausulas_adicionales as string) ?? "",
+  );
+
   const nombreCompleto = `${t.nombres} ${t.apellidos}`;
   const rutEmpleado = t.rut_provisorio
     ? (t.rut ? `${t.rut} (provisorio)` : "(RUT en trámite)")
@@ -151,8 +161,8 @@ export async function generarYSubirContrato(
     INSTITUCION_SALUD: (t.salud as string) ?? "",
     REGIMEN_PREVISIONAL: "chileno",
     HORAS_SEMANALES: horas !== null ? String(horas) : "42",
-    CLAUSULAS_ADICIONALES: con.clausulas_adicionales
-      ? `CLÁUSULA ADICIONAL PACTADA: ${con.clausulas_adicionales}`
+    CLAUSULAS_ADICIONALES: clausulasFinales
+      ? `CLÁUSULA ADICIONAL PACTADA: ${clausulasFinales}`
       : "",
   };
 
