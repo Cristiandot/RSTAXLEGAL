@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { validarRut } from "@/lib/rut";
 import { calcularVacaciones } from "@/lib/feriados";
+import { TIPOS_NOVEDAD } from "@/lib/novedades";
 
 export type SolicitudInput = Record<string, string | boolean | null>;
 
@@ -188,3 +189,127 @@ export async function enviarGestion(
   }
   return { ok: true };
 }
+
+// ===================== Detalle remuneraciones (novedades del mes) =====================
+
+export type NovedadRow = {
+  id: string;
+  trabajador_id: string;
+  trabajador: string;
+  tipo: string;
+  fecha: string | null;
+  fecha_hasta: string | null;
+  cantidad: number | null;
+  monto: number | null;
+  comentario: string | null;
+  origen: string;
+};
+
+export type GestionDelMes = {
+  id: string;
+  tipo: string;
+  trabajador: string;
+  estado: string;
+  datos: Record<string, string>;
+};
+
+export type RemuneracionesInfo = {
+  estado: "abierto" | "cerrado";
+  novedades: NovedadRow[];
+  gestiones: GestionDelMes[];
+};
+
+export async function cargarRemuneraciones(
+  token: string,
+  periodo: string,
+): Promise<{ ok: boolean; info?: RemuneracionesInfo; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("remuneraciones_info", {
+    p_token: token,
+    p_periodo: periodo,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, info: data as RemuneracionesInfo };
+}
+
+export type NovedadInput = {
+  trabajador_id: string;
+  periodo: string;
+  tipo: string;
+  fecha: string;
+  fecha_hasta: string;
+  cantidad: string;
+  monto: string;
+  comentario: string;
+};
+
+export async function guardarNovedad(
+  token: string,
+  n: NovedadInput,
+): Promise<{ ok: boolean; error?: string }> {
+  const def = TIPOS_NOVEDAD.find((t) => t.value === n.tipo);
+  if (!def) return { ok: false, error: "Tipo de novedad no válido." };
+  if (!n.trabajador_id) return { ok: false, error: "Selecciona al trabajador." };
+  if (def.campos === "horas") {
+    if (!n.fecha) return { ok: false, error: "Indica la fecha." };
+    if (!n.cantidad || Number(n.cantidad) <= 0) {
+      return { ok: false, error: "Indica las horas (mayor a 0)." };
+    }
+  }
+  if (def.campos === "rango") {
+    if (!n.fecha) return { ok: false, error: "Indica el primer día de la licencia." };
+    if (!n.fecha_hasta) return { ok: false, error: "Indica el último día de la licencia." };
+    if (n.fecha_hasta < n.fecha) {
+      return { ok: false, error: "El término de la licencia no puede ser anterior al inicio." };
+    }
+  }
+  if (def.campos === "monto") {
+    if (!n.monto || Number(n.monto) <= 0) {
+      return { ok: false, error: "Indica el monto en pesos (mayor a 0)." };
+    }
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("guardar_novedad_remuneracion", {
+    p_token: token,
+    p: {
+      trabajador_id: n.trabajador_id,
+      periodo: n.periodo,
+      tipo: n.tipo,
+      fecha: n.fecha || null,
+      fecha_hasta: def.campos === "rango" ? n.fecha_hasta || null : null,
+      cantidad: def.campos === "horas" ? n.cantidad : null,
+      monto: def.campos === "monto" ? n.monto : null,
+      comentario: n.comentario || null,
+    },
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function eliminarNovedad(
+  token: string,
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("eliminar_novedad_remuneracion", {
+    p_token: token,
+    p_id: id,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function cerrarPeriodoRemuneraciones(
+  token: string,
+  periodo: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("cerrar_periodo_remuneraciones", {
+    p_token: token,
+    p_periodo: periodo,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+

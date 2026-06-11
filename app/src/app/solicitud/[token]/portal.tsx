@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowLeft, ArrowRight, ClipboardList, Table2, Users } from "lucide-react";
 import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
+import { DetalleRemuneraciones } from "./remuneraciones";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,16 +19,20 @@ import {
  * "Detalle remuneraciones" (novedades del mes) está en construcción.
  */
 export function PortalCliente({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
-  const [vista, setVista] = useState<"inicio" | "solicitudes">("inicio");
+  const [vista, setVista] = useState<"inicio" | "solicitudes" | "remuneraciones">("inicio");
 
-  if (vista === "solicitudes") {
+  if (vista !== "inicio") {
     return (
       <div className="space-y-4">
         <Button variant="ghost" size="sm" onClick={() => setVista("inicio")}>
           <ArrowLeft className="size-4" />
           Volver al inicio
         </Button>
-        <SolicitudForm token={token} empresa={empresa} />
+        {vista === "solicitudes" ? (
+          <SolicitudForm token={token} empresa={empresa} />
+        ) : (
+          <DetalleRemuneraciones token={token} empresa={empresa} />
+        )}
       </div>
     );
   }
@@ -89,29 +94,33 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
         </Card>
       </button>
 
-      <Card className="card-soft border-transparent opacity-80">
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                <Table2 className="size-5" />
-              </span>
-              <div>
-                <CardTitle className="text-base">Detalle remuneraciones</CardTitle>
-                <CardDescription className="mt-1">
-                  Novedades del mes para las liquidaciones: horas extra, turnos
-                  en feriados y domingos, licencias médicas, anticipos y bonos.
-                  Lo que ya pediste por el panel de solicitudes (permisos,
-                  vacaciones, finiquitos) se carga solo — no lo repites acá.
-                </CardDescription>
+      <button
+        type="button"
+        onClick={() => setVista("remuneraciones")}
+        className="block w-full text-left"
+      >
+        <Card className="card-soft border-transparent transition-shadow hover:shadow-md">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal)]/10 text-[var(--brand-teal)]">
+                  <Table2 className="size-5" />
+                </span>
+                <div>
+                  <CardTitle className="text-base">Detalle remuneraciones</CardTitle>
+                  <CardDescription className="mt-1">
+                    Novedades del mes para las liquidaciones: horas extra, turnos
+                    en feriados y domingos, licencias médicas, anticipos y bonos.
+                    Lo que ya pediste por el panel de solicitudes (permisos,
+                    vacaciones, finiquitos) se carga solo — no lo repites acá.
+                  </CardDescription>
+                </div>
               </div>
+              <ArrowRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
             </div>
-            <span className="mt-1 shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-              Próximamente
-            </span>
-          </div>
-        </CardHeader>
-      </Card>
+          </CardHeader>
+        </Card>
+      </button>
     </div>
   );
 }
