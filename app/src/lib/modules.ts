@@ -9,6 +9,7 @@ import {
   Table2,
   BarChart3,
   UserCog,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 
@@ -69,6 +70,15 @@ export const MODULOS: SeccionModulos[] = [
         descripcion: "Armado y presentación mensual. Plazo día 20.",
         href: "/f29",
         icon: FileText,
+        estado: "activo",
+      },
+      {
+        key: "indicadores",
+        label: "Indicadores Previred",
+        descripcion:
+          "UF, UTM, topes y tasas previsionales del mes — base de remuneraciones.",
+        href: "/indicadores",
+        icon: TrendingUp,
         estado: "activo",
       },
     ],
