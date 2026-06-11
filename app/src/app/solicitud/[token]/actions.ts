@@ -39,6 +39,9 @@ export async function enviarSolicitud(
       return { ok: false, error: "Explica qué necesitas que diga el anexo." };
     }
     if (datos.anexo_tipo === "cambio_jornada") {
+      if (!datos.cargo) {
+        return { ok: false, error: "Indica el cargo del trabajador (determina la malla de turnos)." };
+      }
       if (!datos.anexo_horas || Number(datos.anexo_horas) <= 0) {
         return { ok: false, error: "Indica las nuevas horas semanales." };
       }

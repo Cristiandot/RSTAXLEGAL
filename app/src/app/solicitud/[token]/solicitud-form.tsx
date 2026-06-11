@@ -247,6 +247,7 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               anexo_horas: anexoTipo === "cambio_jornada" ? s("anexo_horas") : null,
               anexo_fecha_cambio:
                 anexoTipo === "cambio_jornada" ? s("anexo_fecha_cambio") : null,
+              cargo: anexoTipo === "cambio_jornada" ? s("anexo_cargo") : null,
             }
           : {
               ...base,
@@ -486,6 +487,17 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
             ) : null}
             {anexoTipo === "cambio_jornada" ? (
               <>
+                <Campo label="Cargo del trabajador" span2>
+                  <select name="anexo_cargo" className={selectCls} defaultValue={cargos[0] ?? ""} required>
+                    {cargos.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Importante: el cargo determina la malla de turnos que lleva
+                    el anexo.
+                  </p>
+                </Campo>
                 <Campo label="Nuevas horas semanales">
                   <Input
                     name="anexo_horas"
