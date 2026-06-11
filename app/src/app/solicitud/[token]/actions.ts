@@ -14,10 +14,12 @@ export async function enviarSolicitud(
   token: string,
   datos: SolicitudInput,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!datos.nombres || !datos.apellidos) {
+  // Con trabajador registrado seleccionado, nombre/RUT canónicos salen de la BD.
+  const trabajadorRegistrado = Boolean(datos.trabajador_id);
+  if (!trabajadorRegistrado && (!datos.nombres || !datos.apellidos)) {
     return { ok: false, error: "Nombres y apellidos son obligatorios." };
   }
-  if (!datos.rut_provisorio && !validarRut(String(datos.rut ?? ""))) {
+  if (!trabajadorRegistrado && !datos.rut_provisorio && !validarRut(String(datos.rut ?? ""))) {
     return {
       ok: false,
       error: "El RUT no es válido. Si la persona aún no tiene RUT definitivo, marca la opción de RUT en trámite.",
@@ -79,6 +81,7 @@ export async function enviarSolicitud(
 
 export type GestionInput = {
   tipo: "amonestacion" | "finiquito" | "vacaciones";
+  trabajador_id: string | null;
   nombres: string;
   apellidos: string;
   rut: string;
@@ -95,11 +98,15 @@ export async function enviarGestion(
   token: string,
   g: GestionInput,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!g.nombres.trim() || !g.apellidos.trim()) {
-    return { ok: false, error: "Nombres y apellidos del trabajador son obligatorios." };
-  }
-  if (!validarRut(g.rut)) {
-    return { ok: false, error: "El RUT del trabajador no es válido (revisa el dígito verificador)." };
+  // Si viene un trabajador registrado, la RPC toma nombre/RUT de la BD —
+  // no se valida el texto del formulario.
+  if (!g.trabajador_id) {
+    if (!g.nombres.trim() || !g.apellidos.trim()) {
+      return { ok: false, error: "Nombres y apellidos del trabajador son obligatorios." };
+    }
+    if (!validarRut(g.rut)) {
+      return { ok: false, error: "El RUT del trabajador no es válido (revisa el dígito verificador)." };
+    }
   }
   if (g.tipo === "amonestacion") {
     if (!g.datos.fecha_hechos) return { ok: false, error: "Indica la fecha de los hechos." };
@@ -131,6 +138,7 @@ export async function enviarGestion(
     p_token: token,
     p: {
       tipo: g.tipo,
+      trabajador_id: g.trabajador_id,
       nombres: g.nombres.trim(),
       apellidos: g.apellidos.trim(),
       rut: g.rut.trim(),

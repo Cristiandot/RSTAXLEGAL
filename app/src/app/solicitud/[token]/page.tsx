@@ -13,10 +13,9 @@ export default async function SolicitudPage({
   const supabase = await createClient();
   const { data } = await supabase.rpc("solicitud_info", { p_token: token });
 
-  const info = data as {
-    razon_social: string;
-    opciones: { cargo: string; jornada: string; horas: number | null; tipo: string | null }[];
-  } | null;
+  const info = data as (Omit<InfoEmpresa, "trabajadores"> & {
+    trabajadores?: InfoEmpresa["trabajadores"];
+  }) | null;
 
   return (
     <main className="min-h-svh bg-background px-4 py-8">
@@ -43,7 +42,7 @@ export default async function SolicitudPage({
         ) : (
           <SolicitudForm
             token={token}
-            empresa={info as InfoEmpresa}
+            empresa={{ ...info, trabajadores: info.trabajadores ?? [] }}
           />
         )}
 

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { CheckCircle2, ClipboardCopy, ListChecks } from "lucide-react";
 import { enviarSolicitud, enviarGestion } from "./actions";
 import { MOTIVOS_AMONESTACION } from "@/lib/amonestaciones";
+import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+export type TrabajadorRegistrado = {
+  id: string;
+  nombres: string;
+  apellidos: string;
+  rut: string | null;
+  cargo: string | null;
+  fecha_inicio: string | null;
+  tipo_contrato: string | null;
+  fecha_vencimiento: string | null;
+};
+
 export type InfoEmpresa = {
   razon_social: string;
   opciones: {
@@ -27,6 +39,7 @@ export type InfoEmpresa = {
     tipo: string | null;
     nacionalidad: string;
   }[];
+  trabajadores: TrabajadorRegistrado[];
 };
 
 const selectCls =
@@ -131,6 +144,8 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
   const [enviando, startEnviar] = useTransition();
   const [enviada, setEnviada] = useState(false);
   const [gestion, setGestion] = useState<TipoGestion>("contrato");
+  // "" = sin elegir · "manual" = trabajador que no está en la lista · uuid = registrado
+  const [trabajadorSel, setTrabajadorSel] = useState("");
   const [anexoTipo, setAnexoTipo] = useState("renovacion_fijo_a_fijo");
   const [anexoHoras, setAnexoHoras] = useState("");
   const [causal, setCausal] = useState("");
@@ -175,6 +190,15 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
   const esContrato = gestion === "contrato";
   const esAnexo = gestion === "anexo";
   const esGestionRrhh = gestion === "amonestacion" || gestion === "finiquito" || gestion === "vacaciones";
+
+  // Para todo lo que no es contrato nuevo, el trabajador se elige de la lista
+  // de registrados (RSTL ya tiene sus datos); el tipeo manual queda de respaldo.
+  const usaListaTrabajadores = !esContrato && empresa.trabajadores.length > 0;
+  const trabajador =
+    usaListaTrabajadores && trabajadorSel !== "" && trabajadorSel !== "manual"
+      ? (empresa.trabajadores.find((t) => t.id === trabajadorSel) ?? null)
+      : null;
+  const entradaManual = esContrato || !usaListaTrabajadores || trabajadorSel === "manual";
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -221,18 +245,20 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
 
         res = await enviarGestion(token, {
           tipo: gestion,
-          nombres: s("nombres"),
-          apellidos: s("apellidos"),
-          rut: s("rut"),
+          trabajador_id: trabajador?.id ?? null,
+          nombres: trabajador ? trabajador.nombres : s("nombres"),
+          apellidos: trabajador ? trabajador.apellidos : s("apellidos"),
+          rut: trabajador ? (trabajador.rut ?? "") : s("rut"),
           observaciones: s("observaciones"),
           datos,
         });
       } else {
         const base = {
           tipo_solicitud: gestion,
-          nombres: s("nombres"),
-          apellidos: s("apellidos"),
-          rut: s("rut"),
+          trabajador_id: trabajador?.id ?? null,
+          nombres: trabajador ? trabajador.nombres : s("nombres"),
+          apellidos: trabajador ? trabajador.apellidos : s("apellidos"),
+          rut: trabajador ? (trabajador.rut ?? "") : s("rut"),
           rut_provisorio: fd.get("rut_provisorio") === "on",
           nacionalidad: esExtranjero ? paisExtranjero.trim() || "Extranjera" : "Chilena",
           observaciones: s("observaciones"),
@@ -334,7 +360,10 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
             <select
               className={selectCls}
               value={gestion}
-              onChange={(e) => setGestion(e.target.value as TipoGestion)}
+              onChange={(e) => {
+                setGestion(e.target.value as TipoGestion);
+                setTrabajadorSel("");
+              }}
             >
               {GESTIONES.map((g) => (
                 <option key={g.value} value={g.value}>{g.label}</option>
@@ -352,15 +381,60 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
           <CardTitle className="text-base">
             {esContrato ? "Datos del trabajador" : "Trabajador"}
           </CardTitle>
-          {esGestionRrhh ? (
+          {esGestionRrhh || esAnexo ? (
             <CardDescription>El trabajador ya contratado al que corresponde esta gestión.</CardDescription>
           ) : null}
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
-          <Campo label="Nombres"><Input name="nombres" required /></Campo>
-          <Campo label="Apellidos"><Input name="apellidos" required /></Campo>
-          <Campo label="RUT"><Input name="rut" placeholder="12.345.678-9" required={esGestionRrhh} /></Campo>
-          {!esGestionRrhh ? (
+          {usaListaTrabajadores ? (
+            <Campo label="¿Quién es el trabajador?" span2>
+              <select
+                className={selectCls}
+                value={trabajadorSel}
+                onChange={(e) => setTrabajadorSel(e.target.value)}
+                required
+              >
+                <option value="">— Selecciona al trabajador —</option>
+                {empresa.trabajadores.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.apellidos} {t.nombres}
+                    {t.rut ? ` — ${t.rut}` : ""}
+                  </option>
+                ))}
+                <option value="manual">Otro trabajador (no está en la lista)</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Trabajadores registrados con RS Tax &amp; Legal (activos o con
+                contrato reciente). Si no aparece, elige la última opción e
+                ingresa sus datos.
+              </p>
+            </Campo>
+          ) : null}
+          {trabajador ? (
+            <div className="rounded-lg border border-input bg-muted/40 p-3 text-sm sm:col-span-2">
+              <p className="font-medium">
+                {trabajador.nombres} {trabajador.apellidos}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {trabajador.rut ? `RUT ${trabajador.rut}` : "RUT en trámite"}
+                {trabajador.cargo ? ` · ${trabajador.cargo}` : ""}
+                {trabajador.fecha_inicio
+                  ? ` · Contrato desde el ${formatFecha(trabajador.fecha_inicio)}`
+                  : ""}
+                {trabajador.tipo_contrato === "plazo_fijo" && trabajador.fecha_vencimiento
+                  ? ` (plazo fijo hasta el ${formatFecha(trabajador.fecha_vencimiento)})`
+                  : ""}
+              </p>
+            </div>
+          ) : null}
+          {entradaManual ? (
+            <>
+              <Campo label="Nombres"><Input name="nombres" required /></Campo>
+              <Campo label="Apellidos"><Input name="apellidos" required /></Campo>
+              <Campo label="RUT"><Input name="rut" placeholder="12.345.678-9" required={esGestionRrhh} /></Campo>
+            </>
+          ) : null}
+          {!esGestionRrhh && entradaManual ? (
             <div className="flex items-end gap-2 pb-1.5">
               <Checkbox id="rut_provisorio" name="rut_provisorio" />
               <Label htmlFor="rut_provisorio" className="text-xs">
@@ -368,7 +442,7 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               </Label>
             </div>
           ) : null}
-          {!esGestionRrhh ? (
+          {!esGestionRrhh && entradaManual ? (
             <Campo label="Nacionalidad">
               <select
                 className={selectCls}
@@ -478,7 +552,13 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               </select>
             </Campo>
             <Campo label="Fecha del contrato original">
-              <Input name="fecha_contrato_original" type="date" required />
+              <Input
+                key={trabajadorSel}
+                name="fecha_contrato_original"
+                type="date"
+                defaultValue={trabajador?.fecha_inicio ?? ""}
+                required
+              />
             </Campo>
             {anexoTipo === "renovacion_fijo_a_fijo" ? (
               <Campo label="Nueva fecha de término">
@@ -488,7 +568,17 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
             {anexoTipo === "cambio_jornada" ? (
               <>
                 <Campo label="Cargo del trabajador" span2>
-                  <select name="anexo_cargo" className={selectCls} defaultValue={cargos[0] ?? ""} required>
+                  <select
+                    key={trabajadorSel}
+                    name="anexo_cargo"
+                    className={selectCls}
+                    defaultValue={
+                      (trabajador?.cargo
+                        ? cargos.find((c) => c.toLowerCase() === trabajador.cargo!.toLowerCase())
+                        : undefined) ?? (cargos[0] ?? "")
+                    }
+                    required
+                  >
                     {cargos.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
@@ -582,7 +672,13 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
             <Campo label="Fecha de ingreso del trabajador">
-              <Input name="fecha_ingreso" type="date" required />
+              <Input
+                key={trabajadorSel}
+                name="fecha_ingreso"
+                type="date"
+                defaultValue={trabajador?.fecha_inicio ?? ""}
+                required
+              />
             </Campo>
             <Campo label="Último día trabajado (o fecha prevista)">
               <Input name="fecha_termino" type="date" required />
