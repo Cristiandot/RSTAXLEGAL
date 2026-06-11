@@ -82,7 +82,6 @@ export type GestionInput = {
   nombres: string;
   apellidos: string;
   rut: string;
-  correo_contacto: string;
   observaciones: string;
   datos: Record<string, string>;
 };
@@ -102,10 +101,6 @@ export async function enviarGestion(
   if (!validarRut(g.rut)) {
     return { ok: false, error: "El RUT del trabajador no es válido (revisa el dígito verificador)." };
   }
-  if (!g.correo_contacto.trim() || !g.correo_contacto.includes("@")) {
-    return { ok: false, error: "Indica un correo válido para enviarte el resultado." };
-  }
-
   if (g.tipo === "amonestacion") {
     if (!g.datos.fecha_hechos) return { ok: false, error: "Indica la fecha de los hechos." };
     if (!g.datos.descripcion?.trim()) {
@@ -139,7 +134,6 @@ export async function enviarGestion(
       nombres: g.nombres.trim(),
       apellidos: g.apellidos.trim(),
       rut: g.rut.trim(),
-      correo_contacto: g.correo_contacto.trim(),
       observaciones: g.observaciones,
       datos: g.datos,
     },

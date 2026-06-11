@@ -329,10 +329,12 @@ export function GestionesClient({
                   <span className="font-medium">{viendo.observaciones}</span>
                 </div>
               ) : null}
-              <div className="flex flex-col gap-0.5 pt-1">
-                <span className="text-muted-foreground">Enviar resultado a</span>
-                <span className="font-medium">{viendo.correo}</span>
-              </div>
+              {viendo.correo !== "—" ? (
+                <div className="flex flex-col gap-0.5 pt-1">
+                  <span className="text-muted-foreground">Enviar resultado a</span>
+                  <span className="font-medium">{viendo.correo}</span>
+                </div>
+              ) : null}
             </div>
             <DialogFooter>
               {viendo.tipo === "amonestacion" && viendo.estado !== "rechazada" ? (

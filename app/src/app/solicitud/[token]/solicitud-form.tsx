@@ -224,7 +224,6 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
           nombres: s("nombres"),
           apellidos: s("apellidos"),
           rut: s("rut"),
-          correo_contacto: s("correo_contacto"),
           observaciones: s("observaciones"),
           datos,
         });
@@ -772,11 +771,6 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
       {!esContrato ? (
         <Card className="card-soft border-transparent">
           <CardContent className="grid gap-3 pt-4 sm:grid-cols-2">
-            {esGestionRrhh ? (
-              <Campo label="Correo donde te enviaremos el documento / cálculo" span2>
-                <Input name="correo_contacto" type="email" required placeholder="tucorreo@empresa.cl" />
-              </Campo>
-            ) : null}
             <Campo label="Observaciones" span2>
               <Textarea
                 name="observaciones"
