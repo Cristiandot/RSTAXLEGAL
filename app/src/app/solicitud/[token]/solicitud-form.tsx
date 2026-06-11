@@ -523,14 +523,16 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
                 ) : null}
               </>
             ) : null}
-            <Campo label="¿Qué necesitas que diga este anexo?" span2>
-              <Textarea
-                name="anexo_detalle"
-                rows={3}
-                required={anexoTipo === "otro"}
-                placeholder="Explícalo con palabras simples: por ejemplo, cambio de jornada, cambio de sueldo, cambio de funciones, nuevo horario, etc…"
-              />
-            </Campo>
+            {anexoTipo === "otro" ? (
+              <Campo label="¿Qué necesitas que diga este anexo?" span2>
+                <Textarea
+                  name="anexo_detalle"
+                  rows={3}
+                  required
+                  placeholder="Explícalo con palabras simples: por ejemplo, cambio de sueldo, cambio de funciones, nuevo horario, etc…"
+                />
+              </Campo>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
