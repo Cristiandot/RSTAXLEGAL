@@ -188,9 +188,20 @@ export function calcularFiniquito(e: EntradaFiniquito): ResultadoFiniquito {
   let aniosComputables = 0;
   let topeAniosAplicado = false;
   if (servicio) {
-    aniosComputables =
-      servicio.anios +
-      (servicio.meses > 6 || (servicio.meses === 6 && servicio.dias > 0) ? 1 : 0);
+    // Art. 163: la indemnización procede solo si el contrato estuvo vigente
+    // UN AÑO O MÁS; cumplido el año, cada fracción > 6 meses suma un año.
+    if (servicio.anios === 0) {
+      aniosComputables = 0;
+      if (tieneIndemnizacion) {
+        notas.push(
+          "Contrato vigente menos de un año: NO procede indemnización por años de servicio (Art. 163 inc. 1° — exige vigencia de un año o más). El mes de aviso sí procede.",
+        );
+      }
+    } else {
+      aniosComputables =
+        servicio.anios +
+        (servicio.meses > 6 || (servicio.meses === 6 && servicio.dias > 0) ? 1 : 0);
+    }
     const sinTope = e.fechaInicio !== null && e.fechaInicio < "1981-08-14";
     if (aniosComputables > 11 && !sinTope) {
       aniosComputables = 11;
