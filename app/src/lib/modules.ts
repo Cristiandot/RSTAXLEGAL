@@ -61,7 +61,7 @@ export const MODULOS: SeccionModulos[] = [
         descripcion: "Descargas SII C/V + revisión KAME + IVA salud.",
         href: "/conciliacion",
         icon: GitCompareArrows,
-        estado: "proximamente",
+        estado: "activo",
       },
       {
         key: "f29",

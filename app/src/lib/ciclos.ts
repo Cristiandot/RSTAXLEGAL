@@ -28,6 +28,39 @@ export type LiquidacionRow = {
   observaciones: string | null;
 };
 
+/** Fila de `v_checklist_conciliacion` (ciclo Conciliación SII/KAME). */
+export type ConciliacionRow = {
+  ciclo_id: string;
+  cliente_id: string;
+  periodo: string;
+  razon_social: string;
+  rut_empresa: string | null;
+  es_profesional_salud: boolean | null;
+  kame_cert_estado: string | null;
+  kame_cert_observacion: string | null;
+  kame_cert_ultima_revision: string | null;
+  rubro: string | null;
+  responsable_id: string | null;
+  responsable: string | null;
+  fecha_compras_descargadas: string | null;
+  fecha_ventas_descargadas: string | null;
+  fecha_conciliacion_kame_ok: string | null;
+  kame_cert_estado_al_cierre: string | null;
+  observaciones: string | null;
+  estado: string;
+  iva_salud_ejecuciones: number;
+  ultima_ejecucion_iva: string | null;
+};
+
+/** Ejecución de cambio IVA recuperable → no recuperable (clientes salud). */
+export type IvaEjecucionRow = {
+  id: string;
+  cliente_id: string;
+  fecha_ejecutada: string;
+  observaciones: string | null;
+  responsable_nombre: string | null;
+};
+
 /** Fila de `v_checklist_f29` (ciclo F29). */
 export type F29Row = {
   ciclo_id: string;
@@ -52,9 +85,12 @@ export function claseEstado(estado: string): string {
     case "Cerrado":
     case "Previred pagado":
     case "DNP declarado":
+    case "Conciliado":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "Sin iniciar":
       return "border-slate-200 bg-slate-100 text-slate-600";
+    case "Descargando":
+      return "border-violet-200 bg-violet-50 text-violet-700";
     case "Pendiente Previred":
     case "Pendiente presentación":
     case "Previred listo para pago RS":
