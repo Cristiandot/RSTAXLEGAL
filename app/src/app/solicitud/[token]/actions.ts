@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { validarRut } from "@/lib/rut";
+import { calcularVacaciones } from "@/lib/feriados";
 
 export type SolicitudInput = Record<string, string | boolean | null>;
 
@@ -123,11 +124,20 @@ export async function enviarGestion(
     }
   }
   if (g.tipo === "vacaciones") {
-    if (!g.datos.fecha_inicio) return { ok: false, error: "Indica la fecha de inicio de las vacaciones." };
-    if (!g.datos.fecha_regreso) return { ok: false, error: "Indica la fecha de regreso al trabajo." };
-    if (!g.datos.dias_habiles || Number(g.datos.dias_habiles) <= 0) {
-      return { ok: false, error: "Indica los días hábiles solicitados." };
+    if (!g.datos.fecha_inicio) return { ok: false, error: "Indica el primer día de vacaciones." };
+    if (!g.datos.fecha_termino) return { ok: false, error: "Indica el último día de vacaciones." };
+    // Los días hábiles se calculan acá (sábados, domingos y feriados legales
+    // no cuentan — Arts. 67 y 69 CT); no se confía en lo que mande el navegador.
+    const calc = calcularVacaciones(g.datos.fecha_inicio, g.datos.fecha_termino);
+    if (!calc) {
+      return { ok: false, error: "El último día de vacaciones no puede ser anterior al primero." };
     }
+    if (calc.diasHabiles <= 0) {
+      return { ok: false, error: "El rango elegido no contiene días hábiles (solo sábados, domingos o feriados)." };
+    }
+    g.datos.dias_habiles = String(calc.diasHabiles);
+    if (calc.fechaRegreso) g.datos.fecha_regreso = calc.fechaRegreso;
+    if (!calc.coberturaCompleta) g.datos.cobertura_feriados = "incompleta";
   }
 
   const supabase = await createClient();

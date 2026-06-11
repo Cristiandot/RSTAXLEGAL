@@ -6,6 +6,7 @@ import { CheckCircle2, ClipboardCopy, ListChecks } from "lucide-react";
 import { enviarSolicitud, enviarGestion } from "./actions";
 import { MOTIVOS_AMONESTACION } from "@/lib/amonestaciones";
 import { formatFecha } from "@/lib/format";
+import { calcularVacaciones } from "@/lib/feriados";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -149,6 +150,12 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
   const [anexoTipo, setAnexoTipo] = useState("renovacion_fijo_a_fijo");
   const [anexoHoras, setAnexoHoras] = useState("");
   const [causal, setCausal] = useState("");
+  const [vacInicio, setVacInicio] = useState("");
+  const [vacFin, setVacFin] = useState("");
+  const calcVac = useMemo(
+    () => (vacInicio && vacFin ? calcularVacaciones(vacInicio, vacFin) : null),
+    [vacInicio, vacFin],
+  );
 
   const cargos = useMemo(() => [...new Set(empresa.opciones.map((o) => o.cargo))], [empresa]);
   const [cargo, setCargo] = useState(cargos[0] ?? "");
@@ -234,8 +241,7 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
                 }
               : {
                   fecha_inicio: s("fecha_inicio_vac"),
-                  fecha_regreso: s("fecha_regreso"),
-                  dias_habiles: s("dias_habiles"),
+                  fecha_termino: s("fecha_termino_vac"),
                 };
 
         res = await enviarGestion(token, {
@@ -722,14 +728,57 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
             <Campo label="Primer día de vacaciones">
-              <Input name="fecha_inicio_vac" type="date" required />
+              <Input
+                name="fecha_inicio_vac"
+                type="date"
+                required
+                value={vacInicio}
+                onChange={(e) => setVacInicio(e.target.value)}
+              />
             </Campo>
-            <Campo label="Fecha de regreso al trabajo">
-              <Input name="fecha_regreso" type="date" required />
+            <Campo label="Último día de vacaciones">
+              <Input
+                name="fecha_termino_vac"
+                type="date"
+                required
+                value={vacFin}
+                onChange={(e) => setVacFin(e.target.value)}
+              />
             </Campo>
-            <Campo label="Días hábiles solicitados">
-              <Input name="dias_habiles" type="number" min={1} max={30} required placeholder="ej. 5" />
-            </Campo>
+            {vacInicio && vacFin && !calcVac ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700 sm:col-span-2">
+                El último día no puede ser anterior al primero.
+              </p>
+            ) : null}
+            {calcVac ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 sm:col-span-2">
+                <p className="font-medium">
+                  Son {calcVac.diasHabiles} día{calcVac.diasHabiles === 1 ? "" : "s"} hábil
+                  {calcVac.diasHabiles === 1 ? "" : "es"} de vacaciones
+                </p>
+                <p className="mt-0.5 text-xs">
+                  {calcVac.fechaRegreso
+                    ? `El trabajador se reintegra el ${formatFecha(calcVac.fechaRegreso)}. `
+                    : ""}
+                  {calcVac.feriadosEnRango.length > 0
+                    ? `No se cuentan: ${calcVac.feriadosEnRango
+                        .map((f) => `${f.nombre} (${formatFecha(f.fecha)})`)
+                        .join(", ")}.`
+                    : ""}
+                </p>
+                {!calcVac.coberturaCompleta ? (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Parte del rango está fuera de nuestro calendario de feriados —
+                    el equipo confirmará el conteo exacto.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            <p className="rounded-lg border border-sky-200 bg-sky-50 p-2.5 text-xs text-sky-800 sm:col-span-2">
+              Los sábados, domingos y feriados legales en Chile no se descuentan
+              de las vacaciones (Arts. 67 y 69 del Código del Trabajo) — el
+              conteo de arriba ya los excluye.
+            </p>
           </CardContent>
         </Card>
       ) : null}

@@ -139,11 +139,14 @@ function detalle(g: GestionRow): [string, string][] {
     }
     return filas;
   }
-  return [
-    ["Primer día de vacaciones", formatFecha(d.fecha_inicio)],
-    ["Fecha de regreso", formatFecha(d.fecha_regreso)],
-    ["Días hábiles", d.dias_habiles ?? "—"],
-  ];
+  const vac: [string, string][] = [["Primer día de vacaciones", formatFecha(d.fecha_inicio)]];
+  if (d.fecha_termino) vac.push(["Último día de vacaciones", formatFecha(d.fecha_termino)]);
+  vac.push(["Fecha de regreso", formatFecha(d.fecha_regreso)]);
+  vac.push([
+    "Días hábiles",
+    (d.dias_habiles ?? "—") + (d.cobertura_feriados === "incompleta" ? " ⚠ verificar feriados" : ""),
+  ]);
+  return vac;
 }
 
 export function GestionesClient({
