@@ -10,6 +10,25 @@ export type ResultadoGeneracion = {
 };
 
 /**
+ * Redacción de la cláusula de gratificación según la opción elegida en la
+ * solicitud (placeholder {GRATIFICACION_TEXTO} en las plantillas). El texto va
+ * después de "Gratificación:" / "Gratificación Legal:" y sin punto final (el
+ * punto está en la plantilla). Solicitudes antiguas sin tipo → 25% (Art. 50).
+ */
+function textoGratificacion(tipo: string | undefined, monto: number): string {
+  switch (tipo) {
+    case "sin":
+      return "No se pacta gratificación convencional. El trabajador tendrá derecho a gratificación legal únicamente si concurren a su respecto los requisitos del Artículo 47 del Código del Trabajo";
+    case "tope":
+      return "El Empleador pagará mensualmente, por concepto de gratificación legal del Artículo 50 del Código del Trabajo, el equivalente a un doceavo del tope legal de 4,75 Ingresos Mínimos Mensuales";
+    case "manual":
+      return `El Empleador pagará mensualmente la suma fija de $${montoCLP(monto)} (${montoEnPalabras(monto)}) por concepto de gratificación convencional garantizada, imputable a la gratificación legal de los Artículos 47 y 50 del Código del Trabajo`;
+    default:
+      return "El Empleador pagará la gratificación legal mensual conforme al Artículo 50 del Código del Trabajo, equivalente al 25% de la remuneración mensual devengada, con el tope legal de 4,75 Ingresos Mínimos Mensuales (prorrateado mensualmente)";
+  }
+}
+
+/**
  * Genera el .docx de un contrato existente (cualquiera sea su origen: formulario
  * interno o solicitud pública), lo sube a Storage y marca el contrato 'generado'.
  * Resuelve la plantilla por cliente × cargo × jornada × nacionalidad × tipo.
@@ -43,6 +62,8 @@ export async function generarYSubirContrato(
     sueldo_base?: number;
     movilizacion?: number;
     colacion?: number;
+    gratificacion_tipo?: string;
+    gratificacion_monto?: number | string | null;
   };
   const nacionalidad = ((t.nacionalidad as string) ?? "Chilena").trim();
   const nacPlantilla = nacionalidad.toLowerCase().startsWith("chilen") ? "chileno" : "extranjero";
@@ -110,6 +131,10 @@ export async function generarYSubirContrato(
     ASIGNACION_MOVILIZACION_PALABRA: montoEnPalabras(movilizacion),
     ASIGNACION_COLACION: montoCLP(colacion),
     ASIGNACION_COLACION_PALABRA: montoEnPalabras(colacion),
+    GRATIFICACION_TEXTO: textoGratificacion(
+      rem.gratificacion_tipo,
+      Number(rem.gratificacion_monto ?? 0),
+    ),
     PREVISION: (t.afp as string) ?? "",
     INSTITUCION_SALUD: (t.salud as string) ?? "",
     REGIMEN_PREVISIONAL: "chileno",

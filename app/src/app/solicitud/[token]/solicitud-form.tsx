@@ -62,8 +62,13 @@ const DATOS_TRABAJADOR = [
   "Dirección y comuna donde vive",
   "Teléfono y correo electrónico",
   "AFP",
-  "Salud: Fonasa o Isapre (si Isapre, cuál)",
+  "Salud: Fonasa o Isapre (si Isapre, cuál y el valor del plan en UF o $)",
 ];
+
+/** "3,2" → "3.2" · "120.000" → "120000" (formato es-CL → numérico). */
+function normalizarMonto(v: string): string {
+  return v.trim().replace(/\./g, "").replace(",", ".");
+}
 
 const MENSAJE_WHATSAPP = `Hola! Para preparar tu contrato de trabajo necesito que me envíes estos datos:
 
@@ -141,6 +146,10 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
   const [paisExtranjero, setPaisExtranjero] = useState("");
   const esExtranjero = tipoNacionalidad === "extranjera";
 
+  const [salud, setSalud] = useState("Fonasa");
+  const [planUnidad, setPlanUnidad] = useState("UF");
+  const [gratifTipo, setGratifTipo] = useState("25");
+
   const nacBuscada = esExtranjero ? "extranjero" : "chileno";
   const opcionesCombo = useMemo(
     () =>
@@ -169,6 +178,15 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const s = (k: string) => String(fd.get(k) ?? "").trim();
+
+    const esIsapre = esContrato && s("salud") === "Isapre";
+    const planValor = esIsapre ? normalizarMonto(s("plan_valor")) : "";
+    if (esIsapre && (planValor === "" || Number.isNaN(Number(planValor)))) {
+      toast.error(
+        "Indica el valor del plan de Isapre (un número; usa coma para decimales de UF, ej. 3,2).",
+      );
+      return;
+    }
 
     startEnviar(async () => {
       let res: { ok: boolean; error?: string };
@@ -235,7 +253,9 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               fono: s("fono"),
               correo: s("correo"),
               afp: s("afp"),
-              salud: s("salud") === "Isapre" ? s("isapre_nombre") || "Isapre" : "Fonasa",
+              salud: esIsapre ? s("isapre_nombre") || "Isapre" : "Fonasa",
+              salud_plan_unidad: esIsapre ? s("plan_unidad") : null,
+              salud_plan_valor: esIsapre ? planValor : null,
               cargo,
               jornada_tipo: jornadaActual,
               horas_semanales: jornadaActual === "parcial" ? s("horas_semanales") : null,
@@ -246,9 +266,16 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               movilizacion: s("movilizacion") || "0",
               colacion: s("colacion") || "0",
               gratificacion:
-                s("gratificacion") === "anual"
-                  ? "Anual (Art. 50 CT, tope 4,75 IMM)"
-                  : "Mensual (Art. 50 CT, tope 4,75 IMM prorrateado)",
+                gratifTipo === "sin"
+                  ? "Sin gratificación"
+                  : gratifTipo === "tope"
+                    ? "Tope legal: 4,75 IMM anual, prorrateado mensual"
+                    : gratifTipo === "manual"
+                      ? `Manual: $${Number(s("gratificacion_monto") || 0).toLocaleString("es-CL")} mensuales`
+                      : "25% de lo devengado, con tope de 4,75 IMM anual (Art. 50 CT)",
+              gratificacion_tipo: gratifTipo,
+              gratificacion_monto:
+                gratifTipo === "manual" ? s("gratificacion_monto") : null,
             };
         res = await enviarSolicitud(token, payload);
       }
@@ -380,14 +407,50 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
                 </select>
               </Campo>
               <Campo label="Salud">
-                <div className="flex gap-2">
-                  <select name="salud" className={`${selectCls} flex-1`} defaultValue="Fonasa">
-                    <option>Fonasa</option>
-                    <option>Isapre</option>
-                  </select>
-                  <Input name="isapre_nombre" placeholder="Nombre Isapre" className="flex-1" />
-                </div>
+                <select
+                  name="salud"
+                  className={selectCls}
+                  value={salud}
+                  onChange={(e) => setSalud(e.target.value)}
+                >
+                  <option>Fonasa</option>
+                  <option>Isapre</option>
+                </select>
               </Campo>
+              {salud === "Isapre" ? (
+                <div className="grid gap-2 sm:col-span-2 sm:grid-cols-3">
+                  <Campo label="Nombre de la Isapre">
+                    <Input
+                      name="isapre_nombre"
+                      placeholder="ej. Colmena, Banmédica…"
+                      required
+                    />
+                  </Campo>
+                  <Campo label="Plan pactado en">
+                    <select
+                      name="plan_unidad"
+                      className={selectCls}
+                      value={planUnidad}
+                      onChange={(e) => setPlanUnidad(e.target.value)}
+                    >
+                      <option value="UF">UF</option>
+                      <option value="CLP">Pesos ($)</option>
+                    </select>
+                  </Campo>
+                  <Campo
+                    label={
+                      planUnidad === "UF" ? "Valor del plan (UF)" : "Valor del plan ($)"
+                    }
+                  >
+                    <Input
+                      name="plan_valor"
+                      inputMode="decimal"
+                      placeholder={planUnidad === "UF" ? "ej. 3,2" : "ej. 120.000"}
+                      required
+                    />
+                  </Campo>
+                </div>
+              ) : null}
             </>
           ) : null}
         </CardContent>
@@ -612,37 +675,67 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               <Campo label="Movilización ($)"><Input name="movilizacion" type="number" min={0} defaultValue={0} /></Campo>
               <Campo label="Colación ($)"><Input name="colacion" type="number" min={0} defaultValue={0} /></Campo>
               <Campo label="Gratificación legal (Art. 50 CT)">
-                <select name="gratificacion" className={selectCls} defaultValue="mensual">
-                  <option value="mensual">Mensual (prorrateada mes a mes)</option>
-                  <option value="anual">Anual</option>
+                <select
+                  name="gratificacion_tipo"
+                  className={selectCls}
+                  value={gratifTipo}
+                  onChange={(e) => setGratifTipo(e.target.value)}
+                >
+                  <option value="sin">Sin gratificación</option>
+                  <option value="25">25% (con tope legal — la más común)</option>
+                  <option value="tope">Tope (4,75 IMM ÷ 12 mensual)</option>
+                  <option value="manual">Manual (monto fijo)</option>
                 </select>
               </Campo>
+              {gratifTipo === "manual" ? (
+                <Campo label="Monto gratificación mensual ($)">
+                  <Input
+                    name="gratificacion_monto"
+                    type="number"
+                    min={1}
+                    required
+                    placeholder="ej. 150000"
+                  />
+                </Campo>
+              ) : null}
+              <div className="flex flex-col gap-1.5 sm:col-span-3">
+                <Label className="text-xs">Otras consideraciones remuneracionales</Label>
+                <Textarea
+                  name="observaciones"
+                  rows={3}
+                  placeholder="Cualquier asignación o descuento DISTINTO a los anteriores. Por ejemplo: asignación de pérdida de caja (indica el monto), bonos o comisiones (explica cómo se calculan: porcentaje, metas o tabla, fijo o variable), aguinaldos, descuentos pactados, etc."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Usa este espacio para todo pago o descuento que no esté en las
+                  casillas anteriores — mientras más detalle, más rápido sale el
+                  contrato.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </>
       ) : null}
 
-      {/* ================= CONTACTO + OBSERVACIONES ================= */}
-      <Card className="card-soft border-transparent">
-        <CardContent className="grid gap-3 pt-4 sm:grid-cols-2">
-          {esGestionRrhh ? (
-            <Campo label="Correo donde te enviaremos el documento / cálculo" span2>
-              <Input name="correo_contacto" type="email" required placeholder="tucorreo@empresa.cl" />
+      {/* ================= CONTACTO + OBSERVACIONES (no contrato: en contrato
+          las observaciones van en la sección Remuneración) ================= */}
+      {!esContrato ? (
+        <Card className="card-soft border-transparent">
+          <CardContent className="grid gap-3 pt-4 sm:grid-cols-2">
+            {esGestionRrhh ? (
+              <Campo label="Correo donde te enviaremos el documento / cálculo" span2>
+                <Input name="correo_contacto" type="email" required placeholder="tucorreo@empresa.cl" />
+              </Campo>
+            ) : null}
+            <Campo label="Observaciones" span2>
+              <Textarea
+                name="observaciones"
+                rows={3}
+                placeholder="Cualquier detalle adicional que debamos saber, etc…"
+              />
             </Campo>
-          ) : null}
-          <Campo label="Observaciones" span2>
-            <Textarea
-              name="observaciones"
-              rows={3}
-              placeholder={
-                esContrato
-                  ? "Si el contrato lleva asignación de pérdida de caja, indícalo aquí (monto). Si lleva bono o comisión, explica cómo se obtiene: porcentaje, metas o tabla de comisiones, si es fijo o variable, etc…"
-                  : "Cualquier detalle adicional que debamos saber, etc…"
-              }
-            />
-          </Campo>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="flex justify-end">
         <Button type="submit" size="lg" disabled={enviando}>

@@ -81,6 +81,8 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
   const esExtranjero = tipoNacionalidad === "extranjera";
   const nacionalidad = esExtranjero ? paisExtranjero.trim() || "Extranjera" : "Chilena";
 
+  const [gratifTipo, setGratifTipo] = useState("25");
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!empresa) return;
@@ -135,9 +137,15 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
           movilizacion: n("movilizacion"),
           colacion: n("colacion"),
           gratificacion:
-            s("gratificacion") === "anual"
-              ? "Anual (Art. 50 CT, tope 4,75 IMM)"
-              : "Mensual (Art. 50 CT, tope 4,75 IMM prorrateado)",
+            gratifTipo === "sin"
+              ? "Sin gratificación"
+              : gratifTipo === "tope"
+                ? "Tope legal: 4,75 IMM anual, prorrateado mensual"
+                : gratifTipo === "manual"
+                  ? `Manual: $${n("gratificacion_monto").toLocaleString("es-CL")} mensuales`
+                  : "25% de lo devengado, con tope de 4,75 IMM anual (Art. 50 CT)",
+          gratificacionTipo: gratifTipo,
+          gratificacionMonto: gratifTipo === "manual" ? n("gratificacion_monto") : null,
           clausulasAdicionales: s("clausulas_adicionales"),
           observaciones: s("observaciones"),
         },
@@ -371,7 +379,8 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
         <CardHeader>
           <CardTitle className="text-base">Remuneración</CardTitle>
           <CardDescription>
-            Gratificación Art. 50 CT y asignación de caja van fijas en la plantilla.
+            La cláusula de gratificación se redacta según la opción elegida. La
+            asignación de caja va fija en la plantilla.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-3">
@@ -379,11 +388,23 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
           <Campo label="Movilización ($)"><Input name="movilizacion" type="number" min={0} defaultValue={0} /></Campo>
           <Campo label="Colación ($)"><Input name="colacion" type="number" min={0} defaultValue={0} /></Campo>
           <Campo label="Gratificación legal (Art. 50 CT)">
-            <select name="gratificacion" className={selectCls} defaultValue="mensual">
-              <option value="mensual">Mensual (prorrateada mes a mes)</option>
-              <option value="anual">Anual</option>
+            <select
+              name="gratificacion_tipo"
+              className={selectCls}
+              value={gratifTipo}
+              onChange={(e) => setGratifTipo(e.target.value)}
+            >
+              <option value="sin">Sin gratificación</option>
+              <option value="25">25% (con tope legal — la más común)</option>
+              <option value="tope">Tope (4,75 IMM ÷ 12 mensual)</option>
+              <option value="manual">Manual (monto fijo)</option>
             </select>
           </Campo>
+          {gratifTipo === "manual" ? (
+            <Campo label="Monto gratificación mensual ($)">
+              <Input name="gratificacion_monto" type="number" min={1} required placeholder="ej. 150000" />
+            </Campo>
+          ) : null}
           <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 sm:col-span-3">
             <strong>Sueldos mínimos de referencia</strong> (IMM $539.000 por 42
             hrs; proporcional según horas): <strong>42 hrs → $539.000</strong> ·{" "}
