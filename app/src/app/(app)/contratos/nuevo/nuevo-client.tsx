@@ -136,6 +136,7 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
           sueldoBase: n("sueldo_base"),
           movilizacion: n("movilizacion"),
           colacion: n("colacion"),
+          perdidaCaja: n("perdida_caja"),
           gratificacion:
             gratifTipo === "sin"
               ? "Sin gratificación"
@@ -379,14 +380,17 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
         <CardHeader>
           <CardTitle className="text-base">Remuneración</CardTitle>
           <CardDescription>
-            La cláusula de gratificación se redacta según la opción elegida. La
-            asignación de caja va fija en la plantilla.
+            Las cláusulas de gratificación y pérdida de caja se redactan según
+            lo que indiques acá.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-3">
           <Campo label="Sueldo base ($)"><Input name="sueldo_base" type="number" min={1} required /></Campo>
           <Campo label="Movilización ($)"><Input name="movilizacion" type="number" min={0} defaultValue={0} /></Campo>
           <Campo label="Colación ($)"><Input name="colacion" type="number" min={0} defaultValue={0} /></Campo>
+          <Campo label="Pérdida de caja ($) — 0 si no aplica">
+            <Input name="perdida_caja" type="number" min={0} defaultValue={0} />
+          </Campo>
           <Campo label="Gratificación legal (Art. 50 CT)">
             <select
               name="gratificacion_tipo"

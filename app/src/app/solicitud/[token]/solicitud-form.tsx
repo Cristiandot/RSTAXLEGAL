@@ -265,6 +265,7 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               sueldo_base: s("sueldo_base"),
               movilizacion: s("movilizacion") || "0",
               colacion: s("colacion") || "0",
+              perdida_caja: s("perdida_caja") || "0",
               gratificacion:
                 gratifTipo === "sin"
                   ? "Sin gratificación"
@@ -674,6 +675,9 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               <Campo label="Sueldo base ($)"><Input name="sueldo_base" type="number" min={1} required /></Campo>
               <Campo label="Movilización ($)"><Input name="movilizacion" type="number" min={0} defaultValue={0} /></Campo>
               <Campo label="Colación ($)"><Input name="colacion" type="number" min={0} defaultValue={0} /></Campo>
+              <Campo label="Asignación de pérdida de caja ($) — 0 si no maneja caja">
+                <Input name="perdida_caja" type="number" min={0} defaultValue={0} />
+              </Campo>
               <Campo label="Gratificación legal (Art. 50 CT)">
                 <select
                   name="gratificacion_tipo"

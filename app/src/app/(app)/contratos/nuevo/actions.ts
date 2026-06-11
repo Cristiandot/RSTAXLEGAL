@@ -43,6 +43,7 @@ export type CrearContratoInput = {
     sueldoBase: number;
     movilizacion: number;
     colacion: number;
+    perdidaCaja: number;
     gratificacion: string;
     gratificacionTipo: string;
     gratificacionMonto: number | null;
@@ -150,6 +151,7 @@ export async function crearContrato(
         sueldo_base: c.sueldoBase,
         movilizacion: c.movilizacion,
         colacion: c.colacion,
+        perdida_caja: c.perdidaCaja,
         gratificacion:
           c.gratificacion || "25% de lo devengado, con tope de 4,75 IMM anual (Art. 50 CT)",
         gratificacion_tipo: c.gratificacionTipo || "25",

@@ -62,6 +62,7 @@ export async function generarYSubirContrato(
     sueldo_base?: number;
     movilizacion?: number;
     colacion?: number;
+    perdida_caja?: number | string | null;
     gratificacion_tipo?: string;
     gratificacion_monto?: number | string | null;
   };
@@ -93,6 +94,8 @@ export async function generarYSubirContrato(
       error: `No hay plantilla aprobada para: ${con.cargo} · ${jornadaTipo} · ${nacPlantilla} · ${String(con.tipo_contrato).replace("_", " ")}.`,
     };
   }
+
+  const perdidaCaja = Number(rem.perdida_caja ?? 0);
 
   const nombreCompleto = `${t.nombres} ${t.apellidos}`;
   const rutEmpleado = t.rut_provisorio
@@ -135,6 +138,15 @@ export async function generarYSubirContrato(
       rem.gratificacion_tipo,
       Number(rem.gratificacion_monto ?? 0),
     ),
+    ASIGNACION_CAJA_TEXTO:
+      perdidaCaja > 0
+        ? `$${montoCLP(perdidaCaja)} (${montoEnPalabras(perdidaCaja)})`
+        : "No se pacta",
+    CIUDAD_FIRMA:
+      (cli.lugar_firma_contrato as string) ||
+      (cli.ciudad as string) ||
+      (cli.comuna as string) ||
+      "",
     PREVISION: (t.afp as string) ?? "",
     INSTITUCION_SALUD: (t.salud as string) ?? "",
     REGIMEN_PREVISIONAL: "chileno",
