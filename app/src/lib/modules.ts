@@ -14,6 +14,7 @@ import {
   UserCog,
   TrendingUp,
   Calculator,
+  Link2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -201,6 +202,20 @@ export const MODULOS: SeccionModulos[] = [
         icon: UserCog,
         estado: "proximamente",
         roles: ["admin"],
+      },
+    ],
+  },
+  {
+    seccion: "Portal clientes",
+    modulos: [
+      {
+        key: "links-clientes",
+        label: "Links clientes",
+        descripcion:
+          "El link del portal de cada empresa: copiar, abrir y generar para las que no tienen.",
+        href: "/links",
+        icon: Link2,
+        estado: "activo",
       },
     ],
   },
