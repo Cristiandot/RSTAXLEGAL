@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, ClipboardCopy, ListChecks } from "lucide-react";
 import { enviarSolicitud, enviarGestion } from "./actions";
+import { MOTIVOS_AMONESTACION } from "@/lib/amonestaciones";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -197,8 +198,8 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
           gestion === "amonestacion"
             ? {
                 fecha_hechos: s("fecha_hechos"),
+                motivo: s("motivo"),
                 descripcion: s("descripcion"),
-                amonestaciones_previas: s("amonestaciones_previas"),
               }
             : gestion === "finiquito"
               ? {
@@ -551,11 +552,11 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
             <Campo label="Fecha de los hechos">
               <Input name="fecha_hechos" type="date" required />
             </Campo>
-            <Campo label="¿Tiene amonestaciones anteriores?">
-              <select name="amonestaciones_previas" className={selectCls} defaultValue="no">
-                <option value="no">No</option>
-                <option value="si">Sí</option>
-                <option value="no_se">No estoy seguro</option>
+            <Campo label="Motivo de la amonestación">
+              <select name="motivo" className={selectCls} defaultValue="atrasos" required>
+                {MOTIVOS_AMONESTACION.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
               </select>
             </Campo>
             <Campo label="¿Qué ocurrió? Descríbelo con tus palabras" span2>

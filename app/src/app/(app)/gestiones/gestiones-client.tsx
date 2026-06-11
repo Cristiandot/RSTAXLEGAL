@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Eye, Search } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
+import { MOTIVO_AMONESTACION_LABEL } from "@/lib/amonestaciones";
 import { cambiarEstadoGestion } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,11 +86,19 @@ function claseEstado(estado: string): string {
 function detalle(g: GestionRow): [string, string][] {
   const d = g.datos;
   if (g.tipo === "amonestacion") {
-    return [
+    const filas: [string, string][] = [
       ["Fecha de los hechos", formatFecha(d.fecha_hechos)],
-      ["Amonestaciones previas", SI_NO[d.amonestaciones_previas ?? ""] ?? "—"],
+      ["Motivo", MOTIVO_AMONESTACION_LABEL[d.motivo ?? ""] ?? d.motivo ?? "—"],
       ["Descripción de los hechos", d.descripcion ?? "—"],
     ];
+    // solicitudes antiguas (antes del catálogo de motivos) traían este campo
+    if (d.amonestaciones_previas) {
+      filas.splice(2, 0, [
+        "Amonestaciones previas",
+        SI_NO[d.amonestaciones_previas] ?? "—",
+      ]);
+    }
+    return filas;
   }
   if (g.tipo === "finiquito") {
     return [
