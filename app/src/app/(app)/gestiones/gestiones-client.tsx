@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Eye, FileText, Search } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { MOTIVO_AMONESTACION_LABEL } from "@/lib/amonestaciones";
+import { TIPO_PERMISO_LABEL } from "@/lib/permisos";
 import { cambiarEstadoGestion, generarCartaAmonestacion } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,7 @@ const TIPO_LABEL: Record<string, string> = {
   amonestacion: "Amonestación",
   finiquito: "Finiquito / despido",
   vacaciones: "Vacaciones",
+  permiso: "Permiso",
 };
 
 const CAUSAL_LABEL: Record<string, string> = {
@@ -64,6 +66,8 @@ function claseTipo(tipo: string): string {
       return "border-red-200 bg-red-50 text-red-700";
     case "amonestacion":
       return "border-amber-200 bg-amber-50 text-amber-700";
+    case "permiso":
+      return "border-violet-200 bg-violet-50 text-violet-700";
     default:
       return "border-sky-200 bg-sky-50 text-sky-700";
   }
@@ -139,6 +143,27 @@ function detalle(g: GestionRow): [string, string][] {
     }
     return filas;
   }
+  if (g.tipo === "permiso") {
+    const filas: [string, string][] = [
+      ["Tipo de permiso", TIPO_PERMISO_LABEL[d.tipo_permiso ?? ""] ?? d.tipo_permiso ?? "—"],
+      ["Goce de remuneraciones", d.goce === "con" ? "Con goce (pagado)" : d.goce === "sin" ? "Sin goce (se descuenta)" : "—"],
+    ];
+    if (d.unidad === "horas") {
+      filas.push(["Fecha", formatFecha(d.fecha_desde)]);
+      filas.push(["Horas", d.horas ?? "—"]);
+    } else {
+      filas.push(["Desde", formatFecha(d.fecha_desde)]);
+      filas.push(["Hasta", formatFecha(d.fecha_hasta)]);
+      filas.push([
+        "Días",
+        `${d.dias_corridos ?? "—"} corrido(s)` +
+          (d.dias_habiles && d.dias_habiles !== d.dias_corridos
+            ? ` · ${d.dias_habiles} hábil(es) lun-vie`
+            : ""),
+      ]);
+    }
+    return filas;
+  }
   const vac: [string, string][] = [["Primer día de vacaciones", formatFecha(d.fecha_inicio)]];
   if (d.fecha_termino) vac.push(["Último día de vacaciones", formatFecha(d.fecha_termino)]);
   vac.push(["Fecha de regreso", formatFecha(d.fecha_regreso)]);
@@ -205,7 +230,7 @@ export function GestionesClient({
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">Gestiones RRHH</h1>
         <p className="text-sm text-muted-foreground">
-          Amonestaciones, finiquitos y vacaciones solicitadas por los clientes.
+          Amonestaciones, finiquitos, vacaciones y permisos solicitados por los clientes.
           Flujo: revisar → aprobar → enviar al correo de contacto.
           {pendientes > 0 ? ` · ${pendientes} pendiente${pendientes > 1 ? "s" : ""} de revisión.` : ""}
         </p>
@@ -226,6 +251,7 @@ export function GestionesClient({
           <option value="amonestacion">Amonestación</option>
           <option value="finiquito">Finiquito / despido</option>
           <option value="vacaciones">Vacaciones</option>
+          <option value="permiso">Permiso</option>
         </select>
         <select aria-label="Estado" className={selectCls} value={estadoF} onChange={(e) => setEstadoF(e.target.value)}>
           <option value="">Todos los estados</option>

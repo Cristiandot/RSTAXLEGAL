@@ -81,7 +81,7 @@ export async function enviarSolicitud(
 }
 
 export type GestionInput = {
-  tipo: "amonestacion" | "finiquito" | "vacaciones";
+  tipo: "amonestacion" | "finiquito" | "vacaciones" | "permiso";
   trabajador_id: string | null;
   nombres: string;
   apellidos: string;
@@ -138,6 +138,31 @@ export async function enviarGestion(
     g.datos.dias_habiles = String(calc.diasHabiles);
     if (calc.fechaRegreso) g.datos.fecha_regreso = calc.fechaRegreso;
     if (!calc.coberturaCompleta) g.datos.cobertura_feriados = "incompleta";
+  }
+  if (g.tipo === "permiso") {
+    if (!g.datos.tipo_permiso) return { ok: false, error: "Indica el tipo de permiso." };
+    if (g.datos.goce !== "con" && g.datos.goce !== "sin") {
+      return { ok: false, error: "Indica si el permiso es con o sin goce de remuneraciones." };
+    }
+    if (!g.datos.fecha_desde) return { ok: false, error: "Indica la fecha del permiso." };
+    if (g.datos.unidad === "horas") {
+      if (!g.datos.horas || Number(g.datos.horas) <= 0) {
+        return { ok: false, error: "Indica la cantidad de horas del permiso." };
+      }
+      g.datos.fecha_hasta = g.datos.fecha_desde;
+    } else {
+      if (!g.datos.fecha_hasta) return { ok: false, error: "Indica el último día del permiso." };
+      // Días corridos y hábiles de referencia calculados acá (un permiso puede
+      // caer en sábado/domingo y sigue siendo válido — no se rechaza por eso).
+      const calc = calcularVacaciones(g.datos.fecha_desde, g.datos.fecha_hasta);
+      if (!calc) {
+        return { ok: false, error: "El último día del permiso no puede ser anterior al primero." };
+      }
+      const ini = Date.parse(`${g.datos.fecha_desde}T00:00:00Z`);
+      const fin = Date.parse(`${g.datos.fecha_hasta}T00:00:00Z`);
+      g.datos.dias_corridos = String(Math.round((fin - ini) / 86_400_000) + 1);
+      g.datos.dias_habiles = String(calc.diasHabiles);
+    }
   }
 
   const supabase = await createClient();

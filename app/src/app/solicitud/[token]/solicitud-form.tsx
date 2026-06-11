@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { CheckCircle2, ClipboardCopy, ListChecks } from "lucide-react";
 import { enviarSolicitud, enviarGestion } from "./actions";
 import { MOTIVOS_AMONESTACION } from "@/lib/amonestaciones";
+import { TIPOS_PERMISO } from "@/lib/permisos";
 import { formatFecha } from "@/lib/format";
 import { calcularVacaciones } from "@/lib/feriados";
 import { Button } from "@/components/ui/button";
@@ -49,7 +50,7 @@ const selectCls =
 const AFPS = ["AFP Capital", "AFP Cuprum", "AFP Habitat", "AFP Modelo", "AFP PlanVital", "AFP Provida", "AFP Uno"];
 const ESTADOS_CIVILES = ["Soltero(a)", "Casado(a)", "Divorciado(a)", "Viudo(a)", "Conviviente civil"];
 
-type TipoGestion = "contrato" | "anexo" | "amonestacion" | "finiquito" | "vacaciones";
+type TipoGestion = "contrato" | "anexo" | "amonestacion" | "finiquito" | "vacaciones" | "permiso";
 
 const GESTIONES: { value: TipoGestion; label: string }[] = [
   { value: "contrato", label: "Contrato nuevo (trabajador que se incorpora)" },
@@ -57,6 +58,7 @@ const GESTIONES: { value: TipoGestion; label: string }[] = [
   { value: "amonestacion", label: "Carta de amonestación" },
   { value: "finiquito", label: "Finiquito / cálculo de despido" },
   { value: "vacaciones", label: "Papeleta de vacaciones" },
+  { value: "permiso", label: "Permiso (con o sin goce de remuneraciones)" },
 ];
 
 function Campo({ label, children, span2 = false }: { label: string; children: React.ReactNode; span2?: boolean }) {
@@ -157,6 +159,27 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
     [vacInicio, vacFin],
   );
 
+  // Permiso: el catálogo fija el goce en los legales; en el resto lo elige el cliente.
+  const [permisoTipo, setPermisoTipo] = useState("sin_goce");
+  const [permisoGoce, setPermisoGoce] = useState("sin");
+  const [permisoUnidad, setPermisoUnidad] = useState<"dias" | "horas">("dias");
+  const [perDesde, setPerDesde] = useState("");
+  const [perHasta, setPerHasta] = useState("");
+  const permisoDef = TIPOS_PERMISO.find((t) => t.value === permisoTipo) ?? TIPOS_PERMISO[0];
+  const goceFijo = permisoDef.goce !== null;
+  const goceActual = goceFijo ? (permisoDef.goce as string) : permisoGoce;
+  const calcPermiso = useMemo(() => {
+    if (permisoUnidad !== "dias" || !perDesde || !perHasta) return null;
+    return calcularVacaciones(perDesde, perHasta);
+  }, [permisoUnidad, perDesde, perHasta]);
+  const permisoDiasCorridos = useMemo(() => {
+    if (permisoUnidad !== "dias" || !perDesde || !perHasta) return null;
+    const ini = new Date(`${perDesde}T00:00:00Z`).getTime();
+    const fin = new Date(`${perHasta}T00:00:00Z`).getTime();
+    if (Number.isNaN(ini) || Number.isNaN(fin) || fin < ini) return null;
+    return Math.round((fin - ini) / 86_400_000) + 1;
+  }, [permisoUnidad, perDesde, perHasta]);
+
   const cargos = useMemo(() => [...new Set(empresa.opciones.map((o) => o.cargo))], [empresa]);
   const [cargo, setCargo] = useState(cargos[0] ?? "");
   const jornadas = useMemo(
@@ -196,7 +219,11 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
 
   const esContrato = gestion === "contrato";
   const esAnexo = gestion === "anexo";
-  const esGestionRrhh = gestion === "amonestacion" || gestion === "finiquito" || gestion === "vacaciones";
+  const esGestionRrhh =
+    gestion === "amonestacion" ||
+    gestion === "finiquito" ||
+    gestion === "vacaciones" ||
+    gestion === "permiso";
 
   // Para todo lo que no es contrato nuevo, el trabajador se elige de la lista
   // de registrados (RSTL ya tiene sus datos); el tipeo manual queda de respaldo.
@@ -239,10 +266,20 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
                   fecha_termino: s("fecha_termino"),
                   aviso_modalidad: s("aviso_modalidad"),
                 }
-              : {
-                  fecha_inicio: s("fecha_inicio_vac"),
-                  fecha_termino: s("fecha_termino_vac"),
-                };
+              : gestion === "permiso"
+                ? {
+                    tipo_permiso: permisoTipo,
+                    goce: goceActual,
+                    unidad: permisoUnidad,
+                    fecha_desde: s("permiso_desde"),
+                    fecha_hasta:
+                      permisoUnidad === "horas" ? s("permiso_desde") : s("permiso_hasta"),
+                    horas: permisoUnidad === "horas" ? s("permiso_horas") : "",
+                  }
+                : {
+                    fecha_inicio: s("fecha_inicio_vac"),
+                    fecha_termino: s("fecha_termino_vac"),
+                  };
 
         res = await enviarGestion(token, {
           tipo: gestion,
@@ -779,6 +816,119 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               de las vacaciones (Arts. 67 y 69 del Código del Trabajo) — el
               conteo de arriba ya los excluye.
             </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* ================= PERMISO ================= */}
+      {gestion === "permiso" ? (
+        <Card className="card-soft border-transparent">
+          <CardHeader>
+            <CardTitle className="text-base">Permiso</CardTitle>
+            <CardDescription>
+              Los permisos no descuentan días de vacaciones. Los sin goce se
+              descuentan de la remuneración del mes; los legales (matrimonio,
+              nacimiento, fallecimiento) son pagados por ley.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <Campo label="Tipo de permiso" span2>
+              <select
+                className={selectCls}
+                value={permisoTipo}
+                onChange={(e) => {
+                  const def = TIPOS_PERMISO.find((t) => t.value === e.target.value);
+                  setPermisoTipo(e.target.value);
+                  setPermisoGoce(def?.goce ?? def?.goceDefault ?? "sin");
+                }}
+                required
+              >
+                {TIPOS_PERMISO.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+              {permisoDef.nota ? (
+                <p className="text-xs text-muted-foreground">{permisoDef.nota}</p>
+              ) : null}
+            </Campo>
+            <Campo label="¿Con o sin goce de remuneraciones?">
+              <select
+                className={selectCls}
+                value={goceActual}
+                onChange={(e) => setPermisoGoce(e.target.value)}
+                disabled={goceFijo}
+              >
+                <option value="con">Con goce (pagado)</option>
+                <option value="sin">Sin goce (se descuenta)</option>
+              </select>
+              {goceFijo ? (
+                <p className="text-xs text-muted-foreground">
+                  Este tipo de permiso {permisoDef.goce === "con" ? "es con goce" : "es sin goce"} —
+                  no se puede cambiar.
+                </p>
+              ) : null}
+            </Campo>
+            <Campo label="¿Día(s) completo(s) u horas?">
+              <select
+                className={selectCls}
+                value={permisoUnidad}
+                onChange={(e) => setPermisoUnidad(e.target.value as "dias" | "horas")}
+              >
+                <option value="dias">Día(s) completo(s)</option>
+                <option value="horas">Horas dentro de un día</option>
+              </select>
+            </Campo>
+            <Campo label={permisoUnidad === "horas" ? "Fecha del permiso" : "Primer día del permiso"}>
+              <Input
+                name="permiso_desde"
+                type="date"
+                required
+                value={perDesde}
+                onChange={(e) => setPerDesde(e.target.value)}
+              />
+            </Campo>
+            {permisoUnidad === "dias" ? (
+              <Campo label="Último día del permiso (el mismo si es un solo día)">
+                <Input
+                  name="permiso_hasta"
+                  type="date"
+                  required
+                  value={perHasta}
+                  onChange={(e) => setPerHasta(e.target.value)}
+                />
+              </Campo>
+            ) : (
+              <Campo label="Cantidad de horas">
+                <Input
+                  name="permiso_horas"
+                  type="number"
+                  min={0.5}
+                  max={10}
+                  step={0.5}
+                  required
+                  placeholder="ej. 4"
+                />
+              </Campo>
+            )}
+            {permisoUnidad === "dias" && perDesde && perHasta && permisoDiasCorridos === null ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700 sm:col-span-2">
+                El último día no puede ser anterior al primero.
+              </p>
+            ) : null}
+            {permisoDiasCorridos !== null ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 sm:col-span-2">
+                <p className="font-medium">
+                  {permisoDiasCorridos} día{permisoDiasCorridos === 1 ? "" : "s"} de permiso{" "}
+                  {goceActual === "con" ? "con goce" : "sin goce"} de remuneraciones
+                </p>
+                {calcPermiso && calcPermiso.diasHabiles !== permisoDiasCorridos ? (
+                  <p className="mt-0.5 text-xs">
+                    De esos, {calcPermiso.diasHabiles} caen en día hábil (lunes a
+                    viernes sin feriados) — referencia para el descuento si es sin goce.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
