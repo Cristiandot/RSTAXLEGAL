@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Plus, X } from "lucide-react";
+import { Search, Plus, X, Upload, Download, FileSpreadsheet } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { opcionesPeriodo } from "@/lib/periodos";
 import { comparar, type Orden } from "@/lib/ordenar";
@@ -15,9 +15,13 @@ import {
   type UsuarioOpcion,
 } from "@/lib/ciclos";
 import {
+  anularDocumentoContable,
   eliminarCambioIva,
-  guardarConciliacion,
+  guardarContabilidad,
   registrarCambioIva,
+  subirDocumentoContable,
+  urlDocumentoContable,
+  type CategoriaDocumento,
 } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,12 +45,30 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+export type DocumentoContable = {
+  id: string;
+  cliente_id: string;
+  categoria: "rcv_compras" | "rcv_ventas" | "otro";
+  etiqueta: string | null;
+  archivo_path: string;
+  nombre_original: string;
+  tamano_bytes: number | null;
+  created_at: string;
+  subido_por_nombre: string | null;
+};
+
 const ESTADOS = [
   "Sin iniciar",
   "Descargando",
   "Listo para conciliar",
   "Conciliado",
 ];
+
+const CATEGORIA_LABEL: Record<DocumentoContable["categoria"], string> = {
+  rcv_compras: "RCV Compras",
+  rcv_ventas: "RCV Ventas",
+  otro: "Otro",
+};
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -90,31 +112,97 @@ function BadgeKame({ estado }: { estado: string | null }) {
   );
 }
 
-export function ConciliacionClient({
+/** Celda RCV: archivo cargado (✓) > fecha manual legacy > vacío. */
+function CeldaRcv({
+  docs,
+  fechaManual,
+}: {
+  docs: DocumentoContable[];
+  fechaManual: string | null;
+}) {
+  if (docs.length > 0) {
+    return (
+      <Badge
+        variant="outline"
+        className="border-emerald-200 bg-emerald-50 text-emerald-700"
+        title={docs.map((d) => d.nombre_original).join(", ")}
+      >
+        ✓ {formatFecha(docs[0].created_at.slice(0, 10))}
+        {docs.length > 1 ? ` ×${docs.length}` : ""}
+      </Badge>
+    );
+  }
+  if (fechaManual) {
+    return (
+      <span
+        className="text-muted-foreground"
+        title="Fecha registrada a mano (sin archivo en el sistema)"
+      >
+        {formatFecha(fechaManual)} ✎
+      </span>
+    );
+  }
+  return <span className="text-muted-foreground">—</span>;
+}
+
+function formatTamano(bytes: number | null): string {
+  if (!bytes) return "";
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function ContabilidadClient({
   periodo,
   filas,
   usuarios,
   ivaEjecuciones,
+  documentos,
   errorCarga,
 }: {
   periodo: string;
   filas: ConciliacionRow[];
   usuarios: UsuarioOpcion[];
   ivaEjecuciones: IvaEjecucionRow[];
+  documentos: DocumentoContable[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
   const [buscar, setBuscar] = useState("");
   const [estadoF, setEstadoF] = useState("");
+  const [rcvF, setRcvF] = useState("");
   const [kameF, setKameF] = useState("");
   const [saludF, setSaludF] = useState("");
   const [respF, setRespF] = useState("");
   const [editando, setEditando] = useState<ConciliacionRow | null>(null);
   const [obsIva, setObsIva] = useState("");
+  const [categoria, setCategoria] = useState<CategoriaDocumento>("rcv_compras");
+  const [etiqueta, setEtiqueta] = useState("");
+  const inputArchivo = useRef<HTMLInputElement>(null);
   const [guardando, startGuardar] = useTransition();
   const [ivaPendiente, startIva] = useTransition();
+  const [docPendiente, startDoc] = useTransition();
 
   const [orden, setOrden] = useState<Orden>(null);
+
+  // Documentos agrupados por cliente y categoría
+  const docsPorCliente = useMemo(() => {
+    const m = new Map<string, DocumentoContable[]>();
+    for (const d of documentos) {
+      const arr = m.get(d.cliente_id);
+      if (arr) arr.push(d);
+      else m.set(d.cliente_id, [d]);
+    }
+    return m;
+  }, [documentos]);
+
+  const docsDe = (clienteId: string, cat?: DocumentoContable["categoria"]) => {
+    const arr = docsPorCliente.get(clienteId) ?? [];
+    return cat ? arr.filter((d) => d.categoria === cat) : arr;
+  };
+
+  const rcvCompleto = (clienteId: string) =>
+    docsDe(clienteId, "rcv_compras").length > 0 &&
+    docsDe(clienteId, "rcv_ventas").length > 0;
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
@@ -124,6 +212,8 @@ export function ConciliacionClient({
         if (!t.includes(q)) return false;
       }
       if (estadoF && c.estado !== estadoF) return false;
+      if (rcvF === "completo" && !rcvCompleto(c.cliente_id)) return false;
+      if (rcvF === "incompleto" && rcvCompleto(c.cliente_id)) return false;
       if (kameF && c.kame_cert_estado !== kameF) return false;
       if (saludF === "si" && !c.es_profesional_salud) return false;
       if (saludF === "no" && c.es_profesional_salud) return false;
@@ -137,18 +227,19 @@ export function ConciliacionClient({
       switch (orden.col) {
         case "cliente": return c.razon_social;
         case "kame": return c.kame_cert_estado;
-        case "salud": return c.es_profesional_salud ? 0 : 1; // Salud primero en asc
+        case "salud": return c.es_profesional_salud ? 0 : 1;
         case "estado": return c.estado;
         case "responsable": return c.responsable;
-        case "compras": return c.fecha_compras_descargadas;
-        case "ventas": return c.fecha_ventas_descargadas;
-        case "conciliacion": return c.fecha_conciliacion_kame_ok;
+        case "compras": return docsDe(c.cliente_id, "rcv_compras").length > 0 ? 0 : 1;
+        case "ventas": return docsDe(c.cliente_id, "rcv_ventas").length > 0 ? 0 : 1;
+        case "docs": return -docsDe(c.cliente_id).length;
         case "iva": return c.es_profesional_salud ? c.iva_salud_ejecuciones : null;
         default: return null;
       }
     };
     return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
-  }, [filas, buscar, estadoF, kameF, saludF, respF, orden]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filas, buscar, estadoF, rcvF, kameF, saludF, respF, orden, docsPorCliente]);
 
   const resumen: {
     label: string;
@@ -167,6 +258,11 @@ export function ConciliacionClient({
       ).length,
     },
     {
+      label: "RCV completos",
+      valor: filas.filter((c) => rcvCompleto(c.cliente_id)).length,
+      tono: "ok",
+    },
+    {
       label: "Conciliados",
       valor: filas.filter((c) => c.estado === "Conciliado").length,
       tono: "ok",
@@ -176,15 +272,12 @@ export function ConciliacionClient({
       valor: filas.filter((c) => c.kame_cert_estado === "OFF").length,
       tono: "alerta",
     },
-    {
-      label: "Sin asignar",
-      valor: filas.filter((c) => !c.responsable).length,
-    },
   ];
 
   const ivaDelEditando = editando
     ? ivaEjecuciones.filter((e) => e.cliente_id === editando.cliente_id)
     : [];
+  const docsDelEditando = editando ? docsDe(editando.cliente_id) : [];
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -196,7 +289,7 @@ export function ConciliacionClient({
     };
     const ciclo = editando;
     startGuardar(async () => {
-      const res = await guardarConciliacion({
+      const res = await guardarContabilidad({
         cicloId: ciclo.ciclo_id,
         clienteId: ciclo.cliente_id,
         responsableId: get("responsable"),
@@ -213,6 +306,52 @@ export function ConciliacionClient({
       } else {
         toast.error(res.error ?? "Error al guardar");
       }
+    });
+  }
+
+  function onSubirDocumento(e: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!archivo || !editando) return;
+    if (categoria === "otro" && !etiqueta.trim()) {
+      toast.error("Describe qué documento es antes de subirlo.");
+      return;
+    }
+    const fd = new FormData();
+    fd.append("archivo", archivo);
+    fd.append("clienteId", editando.cliente_id);
+    fd.append("cicloId", editando.ciclo_id);
+    fd.append("periodo", periodo);
+    fd.append("categoria", categoria);
+    fd.append("etiqueta", etiqueta.trim());
+    startDoc(async () => {
+      const res = await subirDocumentoContable(fd);
+      if (res.ok) {
+        toast.success(`${CATEGORIA_LABEL[categoria]} cargado`);
+        setEtiqueta("");
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Error al subir el archivo");
+      }
+    });
+  }
+
+  function onDescargar(doc: DocumentoContable) {
+    startDoc(async () => {
+      const res = await urlDocumentoContable(doc.archivo_path, doc.nombre_original);
+      if (res.ok && res.url) window.open(res.url, "_blank");
+      else toast.error(res.error ?? "No se pudo descargar.");
+    });
+  }
+
+  function onAnular(id: string) {
+    if (!window.confirm("¿Quitar este documento del checklist? El archivo queda guardado.")) return;
+    startDoc(async () => {
+      const res = await anularDocumentoContable(id);
+      if (res.ok) {
+        toast.success("Documento anulado");
+        router.refresh();
+      } else toast.error(res.error ?? "Error");
     });
   }
 
@@ -253,10 +392,11 @@ export function ConciliacionClient({
     <div className="space-y-5">
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Conciliación C/V
+          Contabilidad mensual
         </h1>
         <p className="text-sm text-muted-foreground">
-          Descargas SII de Compras/Ventas, revisión KAME y cambios IVA salud.
+          Documentos del SII por empresa (RCV compras/ventas y otros), revisión
+          KAME durante la transición y cambios IVA salud.
         </p>
       </div>
 
@@ -276,7 +416,7 @@ export function ConciliacionClient({
           aria-label="Período"
           className={selectCls}
           value={periodo}
-          onChange={(e) => router.push(`/conciliacion?periodo=${e.target.value}`)}
+          onChange={(e) => router.push(`/contabilidad?periodo=${e.target.value}`)}
         >
           {opcionesPeriodo().map((o) => (
             <option key={o.value} value={o.value}>
@@ -294,6 +434,17 @@ export function ConciliacionClient({
             onChange={(e) => setBuscar(e.target.value)}
           />
         </div>
+
+        <select
+          aria-label="RCV"
+          className={selectCls}
+          value={rcvF}
+          onChange={(e) => setRcvF(e.target.value)}
+        >
+          <option value="">RCV: todos</option>
+          <option value="completo">RCV completo (C y V)</option>
+          <option value="incompleto">RCV incompleto</option>
+        </select>
 
         <select
           aria-label="Estado"
@@ -367,9 +518,9 @@ export function ConciliacionClient({
               <ThSort col="salud" orden={orden} setOrden={setOrden}>Salud</ThSort>
               <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
               <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
-              <ThSort col="compras" orden={orden} setOrden={setOrden}>Compras</ThSort>
-              <ThSort col="ventas" orden={orden} setOrden={setOrden}>Ventas</ThSort>
-              <ThSort col="conciliacion" orden={orden} setOrden={setOrden}>Conciliación</ThSort>
+              <ThSort col="compras" orden={orden} setOrden={setOrden}>RCV Compras</ThSort>
+              <ThSort col="ventas" orden={orden} setOrden={setOrden}>RCV Ventas</ThSort>
+              <ThSort col="docs" orden={orden} setOrden={setOrden} className="text-center">Docs</ThSort>
               <ThSort col="iva" orden={orden} setOrden={setOrden}>IVA cambios</ThSort>
             </TableRow>
           </TableHeader>
@@ -420,9 +571,21 @@ export function ConciliacionClient({
                     </Badge>
                   </TableCell>
                   <TableCell>{c.responsable ?? "—"}</TableCell>
-                  <TableCell>{formatFecha(c.fecha_compras_descargadas)}</TableCell>
-                  <TableCell>{formatFecha(c.fecha_ventas_descargadas)}</TableCell>
-                  <TableCell>{formatFecha(c.fecha_conciliacion_kame_ok)}</TableCell>
+                  <TableCell>
+                    <CeldaRcv
+                      docs={docsDe(c.cliente_id, "rcv_compras")}
+                      fechaManual={c.fecha_compras_descargadas}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <CeldaRcv
+                      docs={docsDe(c.cliente_id, "rcv_ventas")}
+                      fechaManual={c.fecha_ventas_descargadas}
+                    />
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {docsDe(c.cliente_id).length || "—"}
+                  </TableCell>
                   <TableCell>
                     {c.es_profesional_salud ? (
                       c.iva_salud_ejecuciones > 0 ? (
@@ -445,17 +608,25 @@ export function ConciliacionClient({
         </Table>
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        ✓ = archivo cargado en el sistema · ✎ = fecha registrada a mano sin
+        archivo (modalidad anterior). Cuando Danilo defina el formato definitivo
+        de los RCV, el sistema además leerá los totales de cada archivo.
+      </p>
+
       <Dialog
         open={editando !== null}
         onOpenChange={(o) => {
           if (!o) {
             setEditando(null);
             setObsIva("");
+            setEtiqueta("");
+            setCategoria("rcv_compras");
           }
         }}
       >
         {editando ? (
-          <DialogContent className="sm:max-w-xl">
+          <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle className="font-heading">
                 {editando.razon_social}
@@ -472,13 +643,123 @@ export function ConciliacionClient({
               </DialogDescription>
             </DialogHeader>
 
+            {/* ── Documentos del mes ── */}
+            <div className="rounded-lg border border-border bg-muted/20 p-3">
+              <div className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                Documentos del mes (SII)
+              </div>
+              <div className="mt-2 max-h-44 space-y-1.5 overflow-y-auto">
+                {docsDelEditando.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic">
+                    Sin documentos cargados este período.
+                  </p>
+                ) : (
+                  docsDelEditando.map((d) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center justify-between gap-2 rounded-md bg-card px-2.5 py-1.5 text-sm"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <FileSpreadsheet className="size-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className={
+                                d.categoria === "otro"
+                                  ? "border-slate-200 bg-slate-50 text-slate-700"
+                                  : "border-sky-200 bg-sky-50 text-sky-700"
+                              }
+                            >
+                              {d.categoria === "otro"
+                                ? (d.etiqueta ?? "Otro")
+                                : CATEGORIA_LABEL[d.categoria]}
+                            </Badge>
+                            <span className="truncate font-medium" title={d.nombre_original}>
+                              {d.nombre_original}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFecha(d.created_at.slice(0, 10))}
+                            {d.subido_por_nombre ? ` · ${d.subido_por_nombre}` : ""}
+                            {d.tamano_bytes ? ` · ${formatTamano(d.tamano_bytes)}` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => onDescargar(d)}
+                          className="rounded p-1 text-muted-foreground hover:bg-muted"
+                          title="Descargar"
+                          disabled={docPendiente}
+                        >
+                          <Download className="size-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onAnular(d.id)}
+                          className="rounded p-1 text-red-600 hover:bg-red-50"
+                          title="Quitar del checklist (el archivo queda guardado)"
+                          disabled={docPendiente}
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <select
+                  aria-label="Categoría del documento"
+                  className={`${selectCls} h-8`}
+                  value={categoria}
+                  onChange={(e) => setCategoria(e.target.value as CategoriaDocumento)}
+                >
+                  <option value="rcv_compras">RCV Compras</option>
+                  <option value="rcv_ventas">RCV Ventas</option>
+                  <option value="otro">Otro documento</option>
+                </select>
+                {categoria === "otro" ? (
+                  <Input
+                    placeholder="¿Qué documento es? (ej. boletas honorarios)"
+                    className="h-8 w-56 bg-card text-sm"
+                    value={etiqueta}
+                    onChange={(e) => setEtiqueta(e.target.value)}
+                  />
+                ) : null}
+                <input
+                  ref={inputArchivo}
+                  type="file"
+                  className="hidden"
+                  onChange={onSubirDocumento}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                  onClick={() => inputArchivo.current?.click()}
+                  disabled={docPendiente}
+                >
+                  <Upload className="size-3.5" />
+                  {docPendiente ? "Subiendo…" : "Subir archivo"}
+                </Button>
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Al subir un RCV se marca solo el hito de descarga del mes (si
+                estaba pendiente).
+              </p>
+            </div>
+
             <form
-              id="form-conciliacion"
+              id="form-contabilidad"
               onSubmit={onSubmit}
               className="grid grid-cols-2 gap-3"
             >
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="responsable">Responsable conciliación</Label>
+                <Label htmlFor="responsable">Responsable del mes</Label>
                 <select
                   id="responsable"
                   name="responsable"
@@ -620,7 +901,7 @@ export function ConciliacionClient({
               </Button>
               <Button
                 type="submit"
-                form="form-conciliacion"
+                form="form-contabilidad"
                 disabled={guardando}
               >
                 {guardando ? "Guardando…" : "Guardar cambios"}

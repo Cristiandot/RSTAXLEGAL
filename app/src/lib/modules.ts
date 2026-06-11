@@ -1,6 +1,6 @@
 import {
   Wallet,
-  GitCompareArrows,
+  BookOpenCheck,
   FileText,
   FilePlus2,
   FileSignature,
@@ -61,11 +61,12 @@ export const MODULOS: SeccionModulos[] = [
         estado: "activo",
       },
       {
-        key: "conciliacion",
-        label: "Conciliación",
-        descripcion: "Descargas SII C/V + revisión KAME + IVA salud.",
-        href: "/conciliacion",
-        icon: GitCompareArrows,
+        key: "contabilidad",
+        label: "Contabilidad mensual",
+        descripcion:
+          "RCV del SII (compras, ventas, NC/ND) y documentos mensuales por empresa.",
+        href: "/contabilidad",
+        icon: BookOpenCheck,
         estado: "activo",
       },
       {
