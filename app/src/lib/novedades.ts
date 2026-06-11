@@ -58,3 +58,28 @@ export const TIPOS_NOVEDAD: TipoNovedad[] = [
 export const TIPO_NOVEDAD_LABEL: Record<string, string> = Object.fromEntries(
   TIPOS_NOVEDAD.map((t) => [t.value, t.label]),
 );
+
+import { formatFecha } from "./format";
+import { TIPO_PERMISO_LABEL } from "./permisos";
+
+/**
+ * Resumen legible de una gestión del panel (permiso/vacaciones/finiquito)
+ * que cae en el mes — usado por el portal del cliente y por Excel compartidos.
+ */
+export function resumenGestionMes(tipo: string, d: Record<string, string>): string {
+  if (tipo === "vacaciones") {
+    return `Vacaciones ${formatFecha(d.fecha_inicio)} al ${formatFecha(d.fecha_termino)} (${d.dias_habiles ?? "?"} hábiles)`;
+  }
+  if (tipo === "permiso") {
+    const nombre = TIPO_PERMISO_LABEL[d.tipo_permiso ?? ""] ?? "Permiso";
+    const goce = d.goce === "con" ? "con goce" : "sin goce";
+    if (d.unidad === "horas") {
+      return `${nombre} — ${goce}, ${d.horas} hrs el ${formatFecha(d.fecha_desde)}`;
+    }
+    return `${nombre} — ${goce}, ${formatFecha(d.fecha_desde)} al ${formatFecha(d.fecha_hasta)}`;
+  }
+  if (tipo === "finiquito") {
+    return `Término de contrato el ${formatFecha(d.fecha_termino)}`;
+  }
+  return tipo;
+}

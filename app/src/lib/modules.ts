@@ -169,10 +169,11 @@ export const MODULOS: SeccionModulos[] = [
       {
         key: "excel-compartidos",
         label: "Excel compartidos",
-        descripcion: "Nóminas mensuales compartidas con cada cliente.",
+        descripcion:
+          "Novedades de remuneraciones del mes en vivo (cliente + equipo) y generación de archivos de liquidaciones y Previred.",
         href: "/excel",
         icon: Table2,
-        estado: "proximamente",
+        estado: "activo",
       },
     ],
   },

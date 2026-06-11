@@ -10,8 +10,7 @@ import {
   cerrarPeriodoRemuneraciones,
   type RemuneracionesInfo,
 } from "./actions";
-import { TIPOS_NOVEDAD, TIPO_NOVEDAD_LABEL } from "@/lib/novedades";
-import { TIPO_PERMISO_LABEL } from "@/lib/permisos";
+import { TIPOS_NOVEDAD, TIPO_NOVEDAD_LABEL, resumenGestionMes } from "@/lib/novedades";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { type InfoEmpresa } from "./solicitud-form";
 import { Button } from "@/components/ui/button";
@@ -49,23 +48,6 @@ function nombrePeriodo(p: string): string {
   return `${MESES[m - 1] ?? "?"} ${y}`;
 }
 
-/** Resumen legible de una gestión del panel que cae en el mes. */
-function resumenGestion(g: { tipo: string; datos: Record<string, string> }): string {
-  const d = g.datos;
-  if (g.tipo === "vacaciones") {
-    return `Vacaciones ${formatFecha(d.fecha_inicio)} al ${formatFecha(d.fecha_termino)} (${d.dias_habiles ?? "?"} hábiles)`;
-  }
-  if (g.tipo === "permiso") {
-    const tipo = TIPO_PERMISO_LABEL[d.tipo_permiso ?? ""] ?? "Permiso";
-    const goce = d.goce === "con" ? "con goce" : "sin goce";
-    if (d.unidad === "horas") return `${tipo} — ${goce}, ${d.horas} hrs el ${formatFecha(d.fecha_desde)}`;
-    return `${tipo} — ${goce}, ${formatFecha(d.fecha_desde)} al ${formatFecha(d.fecha_hasta)}`;
-  }
-  if (g.tipo === "finiquito") {
-    return `Término de contrato el ${formatFecha(d.fecha_termino)}`;
-  }
-  return g.tipo;
-}
 
 export function DetalleRemuneraciones({
   token,
@@ -200,7 +182,7 @@ export function DetalleRemuneraciones({
                   {info.gestiones.map((g) => (
                     <li key={g.id} className="flex flex-wrap items-baseline gap-x-2">
                       <span className="font-medium">{g.trabajador}</span>
-                      <span className="text-muted-foreground">{resumenGestion(g)}</span>
+                      <span className="text-muted-foreground">{resumenGestionMes(g.tipo, g.datos)}</span>
                       <span className="text-xs text-muted-foreground">({g.estado})</span>
                     </li>
                   ))}
