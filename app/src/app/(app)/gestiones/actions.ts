@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import {
+  generarYSubirCartaAmonestacion,
+  type ResultadoCarta,
+} from "@/lib/carta-amonestacion";
 
 const TRANSICIONES: Record<string, string[]> = {
   solicitada: ["aprobada", "rechazada"],
@@ -34,4 +38,17 @@ export async function cambiarEstadoGestion(
 
   revalidatePath("/gestiones");
   return { ok: true };
+}
+
+/**
+ * Genera el .docx de la carta de amonestación desde la plantilla genérica
+ * (motor compartido) y devuelve el link de descarga.
+ */
+export async function generarCartaAmonestacion(
+  gestionId: string,
+): Promise<ResultadoCarta> {
+  const supabase = await createClient();
+  const res = await generarYSubirCartaAmonestacion(supabase, gestionId);
+  if (res.ok) revalidatePath("/gestiones");
+  return res;
 }

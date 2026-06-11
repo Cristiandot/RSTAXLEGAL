@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/contratos": ["./plantillas/**/*"],
     "/contratos/**": ["./plantillas/**/*"],
+    "/gestiones": ["./plantillas/**/*"],
+    "/gestiones/**": ["./plantillas/**/*"],
   },
 };
 

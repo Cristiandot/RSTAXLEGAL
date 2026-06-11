@@ -3,10 +3,10 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Eye, Search } from "lucide-react";
+import { Eye, FileText, Search } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { MOTIVO_AMONESTACION_LABEL } from "@/lib/amonestaciones";
-import { cambiarEstadoGestion } from "./actions";
+import { cambiarEstadoGestion, generarCartaAmonestacion } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -167,6 +167,17 @@ export function GestionesClient({
     });
   }
 
+  function generarCarta(id: string) {
+    startAccion(async () => {
+      const res = await generarCartaAmonestacion(id);
+      if (res.ok && res.downloadUrl) {
+        toast.success("Carta generada — descargando");
+        window.open(res.downloadUrl, "_blank");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al generar la carta");
+    });
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -258,6 +269,18 @@ export function GestionesClient({
                       <Button size="sm" variant="ghost" onClick={() => setViendo(f)} title="Ver detalle">
                         <Eye className="size-4" />
                       </Button>
+                      {f.tipo === "amonestacion" && f.estado !== "rechazada" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={ocupado}
+                          onClick={() => generarCarta(f.id)}
+                          title="Generar el Word de la carta"
+                        >
+                          <FileText className="size-3.5" />
+                          Carta
+                        </Button>
+                      ) : null}
                       {f.estado === "solicitada" ? (
                         <Button size="sm" variant="outline" disabled={ocupado} onClick={() => avanzar(f.id, "aprobada")}>
                           Aprobar
@@ -312,6 +335,12 @@ export function GestionesClient({
               </div>
             </div>
             <DialogFooter>
+              {viendo.tipo === "amonestacion" && viendo.estado !== "rechazada" ? (
+                <Button variant="outline" disabled={ocupado} onClick={() => generarCarta(viendo.id)}>
+                  <FileText className="size-4" />
+                  Generar carta
+                </Button>
+              ) : null}
               {viendo.estado === "solicitada" ? (
                 <Button disabled={ocupado} onClick={() => avanzar(viendo.id, "aprobada")}>
                   Aprobar
