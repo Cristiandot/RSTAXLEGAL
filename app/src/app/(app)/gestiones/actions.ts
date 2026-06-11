@@ -36,8 +36,15 @@ export async function cambiarEstadoGestion(
     .eq("id", gestionId);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/gestiones");
+  revalidarBandejas();
   return { ok: true };
+}
+
+/** Las bandejas por gestión comparten estas actions — se revalidan todas. */
+function revalidarBandejas() {
+  for (const ruta of ["/amonestaciones", "/vacaciones", "/permisos", "/finiquitos"]) {
+    revalidatePath(ruta);
+  }
 }
 
 /**
@@ -49,6 +56,6 @@ export async function generarCartaAmonestacion(
 ): Promise<ResultadoCarta> {
   const supabase = await createClient();
   const res = await generarYSubirCartaAmonestacion(supabase, gestionId);
-  if (res.ok) revalidatePath("/gestiones");
+  if (res.ok) revalidarBandejas();
   return res;
 }
