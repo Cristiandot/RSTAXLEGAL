@@ -60,6 +60,18 @@ const REGLAS = [
     re: /\{NOMBRE_EMPLEADO\}, chileno, /,
     rep: "{NOMBRE_EMPLEADO}, ",
   },
+  {
+    // Solo cláusula de jornada de CONTRATOS ("NN horas semanales"). El motor
+    // pone 42 para jornada completa (tope vigente desde 26-04-2026, Ley
+    // 21.561) y las horas pactadas para parcial — corrige de paso las
+    // plantillas que decían 44. El anexo 30h dice "horas a la semana" y NO
+    // se toca (pendiente revisión Felipe: excede tope parcial de 28).
+    nombre: "horas semanales fijas en cláusula de jornada",
+    // [\s ]: la plantilla 21h trae un espacio duro (NBSP) entre el
+    // número y "horas".
+    re: /de[\s ](?:21|30|42|44)[\s ]horas[\s ]semanales/,
+    rep: "de {HORAS_SEMANALES} horas semanales",
+  },
 ];
 
 /** Texto concatenado de los <w:t> + posiciones para edición quirúrgica. */
