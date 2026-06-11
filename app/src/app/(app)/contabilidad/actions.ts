@@ -73,11 +73,20 @@ export async function guardarContabilidad(
     }
   }
 
-  revalidatePath("/contabilidad");
+  revalidatePath("/contabilidad", "layout");
   return { ok: true };
 }
 
-const CATEGORIAS = ["rcv_compras", "rcv_ventas", "otro"] as const;
+const CATEGORIAS = [
+  "fact_compras",
+  "fact_ventas",
+  "boleta_ventas",
+  "boleta_compras",
+  "honorarios",
+  "otro_gasto",
+  "otro_ingreso",
+  "otro",
+] as const;
 export type CategoriaDocumento = (typeof CATEGORIAS)[number];
 
 /**
@@ -108,9 +117,6 @@ export async function subirDocumentoContable(
   if (!CATEGORIAS.includes(categoria)) {
     return { ok: false, error: "Categoría de documento inválida." };
   }
-  if (categoria === "otro" && !etiqueta) {
-    return { ok: false, error: "Describe qué documento es (etiqueta)." };
-  }
 
   const supabase = await createClient();
 
@@ -139,9 +145,9 @@ export async function subirDocumentoContable(
   if (errIns) return { ok: false, error: errIns.message };
 
   // Estampar el hito de descarga si corresponde y está vacío
-  if (cicloId && (categoria === "rcv_compras" || categoria === "rcv_ventas")) {
+  if (cicloId && (categoria === "fact_compras" || categoria === "fact_ventas")) {
     const campo =
-      categoria === "rcv_compras"
+      categoria === "fact_compras"
         ? "fecha_compras_descargadas"
         : "fecha_ventas_descargadas";
     const { data: ciclo } = await supabase
@@ -157,7 +163,7 @@ export async function subirDocumentoContable(
     }
   }
 
-  revalidatePath("/contabilidad");
+  revalidatePath("/contabilidad", "layout");
   return { ok: true };
 }
 
@@ -171,7 +177,7 @@ export async function anularDocumentoContable(
     .update({ activo: false })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/contabilidad");
+  revalidatePath("/contabilidad", "layout");
   return { ok: true };
 }
 
@@ -211,7 +217,7 @@ export async function registrarCambioIva(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/contabilidad");
+  revalidatePath("/contabilidad", "layout");
   return { ok: true };
 }
 
@@ -227,6 +233,6 @@ export async function eliminarCambioIva(
 
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/contabilidad");
+  revalidatePath("/contabilidad", "layout");
   return { ok: true };
 }

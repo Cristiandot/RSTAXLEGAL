@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, ClipboardList, Table2, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, ClipboardList, Receipt, Table2, Users } from "lucide-react";
 import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
 import { DetalleRemuneraciones } from "./remuneraciones";
+import { GastosMenores } from "./gastos-menores";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,7 +20,9 @@ import {
  * "Detalle remuneraciones" (novedades del mes) está en construcción.
  */
 export function PortalCliente({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
-  const [vista, setVista] = useState<"inicio" | "solicitudes" | "remuneraciones">("inicio");
+  const [vista, setVista] = useState<
+    "inicio" | "solicitudes" | "remuneraciones" | "gastos"
+  >("inicio");
 
   if (vista !== "inicio") {
     return (
@@ -30,8 +33,10 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
         </Button>
         {vista === "solicitudes" ? (
           <SolicitudForm token={token} empresa={empresa} />
-        ) : (
+        ) : vista === "remuneraciones" ? (
           <DetalleRemuneraciones token={token} empresa={empresa} />
+        ) : (
+          <GastosMenores token={token} empresa={empresa} />
         )}
       </div>
     );
@@ -113,6 +118,35 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
                     en feriados y domingos, licencias médicas, anticipos y bonos.
                     Lo que ya pediste por el panel de solicitudes (permisos,
                     vacaciones, finiquitos) se carga solo — no lo repites acá.
+                  </CardDescription>
+                </div>
+              </div>
+              <ArrowRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
+            </div>
+          </CardHeader>
+        </Card>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setVista("gastos")}
+        className="block w-full text-left"
+      >
+        <Card className="card-soft border-transparent transition-shadow hover:shadow-md">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal)]/10 text-[var(--brand-teal)]">
+                  <Receipt className="size-5" />
+                </span>
+                <div>
+                  <CardTitle className="text-base">
+                    Gastos e ingresos menores
+                  </CardTitle>
+                  <CardDescription className="mt-1">
+                    Compras y ventas con boleta que no pasan por las facturas de
+                    la empresa. No van al SII mensual, pero se consideran en tu
+                    Operación Renta anual.
                   </CardDescription>
                 </div>
               </div>
