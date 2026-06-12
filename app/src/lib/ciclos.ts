@@ -76,6 +76,7 @@ export type F29Row = {
   fecha_f29_presentado: string | null;
   monto_a_pagar: number | string | null;
   folio_f29: string | null;
+  pago_por: string | null; // 'rs' | 'cliente' | null
   observaciones: string | null;
 };
 
