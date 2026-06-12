@@ -61,10 +61,30 @@ export default async function ClienteContabilidadPage({
       .order("fecha", { ascending: false }),
     supabase
       .from("clientes")
-      .select("hace_contabilidad_completa")
+      .select("hace_contabilidad_completa, activo")
       .eq("id", clienteId)
       .maybeSingle(),
   ]);
+
+  // Auto-crear el ciclo del período si no existe (meses históricos o nuevos):
+  // sin esto, el detalle bloqueaba la carga de documentos con "no tiene ciclo".
+  // Idempotente gracias a la única (cliente_id, periodo).
+  let fila = (filaRes.data as ConciliacionRow | null) ?? null;
+  if (!fila && !filaRes.error && clienteRes.data?.activo) {
+    await supabase
+      .from("ciclo_conciliacion")
+      .upsert(
+        { cliente_id: clienteId, periodo },
+        { onConflict: "cliente_id,periodo", ignoreDuplicates: true },
+      );
+    const { data: creada } = await supabase
+      .from("v_checklist_conciliacion")
+      .select("*")
+      .eq("periodo", periodo)
+      .eq("cliente_id", clienteId)
+      .maybeSingle();
+    fila = (creada as ConciliacionRow | null) ?? null;
+  }
 
   const documentos: DocumentoContable[] = (docsRes.data ?? []).map((d) => {
     const u = d.usuarios as unknown as
@@ -102,7 +122,7 @@ export default async function ClienteContabilidadPage({
     <main className="mx-auto max-w-6xl px-4 pb-10 sm:px-6">
       <ClienteContabilidadClient
         periodo={periodo}
-        fila={(filaRes.data as ConciliacionRow | null) ?? null}
+        fila={fila}
         usuarios={(usuariosRes.data ?? []) as UsuarioOpcion[]}
         documentos={documentos}
         ivaEjecuciones={ivaEjecuciones}
