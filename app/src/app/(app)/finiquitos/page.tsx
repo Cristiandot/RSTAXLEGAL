@@ -11,7 +11,7 @@ export default async function FiniquitosPage() {
   const { data, error } = await supabase
     .from("solicitudes_rrhh")
     .select(
-      "id, trabajador_nombre, trabajador_rut, correo_contacto, datos, estado, observaciones, created_at, clientes(razon_social)",
+      "id, trabajador_nombre, trabajador_rut, correo_contacto, datos, estado, observaciones, created_at, clientes(razon_social), trabajadores(correo, banco, tipo_cuenta, numero_cuenta)",
     )
     .eq("tipo", "finiquito")
     .order("created_at", { ascending: false })
@@ -34,6 +34,8 @@ export default async function FiniquitosPage() {
         }
       | undefined;
     const r = calculo?.resumen;
+    const t = g.trabajadores as unknown as Record<string, unknown> | null;
+    const str = (k: string) => (typeof datos[k] === "string" ? (datos[k] as string) : null);
     return {
       id: g.id,
       trabajador: g.trabajador_nombre,
@@ -55,6 +57,13 @@ export default async function FiniquitosPage() {
               indemAnios: r.indemAnios ?? 0,
             }
           : null,
+      // ficha del trabajador primero; lo informado por el portal de respaldo
+      pago: {
+        correo: ((t?.correo as string) ?? str("correo_trabajador")) ?? "",
+        banco: ((t?.banco as string) ?? str("banco")) ?? "",
+        tipoCuenta: ((t?.tipo_cuenta as string) ?? str("tipo_cuenta")) ?? "",
+        numeroCuenta: ((t?.numero_cuenta as string) ?? str("numero_cuenta")) ?? "",
+      },
       creada: g.created_at,
     };
   });

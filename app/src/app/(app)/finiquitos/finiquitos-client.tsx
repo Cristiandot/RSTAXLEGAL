@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, Calculator, CheckCircle2, FileSpreadsheet, FileText, Mail, Search, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Calculator, CheckCircle2, FileSpreadsheet, FileText, Landmark, Mail, Search, Send, Trash2 } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import {
   diasParaLimite,
@@ -12,7 +12,8 @@ import {
   textoCorreoFiniquito,
   type ResumenCorreo,
 } from "@/lib/finiquito-correo";
-import { eliminarSolicitudFiniquito, exportarCsvDt } from "./actions";
+import { eliminarSolicitudFiniquito, exportarCsvDt, guardarDatosPago } from "./actions";
+import { BANCOS_DT, TIPOS_CUENTA_DT } from "@/lib/dt-finiquitos";
 import { cambiarEstadoGestion } from "../gestiones/actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,7 @@ export type FiniquitoRow = {
   totalCalculado: number | null;
   calculadoEn: string | null;
   resumen: ResumenCorreo | null;
+  pago: { correo: string; banco: string; tipoCuenta: string; numeroCuenta: string };
   creada: string;
 };
 
@@ -140,6 +142,36 @@ export function FiniquitosClient({
     { trabajador: string; campos: string[] }[] | null
   >(null);
   const [advertenciasDt, setAdvertenciasDt] = useState<string[]>([]);
+
+  // ── Edición rápida de datos de pago (banco/cuenta/correo) ──
+  const [editandoPago, setEditandoPago] = useState<FiniquitoRow | null>(null);
+  const [pago, setPago] = useState({ correo: "", banco: "", tipoCuenta: "", numeroCuenta: "" });
+  const [guardandoPago, startPago] = useTransition();
+
+  function abrirPago(f: FiniquitoRow) {
+    const canon = (v: string, ops: string[]) =>
+      ops.find((o) => o.toUpperCase() === v.trim().toUpperCase()) ?? v;
+    setPago({
+      correo: f.pago.correo,
+      banco: canon(f.pago.banco, Object.values(BANCOS_DT)),
+      tipoCuenta: canon(f.pago.tipoCuenta, Object.values(TIPOS_CUENTA_DT)),
+      numeroCuenta: f.pago.numeroCuenta,
+    });
+    setEditandoPago(f);
+  }
+
+  function guardarPago() {
+    if (!editandoPago) return;
+    const id = editandoPago.id;
+    startPago(async () => {
+      const res = await guardarDatosPago(id, pago);
+      if (res.ok) {
+        toast.success("Datos de pago guardados");
+        setEditandoPago(null);
+        router.refresh();
+      } else toast.error(res.error ?? "Error al guardar");
+    });
+  }
   const [exportando, startExportar] = useTransition();
 
   function alternarSeleccion(id: string) {
@@ -392,6 +424,20 @@ export function FiniquitosClient({
                       </Button>
                       <Button
                         size="sm"
+                        variant={f.pago.numeroCuenta && f.pago.banco ? "ghost" : "outline"}
+                        className={f.pago.numeroCuenta && f.pago.banco ? "" : "text-amber-700"}
+                        title={
+                          f.pago.numeroCuenta && f.pago.banco
+                            ? `Cuenta: ${f.pago.banco} · ${f.pago.numeroCuenta} — editar datos de pago`
+                            : "Faltan datos de pago (banco/cuenta/correo) — la DT los exige para pagar"
+                        }
+                        onClick={() => abrirPago(f)}
+                      >
+                        <Landmark className="size-3.5" />
+                        Banco
+                      </Button>
+                      <Button
+                        size="sm"
                         variant="outline"
                         disabled={f.resumen === null}
                         title={
@@ -519,6 +565,83 @@ export function FiniquitosClient({
               >
                 <Trash2 className="size-4" />
                 {ocupado ? "Eliminando…" : "Eliminar definitivamente"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
+
+      {/* Edición rápida de datos de pago del trabajador */}
+      <Dialog open={editandoPago !== null} onOpenChange={(o) => { if (!o) setEditandoPago(null); }}>
+        {editandoPago ? (
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-heading">
+                Datos de pago — {editandoPago.trabajador}
+              </DialogTitle>
+              <DialogDescription>
+                Cuenta UNIPERSONAL y correo personal del trabajador: los exige la
+                DT para pagar el finiquito electrónico vía TGR. Se guardan en la
+                ficha del trabajador y los usa el CSV DT.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="pago-correo">Correo personal</Label>
+                <Input
+                  id="pago-correo"
+                  type="email"
+                  value={pago.correo}
+                  onChange={(e) => setPago({ ...pago, correo: e.target.value })}
+                  placeholder="correo@ejemplo.cl"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="pago-banco">Banco</Label>
+                <select
+                  id="pago-banco"
+                  className={selectCls}
+                  value={pago.banco}
+                  onChange={(e) => setPago({ ...pago, banco: e.target.value })}
+                >
+                  <option value="">— Sin dato —</option>
+                  {Object.values(BANCOS_DT).map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="pago-tipo">Tipo de cuenta</Label>
+                <select
+                  id="pago-tipo"
+                  className={selectCls}
+                  value={pago.tipoCuenta}
+                  onChange={(e) => setPago({ ...pago, tipoCuenta: e.target.value })}
+                >
+                  <option value="">— Sin dato —</option>
+                  {Object.values(TIPOS_CUENTA_DT).map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="pago-cuenta">N° de cuenta (sin guiones ni espacios)</Label>
+                <Input
+                  id="pago-cuenta"
+                  inputMode="numeric"
+                  value={pago.numeroCuenta}
+                  onChange={(e) => setPago({ ...pago, numeroCuenta: e.target.value })}
+                  placeholder="ej. 20319708"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditandoPago(null)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={guardarPago} disabled={guardandoPago}>
+                <Landmark className="size-4" />
+                {guardandoPago ? "Guardando…" : "Guardar datos de pago"}
               </Button>
             </DialogFooter>
           </DialogContent>
