@@ -185,15 +185,29 @@ export function ContratosClient({
     });
   }
 
-  // Liquidación de ejemplo (mes normal, sin novedades)
+  // Liquidación de ejemplo (mes normal, sin novedades). Para contratos con
+  // pago por día, los días del mes simulado son editables (ej. 10 días).
   const [liqDe, setLiqDe] = useState<ContratoRow | null>(null);
+  const [liqDias, setLiqDias] = useState(30);
+  const esPorDia = (f: ContratoRow | null) =>
+    f?.remuneracion?.modalidad === "por_dia" && Number(f.remuneracion?.valor_dia ?? 0) > 0;
+
+  function abrirLiquidacion(f: ContratoRow) {
+    setLiqDias(30);
+    setLiqDe(f);
+  }
+
   const liq: LiquidacionEjemplo | null = useMemo(() => {
     if (!liqDe || !indicadores) return null;
     const r = liqDe.remuneracion ?? {};
-    const sueldo = Number(r.sueldo_base ?? 0);
+    const porDia = esPorDia(liqDe);
+    const sueldo = porDia
+      ? Number(r.valor_dia) * liqDias
+      : Number(r.sueldo_base ?? 0);
     if (!sueldo) return null;
     return calcularLiquidacionEjemplo({
-      sueldoBase: sueldo,
+      sueldoBase: Math.round(sueldo),
+      dias: porDia ? liqDias : 30,
       gratificacionTipo: String(r.gratificacion_tipo ?? "25"),
       gratificacionMonto: Number(r.gratificacion_monto ?? 0),
       colacion: Number(r.colacion ?? 0),
@@ -205,7 +219,7 @@ export function ContratosClient({
       utm: indicadores.utm,
       tasasAfp: indicadores.tasasAfp,
     });
-  }, [liqDe, indicadores]);
+  }, [liqDe, liqDias, indicadores]);
 
   // Eliminación definitiva con doble seguridad: solo admins + escribir "borrar"
   const [borrando, setBorrando] = useState<ContratoRow | null>(null);
@@ -335,12 +349,13 @@ export function ContratosClient({
                       ) : null}
                       {indicadores &&
                       f.tipoDocumento === "contrato" &&
-                      Number(f.remuneracion?.sueldo_base ?? 0) > 0 ? (
+                      (Number(f.remuneracion?.sueldo_base ?? 0) > 0 ||
+                        esPorDia(f)) ? (
                         <Button
                           size="sm"
                           variant="ghost"
                           disabled={ocupado}
-                          onClick={() => setLiqDe(f)}
+                          onClick={() => abrirLiquidacion(f)}
                           title="Ver liquidación ejemplo de un mes normal (líquido estimado)"
                         >
                           <Receipt className="size-4" />
@@ -454,13 +469,39 @@ export function ContratosClient({
                 Liquidación ejemplo · {liqDe.trabajador}
               </DialogTitle>
               <DialogDescription>
-                Mes normal de 30 días, sin novedades — con los indicadores
-                Previred de {indicadores?.periodo}. Referencial.
+                {esPorDia(liqDe)
+                  ? `Pago por día — simula el mes con los días que quieras, con los indicadores Previred de ${indicadores?.periodo}. Referencial.`
+                  : `Mes normal de 30 días, sin novedades — con los indicadores Previred de ${indicadores?.periodo}. Referencial.`}
               </DialogDescription>
             </DialogHeader>
 
+            {esPorDia(liqDe) ? (
+              <div className="flex items-center gap-2">
+                <Label htmlFor="liq-dias" className="whitespace-nowrap">Días trabajados</Label>
+                <Input
+                  id="liq-dias"
+                  className="w-20"
+                  inputMode="numeric"
+                  value={liqDias}
+                  onChange={(e) => {
+                    const n = Number(e.target.value.replace(/[^0-9]/g, ""));
+                    setLiqDias(Math.max(1, Math.min(n || 1, 30)));
+                  }}
+                />
+                <span className="text-xs text-muted-foreground">
+                  × {formatMonto(Number(liqDe.remuneracion?.valor_dia ?? 0))} por día
+                </span>
+              </div>
+            ) : null}
+
             <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between"><span>Sueldo base</span><span className="tabular-nums">{formatMonto(liq.sueldoBase)}</span></div>
+              <div className="flex justify-between">
+                <span>
+                  Sueldo base
+                  {esPorDia(liqDe) ? ` (${liqDias} día${liqDias === 1 ? "" : "s"})` : ""}
+                </span>
+                <span className="tabular-nums">{formatMonto(liq.sueldoBase)}</span>
+              </div>
               <div className="flex justify-between"><span>Gratificación legal</span><span className="tabular-nums">{formatMonto(liq.gratificacion)}</span></div>
               <div className="flex justify-between border-t pt-1.5 font-medium"><span>Total imponible</span><span className="tabular-nums">{formatMonto(liq.totalImponible)}</span></div>
               <div className="flex justify-between text-muted-foreground">

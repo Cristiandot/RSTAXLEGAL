@@ -9,6 +9,12 @@ export type TasaAfpPeriodo = { nombre: string; tasa_trabajador: number };
 
 export type EntradaLiquidacionEjemplo = {
   sueldoBase: number;
+  /**
+   * Días trabajados del mes simulado (contratos con pago por día). El tope de
+   * la gratificación legal se prorratea en proporción a 30 días. Omitir o 30 =
+   * mes completo.
+   */
+  dias?: number;
   gratificacionTipo: string; // 'sin' | '25' | 'tope' | 'manual'
   gratificacionMonto: number;
   colacion: number;
@@ -69,7 +75,11 @@ export function calcularLiquidacionEjemplo(
 ): LiquidacionEjemplo {
   const notas: string[] = [];
 
-  const topeGratif = Math.round((4.75 * e.imm) / 12);
+  const dias = e.dias && e.dias > 0 ? Math.min(e.dias, 30) : 30;
+  const topeGratif = Math.round(((4.75 * e.imm) / 12) * (dias / 30));
+  if (dias < 30) {
+    notas.push(`Mes simulado de ${dias} días trabajados — tope de gratificación prorrateado.`);
+  }
   const gratificacion =
     e.gratificacionTipo === "sin"
       ? 0
