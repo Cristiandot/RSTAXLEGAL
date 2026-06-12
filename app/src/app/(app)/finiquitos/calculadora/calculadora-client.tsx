@@ -33,6 +33,8 @@ export type GestionFiniquito = {
   sueldoBase: number | null;
   otrasRemuneraciones: number | null;
   diasTomados: number | null;
+  /** Saldo de feriado DEVENGADO según control del cliente (override del automático). */
+  diasObtenidos: number | null;
   licenciaVigente: string | null;
   fuero: string | null;
   calculoGuardado: {
@@ -139,7 +141,7 @@ export function CalculadoraClient({
   const [zonaExtrema, setZonaExtrema] = useState(guardado?.zonaExtrema ?? false);
   const [diasTomados, setDiasTomados] = useState(guardado?.diasTomados ?? gestion?.diasTomados ?? 0);
   const [obtenidosManual, setObtenidosManual] = useState<number | null>(
-    guardado?.diasObtenidosManual ?? null,
+    guardado?.diasObtenidosManual ?? gestion?.diasObtenidos ?? null,
   );
   const [remPendiente, setRemPendiente] = useState(guardado?.remuneracionPendiente ?? 0);
   const [descuentoAfc, setDescuentoAfc] = useState(guardado?.descuentoAfc ?? 0);

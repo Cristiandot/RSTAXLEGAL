@@ -80,6 +80,7 @@ export default async function CalculadoraFiniquitoPage({
         sueldoBase: str("sueldo_base") ? Number(str("sueldo_base")) : sueldoContrato,
         otrasRemuneraciones: str("otras_remuneraciones") ? Number(str("otras_remuneraciones")) : null,
         diasTomados: str("vacaciones_dias_tomados") ? Number(str("vacaciones_dias_tomados")) : null,
+        diasObtenidos: str("vacaciones_dias_obtenidos") ? Number(str("vacaciones_dias_obtenidos")) : null,
         licenciaVigente: str("licencia_vigente"),
         fuero: str("fuero"),
         calculoGuardado: (datos.calculo_finiquito ?? null) as GestionFiniquito["calculoGuardado"],
