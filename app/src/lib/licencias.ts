@@ -45,3 +45,10 @@ export function diasEntre(inicioISO: string, terminoISO: string): number | null 
   if (Number.isNaN(i) || Number.isNaN(t) || t < i) return null;
   return Math.round((t - i) / 86400000) + 1;
 }
+
+/** Suma n días corridos a una fecha ISO (n puede ser 0). */
+export function sumarDias(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}

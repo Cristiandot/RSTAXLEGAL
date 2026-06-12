@@ -14,6 +14,7 @@ import {
   claseEstadoLicencia,
   licenciaVigente,
   diasEntre,
+  sumarDias,
 } from "@/lib/licencias";
 import {
   crearLicencia,
@@ -637,6 +638,24 @@ function RegistroLicencia({
   const cliente = clientes.find((c) => c.id === clienteId) ?? null;
   const elegido = nomina.find((t) => t.id === trabajadorId) ?? null;
 
+  // Flujo habitual: fecha inicio + días que dura → el término se calcula solo.
+  // Si se escribe el término a mano, los días pasan a calcularse desde las fechas.
+  function cambiarInicio(v: string) {
+    setInicio(v);
+    const n = Number(diasManual);
+    if (v && diasManual !== "" && n > 0) setTermino(sumarDias(v, n - 1));
+  }
+  function cambiarDias(v: string) {
+    const limpio = v.replace(/[^0-9]/g, "");
+    setDiasManual(limpio);
+    const n = Number(limpio);
+    if (inicio && limpio !== "" && n > 0) setTermino(sumarDias(inicio, n - 1));
+  }
+  function cambiarTermino(v: string) {
+    setTermino(v);
+    setDiasManual("");
+  }
+
   function guardar() {
     const nombreFinal = elegido?.nombre ?? nombre;
     if (!nombreFinal.trim()) {
@@ -789,20 +808,20 @@ function RegistroLicencia({
 
         <div className="space-y-1">
           <Label>Fecha inicio</Label>
-          <Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <Label>Fecha término</Label>
-          <Input type="date" value={termino} onChange={(e) => setTermino(e.target.value)} />
+          <Input type="date" value={inicio} onChange={(e) => cambiarInicio(e.target.value)} />
         </div>
         <div className="space-y-1">
           <Label>N° días</Label>
           <Input
             inputMode="numeric"
             value={diasManual !== "" ? diasManual : (diasAuto ?? "")}
-            onChange={(e) => setDiasManual(e.target.value.replace(/[^0-9]/g, ""))}
-            placeholder="Auto con las fechas"
+            onChange={(e) => cambiarDias(e.target.value)}
+            placeholder="Duración"
           />
+        </div>
+        <div className="space-y-1">
+          <Label>Fecha término (auto)</Label>
+          <Input type="date" value={termino} onChange={(e) => cambiarTermino(e.target.value)} />
         </div>
         <div className="space-y-1">
           <Label>Estado</Label>
