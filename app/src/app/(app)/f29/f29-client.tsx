@@ -40,10 +40,9 @@ import {
 
 const ESTADOS = ["Sin iniciar", "Pendiente presentación", "Cerrado"];
 
-/** Pasos del F29 marcables con checkbox inline (mismo patrón que Liquidaciones). */
-const PASOS_F29: { columna: "fecha_f29_armado" | "fecha_f29_presentado"; label: string }[] = [
-  { columna: "fecha_f29_armado", label: "F29 armado" },
-  { columna: "fecha_f29_presentado", label: "F29 enviado" },
+/** Paso único del F29 marcable con checkbox inline: F29 enviado (cierra el ciclo). */
+const PASOS_F29: { columna: "fecha_f29_presentado"; label: string }[] = [
+  { columna: "fecha_f29_presentado", label: "F29" },
 ];
 
 /** Input de monto que guarda al salir del campo o con Enter. */
@@ -322,8 +321,7 @@ export function F29Client({
               <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
               <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>
               <ThSort col="dias" orden={orden} setOrden={setOrden} className="text-center">Días</ThSort>
-              <ThSort col="armado" orden={orden} setOrden={setOrden} className="text-center">F29 armado</ThSort>
-              <ThSort col="presentado" orden={orden} setOrden={setOrden} className="text-center">F29 enviado</ThSort>
+              <ThSort col="presentado" orden={orden} setOrden={setOrden} className="text-center">F29</ThSort>
               <TableHead>Paga</TableHead>
               <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Monto</ThSort>
               <ThSort col="folio" orden={orden} setOrden={setOrden}>Folio</ThSort>
@@ -333,7 +331,7 @@ export function F29Client({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={12}
+                  colSpan={11}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
