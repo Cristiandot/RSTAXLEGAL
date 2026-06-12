@@ -38,14 +38,15 @@ export function etiquetaPeriodo(periodo: string): string {
 }
 
 /**
- * Opciones de período: mes siguiente + el actual + los 11 anteriores,
- * ordenadas de más reciente a más antigua. Default sugerido = período actual.
+ * Opciones de período: los 11 meses anteriores + el actual + el siguiente,
+ * en orden cronológico (enero → diciembre dentro de cada año, pedido de
+ * Cristian 12-06-2026). Default sugerido = período actual.
  */
 export function opcionesPeriodo(): { value: string; label: string }[] {
   const hoy = new Date();
   const base = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
   const out: { value: string; label: string }[] = [];
-  for (let i = 1; i >= -11; i--) {
+  for (let i = -11; i <= 1; i++) {
     const d = new Date(base.getFullYear(), base.getMonth() + i, 1);
     const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     out.push({ value, label: etiquetaPeriodo(value) });
