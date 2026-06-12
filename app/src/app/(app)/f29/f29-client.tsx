@@ -112,14 +112,12 @@ export function F29Client({
   const [concilF, setConcilF] = useState("");
   const [respF, setRespF] = useState("");
   const [editando, setEditando] = useState<F29Row | null>(null);
-  // Hitos del modal como checklist: tildar estampa la fecha de hoy al guardar.
-  const [armadoChk, setArmadoChk] = useState(false);
+  // Hito único F29 como checklist: tildar estampa la fecha de hoy al guardar.
   const [presentadoChk, setPresentadoChk] = useState(false);
   const [guardando, startGuardar] = useTransition();
   const [marcando, startMarcar] = useTransition();
 
   function abrirModal(c: F29Row) {
-    setArmadoChk(c.fecha_f29_armado !== null);
     setPresentadoChk(c.fecha_f29_presentado !== null);
     setEditando(c);
   }
@@ -217,7 +215,8 @@ export function F29Client({
       const res = await guardarF29({
         cicloId: ciclo.ciclo_id,
         responsableId: get("responsable"),
-        fechaArmado: armadoChk ? (ciclo.fecha_f29_armado ?? hoy) : null,
+        // fecha_f29_armado ya no se gestiona en la UI: se conserva tal cual.
+        fechaArmado: ciclo.fecha_f29_armado,
         fechaPresentado: presentadoChk
           ? (ciclo.fecha_f29_presentado ?? hoy)
           : null,
@@ -511,27 +510,7 @@ export function F29Client({
                 </select>
               </div>
 
-              <div className="flex items-start gap-2.5 rounded-lg border border-input bg-card p-3">
-                <Checkbox
-                  id="chk_armado"
-                  checked={armadoChk}
-                  onCheckedChange={(v) => setArmadoChk(v === true)}
-                />
-                <Label
-                  htmlFor="chk_armado"
-                  className="flex cursor-pointer flex-col items-start gap-0.5"
-                >
-                  <span className="font-medium">F29 armado</span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {armadoChk
-                      ? editando.fecha_f29_armado
-                        ? formatFecha(editando.fecha_f29_armado)
-                        : "Se estampa hoy al guardar"
-                      : "Pendiente"}
-                  </span>
-                </Label>
-              </div>
-              <div className="flex items-start gap-2.5 rounded-lg border border-input bg-card p-3">
+              <div className="col-span-2 flex items-start gap-2.5 rounded-lg border border-input bg-card p-3">
                 <Checkbox
                   id="chk_presentado"
                   checked={presentadoChk}
@@ -541,7 +520,7 @@ export function F29Client({
                   htmlFor="chk_presentado"
                   className="flex cursor-pointer flex-col items-start gap-0.5"
                 >
-                  <span className="font-medium">F29 presentado</span>
+                  <span className="font-medium">F29</span>
                   <span className="text-xs font-normal text-muted-foreground">
                     {presentadoChk
                       ? editando.fecha_f29_presentado
