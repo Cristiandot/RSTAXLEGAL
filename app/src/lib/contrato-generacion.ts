@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generarDocx, fechaLarga, montoCLP } from "@/lib/generar-docx";
 import { montoEnPalabras } from "@/lib/numero-palabras";
+import { nombreArchivo } from "@/lib/format";
 import { redactarClausulasContrato } from "@/lib/redactar-hechos";
 
 export type ResultadoGeneracion = {
@@ -226,10 +227,10 @@ export async function generarYSubirContrato(
     .update({ documento_path: storagePath, estado: "generado", plantilla_id: plantilla.id })
     .eq("id", contratoId);
 
-  const nombreArchivo = `Contrato - ${nombreCompleto}.docx`;
+  const nombreDescarga = nombreArchivo(`Contrato - ${nombreCompleto}`) + ".docx";
   const { data: firmado } = await supabase.storage
     .from("contratos")
-    .createSignedUrl(storagePath, 3600, { download: nombreArchivo });
+    .createSignedUrl(storagePath, 3600, { download: nombreDescarga });
 
-  return { ok: true, downloadUrl: firmado?.signedUrl, nombreArchivo };
+  return { ok: true, downloadUrl: firmado?.signedUrl, nombreArchivo: nombreDescarga };
 }

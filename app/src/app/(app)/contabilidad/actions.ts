@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { nombreArchivo } from "@/lib/format";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -187,9 +188,16 @@ export async function urlDocumentoContable(
   nombre: string,
 ): Promise<{ ok: boolean; url?: string; error?: string }> {
   const supabase = await createClient();
+  // El nombre puede traer tildes (razón social/etiquetas) — se normaliza para
+  // que la descarga no llegue con el nombre percent-encodeado.
+  const punto = nombre.lastIndexOf(".");
+  const descarga =
+    punto > 0
+      ? nombreArchivo(nombre.slice(0, punto)) + nombre.slice(punto).toLowerCase()
+      : nombreArchivo(nombre);
   const { data, error } = await supabase.storage
     .from("contabilidad")
-    .createSignedUrl(archivoPath, 3600, { download: nombre });
+    .createSignedUrl(archivoPath, 3600, { download: descarga });
   if (error || !data?.signedUrl) {
     return { ok: false, error: error?.message ?? "No se pudo generar el link." };
   }

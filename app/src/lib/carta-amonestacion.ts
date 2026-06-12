@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generarDocx, fechaLarga } from "@/lib/generar-docx";
 import { redactarHechosFormales } from "@/lib/redactar-hechos";
+import { nombreArchivo } from "@/lib/format";
 
 export type ResultadoCarta = {
   ok: boolean;
@@ -124,10 +125,10 @@ export async function generarYSubirCartaAmonestacion(
     .update({ documento_path: storagePath })
     .eq("id", gestionId);
 
-  const nombreArchivo = `Carta Amonestación - ${g.trabajador_nombre}.docx`;
+  const nombreDescarga = nombreArchivo(`Carta Amonestacion - ${g.trabajador_nombre}`) + ".docx";
   const { data: firmado } = await supabase.storage
     .from("contratos")
-    .createSignedUrl(storagePath, 3600, { download: nombreArchivo });
+    .createSignedUrl(storagePath, 3600, { download: nombreDescarga });
 
-  return { ok: true, downloadUrl: firmado?.signedUrl, nombreArchivo };
+  return { ok: true, downloadUrl: firmado?.signedUrl, nombreArchivo: nombreDescarga };
 }

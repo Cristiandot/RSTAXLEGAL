@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generarDocx, fechaLarga } from "@/lib/generar-docx";
+import { nombreArchivo } from "@/lib/format";
 
 /**
  * Carta de aviso de término de contrato (Art. 162 CT) para el módulo
@@ -193,10 +194,10 @@ export async function generarYSubirCartaAviso(
     })
     .eq("id", gestionId);
 
-  const nombreArchivo = `Carta Aviso Término - ${g.trabajador_nombre}.docx`;
+  const nombreDescarga = nombreArchivo(`Carta Aviso Termino - ${g.trabajador_nombre}`) + ".docx";
   const { data: firmado } = await supabase.storage
     .from("contratos")
-    .createSignedUrl(storagePath, 3600, { download: nombreArchivo });
+    .createSignedUrl(storagePath, 3600, { download: nombreDescarga });
 
-  return { ok: true, downloadUrl: firmado?.signedUrl, nombreArchivo };
+  return { ok: true, downloadUrl: firmado?.signedUrl, nombreArchivo: nombreDescarga };
 }

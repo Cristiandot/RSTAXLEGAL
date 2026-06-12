@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getUsuarioActual } from "@/lib/auth";
+import { nombreArchivo } from "@/lib/format";
 import { generarYSubirContrato } from "@/lib/contrato-generacion";
 import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
 
@@ -131,7 +132,7 @@ export async function enviarContratoAlCliente(
 <p>Adjuntamos el contrato de trabajo de <strong>${trabajador}</strong>, revisado y aprobado por nuestro equipo.</p>
 <p>Por favor imprímelo en dos ejemplares, fírmenlo ambas partes y conserva uno en la carpeta del trabajador. Cualquier ajuste que necesites, responde a este correo o contacta a tu ejecutivo.</p>`,
     }),
-    adjuntos: [{ filename: `Contrato - ${trabajador}.docx`, content: base64 }],
+    adjuntos: [{ filename: nombreArchivo(`Contrato - ${trabajador}`) + ".docx", content: base64 }],
   });
   if (!res.ok) return { ok: false, error: res.error };
 
@@ -202,7 +203,9 @@ export async function linkDescargaContrato(
     return { ok: false, error: "Este contrato no tiene documento generado." };
   }
   const t = con.trabajadores as unknown as { nombres: string; apellidos: string } | null;
-  const nombre = t ? `Contrato - ${t.nombres} ${t.apellidos}.docx` : "Contrato.docx";
+  const nombre = t
+    ? nombreArchivo(`Contrato - ${t.nombres} ${t.apellidos}`) + ".docx"
+    : "CONTRATO.docx";
   const { data, error } = await supabase.storage
     .from("contratos")
     .createSignedUrl(con.documento_path, 3600, { download: nombre });
