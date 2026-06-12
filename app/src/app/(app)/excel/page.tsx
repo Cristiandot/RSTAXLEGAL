@@ -125,7 +125,7 @@ export default async function ExcelPage({
   );
 
   return (
-    <main className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
+    <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
       <ExcelClient empresas={filas} periodo={periodo} errorCarga={errorCarga} />
     </main>
   );

@@ -60,7 +60,7 @@ export default async function FiniquitosPage() {
   });
 
   return (
-    <main className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
+    <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
       <FiniquitosClient
         filas={filas}
         esAdmin={usuario.rol === "admin"}

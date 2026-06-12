@@ -44,7 +44,7 @@ export default async function ContabilidadPage({
   }));
 
   return (
-    <main className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
+    <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
       <ContabilidadClient
         periodo={periodo}
         filas={(filasRes.data ?? []) as ConciliacionRow[]}

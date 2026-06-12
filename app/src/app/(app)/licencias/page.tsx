@@ -46,7 +46,6 @@ export default async function LicenciasPage() {
   });
 
   return (
-    // grilla ancha: más que el estándar del panel (1280px) pero sin desparramarse
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
       <LicenciasClient
         filas={filas}
