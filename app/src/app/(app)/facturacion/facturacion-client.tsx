@@ -129,7 +129,8 @@ export function FacturacionClient({
   const resumen = [
     { label: "Documentos", valor: filas.length },
     { label: "Pagadas", valor: filas.filter((f) => f.pagada).length },
-    { label: "Pendientes de pago", valor: filas.filter((f) => !f.pagada && f.tipo === "factura").length },
+    { label: "En suscripción", valor: filas.filter((f) => !f.pagada && f.suscrito).length },
+    { label: "Pendientes de pago", valor: filas.filter((f) => !f.pagada && !f.suscrito && f.tipo === "factura").length },
     { label: "Sin vincular a cliente", valor: filas.filter((f) => !f.clienteId).length },
   ];
 
@@ -150,11 +151,37 @@ export function FacturacionClient({
     });
   }
 
-  function togglePago(f: FacturaRow) {
+  // ---- Marcar pago con fecha elegida ----
+  const [pagando, setPagando] = useState<FacturaRow | null>(null);
+  const [fechaPagoNueva, setFechaPagoNueva] = useState("");
+
+  function abrirPago(f: FacturaRow) {
+    setFechaPagoNueva(f.fechaPago ?? new Date().toISOString().slice(0, 10));
+    setPagando(f);
+  }
+
+  function confirmarPago() {
+    if (!pagando) return;
+    const id = pagando.id;
+    const fecha = fechaPagoNueva || null;
     startAccion(async () => {
-      const res = await marcarPago(f.id, !f.pagada);
+      const res = await marcarPago(id, true, fecha);
       if (res.ok) {
-        toast.success(f.pagada ? "Pago desmarcado" : "Marcada como pagada");
+        toast.success("Marcada como pagada");
+        setPagando(null);
+        router.refresh();
+      } else toast.error(res.error ?? "Error");
+    });
+  }
+
+  function quitarPago() {
+    if (!pagando) return;
+    const id = pagando.id;
+    startAccion(async () => {
+      const res = await marcarPago(id, false);
+      if (res.ok) {
+        toast.success("Pago desmarcado");
+        setPagando(null);
         router.refresh();
       } else toast.error(res.error ?? "Error");
     });
@@ -283,7 +310,7 @@ export function FacturacionClient({
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {resumen.map((r) => (
           <ResumenCard key={r.label} label={r.label} valor={r.valor} />
         ))}
@@ -392,12 +419,23 @@ export function FacturacionClient({
                     <button
                       type="button"
                       disabled={ocupado}
-                      onClick={() => togglePago(f)}
-                      title={f.pagada ? `Pagada el ${formatFecha(f.fechaPago)} — click para desmarcar` : "Click para marcar como pagada"}
+                      onClick={() => abrirPago(f)}
+                      title={
+                        f.pagada
+                          ? `Pagada el ${formatFecha(f.fechaPago)} — click para editar o quitar`
+                          : f.suscrito
+                            ? `Suscripción — pago automático${f.diaPago ? ` el día ${f.diaPago}` : " (día por confirmar)"}. Click para registrar la fecha de pago.`
+                            : "Click para marcar como pagada"
+                      }
                     >
                       {f.pagada ? (
                         <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
                           Pagada{f.fechaPago ? ` ${formatFecha(f.fechaPago)}` : ""}
+                        </Badge>
+                      ) : f.suscrito ? (
+                        <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800">
+                          <RefreshCcw className="size-3" />
+                          Suscripción{f.diaPago ? ` · día ${f.diaPago}` : ""}
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-600">
@@ -405,12 +443,6 @@ export function FacturacionClient({
                         </Badge>
                       )}
                     </button>
-                    {f.suscrito ? (
-                      <span className="mt-0.5 flex items-center gap-1 text-xs text-sky-600" title={`Cliente suscrito — pago automático${f.diaPago ? ` el día ${f.diaPago} de cada mes` : ""}`}>
-                        <RefreshCcw className="size-3" />
-                        suscrito{f.diaPago ? ` · día ${f.diaPago}` : ""}
-                      </span>
-                    ) : null}
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
@@ -526,6 +558,47 @@ export function FacturacionClient({
         </DialogContent>
       </Dialog>
 
+      {/* ---- Diálogo: registrar pago ---- */}
+      <Dialog open={pagando !== null} onOpenChange={(o) => { if (!o) setPagando(null); }}>
+        {pagando ? (
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="font-heading">
+                Pago de {pagando.tipo === "nota_credito" ? "NC" : "factura"} {pagando.folio}
+              </DialogTitle>
+              <DialogDescription>
+                {pagando.clienteNombre ?? pagando.razonFactura} · {etiquetaPeriodo(pagando.periodo)}
+                {pagando.monto ? ` · ${formatMonto(pagando.monto)}` : ""}
+                {pagando.suscrito ? " · cliente en suscripción" : ""}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="fecha_pago">Fecha de pago</Label>
+              <Input
+                id="fecha_pago"
+                type="date"
+                className="w-44"
+                value={fechaPagoNueva}
+                onChange={(e) => setFechaPagoNueva(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              {pagando.pagada ? (
+                <Button variant="outline" className="text-destructive" onClick={quitarPago} disabled={ocupado}>
+                  Quitar pago
+                </Button>
+              ) : null}
+              <Button variant="outline" onClick={() => setPagando(null)}>
+                Cancelar
+              </Button>
+              <Button onClick={confirmarPago} disabled={ocupado}>
+                {pagando.pagada ? "Actualizar fecha" : "Marcar pagada"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
+
       {/* ---- Diálogo: vincular cliente ---- */}
       <Dialog open={vinculando !== null} onOpenChange={(o) => { if (!o) setVinculando(null); }}>
         {vinculando ? (
@@ -570,7 +643,7 @@ export function FacturacionClient({
                 {suscrito ? (
                   <div className="mt-2 flex items-center gap-2">
                     <Label htmlFor="dia_pago" className="text-xs whitespace-nowrap">
-                      Día del mes en que se ejecuta el pago
+                      Día del mes en que se ejecuta el pago (opcional)
                     </Label>
                     <Input
                       id="dia_pago"
@@ -580,7 +653,7 @@ export function FacturacionClient({
                       className="h-8 w-20"
                       value={diaPago}
                       onChange={(e) => setDiaPago(e.target.value)}
-                      placeholder="ej. 5"
+                      placeholder="¿?"
                     />
                   </div>
                 ) : null}

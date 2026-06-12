@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUsuarioActual } from "@/lib/auth";
 import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
 import { etiquetaPeriodo } from "@/lib/periodos";
+import { nombreArchivo } from "@/lib/format";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -35,7 +36,7 @@ export async function linkDescargaFactura(
   if (!f) return { ok: false, error: "Factura no encontrada." };
 
   const etiqueta = f.tipo === "nota_credito" ? "NC" : "Factura";
-  const nombre = `${etiqueta} ${f.folio} - ${f.razon_social_factura}.pdf`;
+  const nombre = nombreArchivo(`${etiqueta} ${f.folio} - ${f.razon_social_factura}`) + ".pdf";
   const { data: firmado, error } = await supabase.storage
     .from("facturas")
     .createSignedUrl(f.archivo_path, 3600, { download: nombre });
@@ -208,17 +209,21 @@ export async function subirFacturasLote(
   return { ok: true, resultados };
 }
 
-/** Marca o desmarca el pago de una factura (estampa la fecha de hoy al marcar). */
+/** Marca o desmarca el pago de una factura, con fecha elegida por el equipo. */
 export async function marcarPago(
   facturaId: string,
   pagada: boolean,
+  fecha?: string | null,
 ): Promise<{ ok: boolean; error?: string }> {
+  if (pagada && fecha && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return { ok: false, error: "Fecha de pago inválida." };
+  }
   const supabase = await createClient();
   const { error } = await supabase
     .from("facturas")
     .update({
       pagada,
-      fecha_pago: pagada ? new Date().toISOString().slice(0, 10) : null,
+      fecha_pago: pagada ? (fecha ?? new Date().toISOString().slice(0, 10)) : null,
     })
     .eq("id", facturaId);
   if (error) return { ok: false, error: error.message };
@@ -226,14 +231,17 @@ export async function marcarPago(
   return { ok: true };
 }
 
-/** Guarda la suscripción de pago automático del cliente (atributo del cliente). */
+/**
+ * Guarda la suscripción de pago automático del cliente (atributo del cliente).
+ * El día de pago es opcional — hay suscritos cuya fecha de cargo no se conoce.
+ */
 export async function guardarSuscripcion(
   clienteId: string,
   suscrito: boolean,
   diaPago: number | null,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (suscrito && (diaPago === null || diaPago < 1 || diaPago > 31)) {
-    return { ok: false, error: "Indica el día del mes en que se ejecuta el pago (1 a 31)." };
+  if (suscrito && diaPago !== null && (diaPago < 1 || diaPago > 31)) {
+    return { ok: false, error: "El día del pago debe estar entre 1 y 31 (o déjalo vacío si no se conoce)." };
   }
   const supabase = await createClient();
   const { error } = await supabase
@@ -289,7 +297,7 @@ export async function enviarFacturaAlCliente(
     }),
     adjuntos: [
       {
-        filename: `${etiqueta} ${f.folio} - ${f.razon_social_factura}.pdf`,
+        filename: nombreArchivo(`${etiqueta} ${f.folio} - ${f.razon_social_factura}`) + ".pdf",
         content: Buffer.from(await pdf.arrayBuffer()).toString("base64"),
       },
     ],
