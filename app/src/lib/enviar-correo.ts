@@ -1,9 +1,17 @@
 /**
  * Envío de correos vía Resend API (dominio rstaxlegal.cl ya verificado).
  * Requiere RESEND_API_KEY en las variables de entorno (Vercel / .env.local).
+ *
+ * Remitente: si se pasa `de` con un correo @rstaxlegal.cl (el usuario
+ * conectado, vía getUsuarioActual), el correo sale A SU NOMBRE — el dominio
+ * completo está verificado en Resend, así que cualquier casilla de la firma
+ * es remitente válido (DKIM alineado). El remitente además va en copia oculta
+ * (queda registro en su buzón M365, ya que el envío no pasa por Outlook) y en
+ * reply-to (las respuestas del cliente le llegan directo). Sin `de`, fallback
+ * al remitente genérico notificaciones@.
  */
 
-const REMITENTE = "RS Tax & Legal <notificaciones@rstaxlegal.cl>";
+const REMITENTE_GENERICO = "RS Tax & Legal <notificaciones@rstaxlegal.cl>";
 
 export type Adjunto = { filename: string; content: string }; // content en base64
 
@@ -12,11 +20,14 @@ export async function enviarCorreo({
   asunto,
   html,
   adjuntos,
+  de,
 }: {
   para: string;
   asunto: string;
   html: string;
   adjuntos?: Adjunto[];
+  /** Usuario conectado que envía — el correo sale a su nombre. */
+  de?: { nombre: string; correo: string };
 }): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -27,6 +38,10 @@ export async function enviarCorreo({
     };
   }
 
+  // Solo casillas del dominio verificado pueden ser remitente.
+  const remitentePropio = de && de.correo.toLowerCase().endsWith("@rstaxlegal.cl");
+  const from = remitentePropio ? `${de!.nombre} <${de!.correo}>` : REMITENTE_GENERICO;
+
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -34,11 +49,17 @@ export async function enviarCorreo({
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: REMITENTE,
+      from,
       to: [para],
       subject: asunto,
       html,
       attachments: adjuntos,
+      ...(de
+        ? {
+            reply_to: [de.correo],
+            bcc: [de.correo],
+          }
+        : {}),
     }),
   });
 

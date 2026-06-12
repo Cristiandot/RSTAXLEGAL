@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getUsuarioActual } from "@/lib/auth";
 import { generarYSubirContrato } from "@/lib/contrato-generacion";
 import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
 
@@ -119,7 +120,9 @@ export async function enviarContratoAlCliente(
   const base64 = Buffer.from(await archivo.arrayBuffer()).toString("base64");
 
   const trabajador = t ? `${t.nombres} ${t.apellidos}` : "trabajador";
+  const usuario = await getUsuarioActual();
   const res = await enviarCorreo({
+    de: { nombre: usuario.nombre, correo: usuario.correo },
     para: cli.correo_empresa,
     asunto: `Contrato de trabajo — ${trabajador} · ${cli.razon_social}`,
     html: htmlCorreoDocumento({
