@@ -35,6 +35,8 @@ export type GestionFiniquito = {
   diasTomados: number | null;
   /** Saldo de feriado DEVENGADO según control del cliente (override del automático). */
   diasObtenidos: number | null;
+  /** Remuneración pendiente del mes EN LÍQUIDO (criterio RSTL), precalculada por el equipo. */
+  remuneracionPendiente: number | null;
   licenciaVigente: string | null;
   fuero: string | null;
   calculoGuardado: {
@@ -143,7 +145,9 @@ export function CalculadoraClient({
   const [obtenidosManual, setObtenidosManual] = useState<number | null>(
     guardado?.diasObtenidosManual ?? gestion?.diasObtenidos ?? null,
   );
-  const [remPendiente, setRemPendiente] = useState(guardado?.remuneracionPendiente ?? 0);
+  const [remPendiente, setRemPendiente] = useState(
+    guardado?.remuneracionPendiente ?? gestion?.remuneracionPendiente ?? 0,
+  );
   const [descuentoAfc, setDescuentoAfc] = useState(guardado?.descuentoAfc ?? 0);
   const [ufManual, setUfManual] = useState<number | null>(null);
 
