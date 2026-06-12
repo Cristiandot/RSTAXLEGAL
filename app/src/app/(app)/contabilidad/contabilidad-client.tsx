@@ -39,6 +39,17 @@ export type DocumentoContable = {
   subido_por_nombre: string | null;
 };
 
+/** Estado de los libros RCV del período (solo empresas con contabilidad completa). */
+export type RcvResumenFila = {
+  cliente_id: string;
+  docs_compras: number;
+  docs_ventas: number;
+  iva_credito_rcv: number;
+  iva_debito_rcv: number;
+  f29_iva_debito: number | null;
+  f29_iva_credito: number | null;
+};
+
 const ESTADOS = [
   "Sin iniciar",
   "Descargando",
@@ -88,6 +99,64 @@ function BadgeKame({ estado }: { estado: string | null }) {
   );
 }
 
+/**
+ * Celda de libros RCV (contabilidad completa): conteo importado y cuadratura
+ * contra el F29. Click → grilla de libros, sin pasar por el detalle.
+ */
+function CeldaRcv({
+  resumen,
+  href,
+}: {
+  resumen: RcvResumenFila;
+  href: string;
+}) {
+  const sinDocs = resumen.docs_compras === 0 && resumen.docs_ventas === 0;
+  const sinF29 =
+    resumen.f29_iva_debito === null && resumen.f29_iva_credito === null;
+  const cuadra =
+    !sinF29 &&
+    Number(resumen.f29_iva_debito ?? 0) === Number(resumen.iva_debito_rcv) &&
+    Number(resumen.f29_iva_credito ?? 0) === Number(resumen.iva_credito_rcv);
+
+  return (
+    <a
+      href={href}
+      onClick={(e) => e.stopPropagation()}
+      className="inline-flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-muted"
+      title="Abrir libros de compras y ventas (RCV)"
+    >
+      {sinDocs ? (
+        <span className="text-xs font-medium text-primary">Importar RCV →</span>
+      ) : (
+        <>
+          <span className="inline-flex h-6 items-center rounded-md border border-border bg-muted/40 px-1.5 text-[11px] font-semibold tabular-nums">
+            C·{resumen.docs_compras}
+          </span>
+          <span className="inline-flex h-6 items-center rounded-md border border-border bg-muted/40 px-1.5 text-[11px] font-semibold tabular-nums">
+            V·{resumen.docs_ventas}
+          </span>
+          {sinF29 ? (
+            <Badge variant="outline" className="border-border bg-muted/40 text-muted-foreground">
+              sin F29
+            </Badge>
+          ) : cuadra ? (
+            <Badge
+              variant="outline"
+              className="border-emerald-200 bg-emerald-50 text-emerald-700"
+            >
+              ✓ F29
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
+              ≠ F29
+            </Badge>
+          )}
+        </>
+      )}
+    </a>
+  );
+}
+
 /** Mini-checklist documental de la fila: una sigla por categoría principal. */
 function ChecklistDocs({
   conteos,
@@ -132,12 +201,14 @@ export function ContabilidadClient({
   filas,
   usuarios,
   documentos,
+  rcvResumen = [],
   errorCarga,
 }: {
   periodo: string;
   filas: ConciliacionRow[];
   usuarios: UsuarioOpcion[];
   documentos: DocumentoContable[];
+  rcvResumen?: RcvResumenFila[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -148,6 +219,11 @@ export function ContabilidadClient({
   const [saludF, setSaludF] = useState("");
   const [respF, setRespF] = useState("");
   const [orden, setOrden] = useState<Orden>(null);
+
+  const rcvPorCliente = useMemo(
+    () => new Map(rcvResumen.map((r) => [r.cliente_id, r])),
+    [rcvResumen],
+  );
 
   // Conteo de documentos por cliente y categoría
   const conteosPorCliente = useMemo(() => {
@@ -376,6 +452,7 @@ export function ContabilidadClient({
               <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[240px]">Cliente</ThSort>
               <TableHead>RUT</TableHead>
               <ThSort col="docs" orden={orden} setOrden={setOrden}>Documentos del mes</ThSort>
+              <TableHead>Libros RCV</TableHead>
               <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
               <ThSort col="kame" orden={orden} setOrden={setOrden}>KAME</ThSort>
               <ThSort col="salud" orden={orden} setOrden={setOrden}>Salud</ThSort>
@@ -387,7 +464,7 @@ export function ContabilidadClient({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -416,6 +493,16 @@ export function ContabilidadClient({
                       conteos={conteosDe(c.cliente_id)}
                       adicionales={adicionalesDe(c.cliente_id)}
                     />
+                  </TableCell>
+                  <TableCell>
+                    {rcvPorCliente.has(c.cliente_id) ? (
+                      <CeldaRcv
+                        resumen={rcvPorCliente.get(c.cliente_id)!}
+                        href={`/contabilidad/${c.cliente_id}/rcv?periodo=${periodo}`}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={claseEstado(c.estado)}>
@@ -464,6 +551,9 @@ export function ContabilidadClient({
         Checklist: FC facturas de compras · FV facturas de ventas · BV ventas
         con boleta · BC compras con boleta · +N documentos adicionales
         (honorarios, otros gastos/ingresos). Verde = archivo cargado este mes.
+        Libros RCV (empresas con contabilidad completa): C/V = documentos
+        importados del SII · ✓ F29 = el IVA del RCV cuadra exacto con el F29
+        del período.
       </p>
     </div>
   );
