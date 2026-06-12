@@ -150,8 +150,7 @@ export function FiniquitosClient({
     });
   }
 
-  function exportarDt() {
-    const ids = [...seleccionados];
+  function exportarDt(ids: string[]) {
     startExportar(async () => {
       const res = await exportarCsvDt(ids);
       if (!res.ok || !res.csv) {
@@ -271,7 +270,7 @@ export function FiniquitosClient({
         <Button
           variant="outline"
           disabled={seleccionados.size === 0 || exportando}
-          onClick={exportarDt}
+          onClick={() => exportarDt([...seleccionados])}
           title="Genera el CSV de carga masiva del Finiquito Electrónico (Mi DT) con los seleccionados"
         >
           <FileSpreadsheet className="size-4" />
@@ -374,6 +373,20 @@ export function FiniquitosClient({
                           Carta aviso
                         </Button>
                       ) : null}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={f.resumen === null || exportando}
+                        title={
+                          f.resumen === null
+                            ? "Primero calcula y guarda el finiquito"
+                            : "Descargar el CSV de carga del Finiquito Electrónico (Mi DT) de este finiquito"
+                        }
+                        onClick={() => exportarDt([f.id])}
+                      >
+                        <FileSpreadsheet className="size-3.5" />
+                        CSV DT
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
