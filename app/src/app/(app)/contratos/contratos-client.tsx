@@ -4,8 +4,13 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { AlertTriangle, Download, FilePlus2, Pencil, Search, Send, Trash2 } from "lucide-react";
-import { formatFecha } from "@/lib/format";
+import { AlertTriangle, Download, FilePlus2, Pencil, Receipt, Search, Send, Trash2 } from "lucide-react";
+import { formatFecha, formatMonto } from "@/lib/format";
+import {
+  calcularLiquidacionEjemplo,
+  type LiquidacionEjemplo,
+  type TasaAfpPeriodo,
+} from "@/lib/liquidacion-ejemplo";
 import {
   actualizarClausulas,
   cambiarEstadoContrato,
@@ -53,6 +58,17 @@ export type ContratoRow = {
   trabajador: string;
   rutTrabajador: string;
   creadoPor: string;
+  /** Remuneración pactada (jsonb del contrato) — para la liquidación ejemplo. */
+  remuneracion?: Record<string, unknown> | null;
+  afp?: string | null;
+  salud?: string | null;
+};
+
+export type IndicadoresLiquidacion = {
+  periodo: string;
+  imm: number;
+  utm: number | null;
+  tasasAfp: TasaAfpPeriodo[];
 };
 
 const ESTADOS = ["solicitado", "generado", "aprobado", "enviado", "anulado"];
@@ -82,6 +98,7 @@ export function ContratosClient({
   descripcion = "Solicitudes, generación y revisión. Flujo: generado → aprobado → enviado.",
   mostrarHerramientasContrato = true,
   esAdmin = false,
+  indicadores = null,
 }: {
   filas: ContratoRow[];
   errorCarga: string | null;
@@ -91,6 +108,8 @@ export function ContratosClient({
   mostrarHerramientasContrato?: boolean;
   /** Habilita la eliminación definitiva (doble confirmación, solo admins). */
   esAdmin?: boolean;
+  /** Indicadores Previred del período — habilitan "Ver liquidación ejemplo". */
+  indicadores?: IndicadoresLiquidacion | null;
 }) {
   const router = useRouter();
   const [buscar, setBuscar] = useState("");
@@ -165,6 +184,28 @@ export function ContratosClient({
       } else toast.error(res.error ?? "Error al enviar");
     });
   }
+
+  // Liquidación de ejemplo (mes normal, sin novedades)
+  const [liqDe, setLiqDe] = useState<ContratoRow | null>(null);
+  const liq: LiquidacionEjemplo | null = useMemo(() => {
+    if (!liqDe || !indicadores) return null;
+    const r = liqDe.remuneracion ?? {};
+    const sueldo = Number(r.sueldo_base ?? 0);
+    if (!sueldo) return null;
+    return calcularLiquidacionEjemplo({
+      sueldoBase: sueldo,
+      gratificacionTipo: String(r.gratificacion_tipo ?? "25"),
+      gratificacionMonto: Number(r.gratificacion_monto ?? 0),
+      colacion: Number(r.colacion ?? 0),
+      movilizacion: Number(r.movilizacion ?? 0),
+      afp: liqDe.afp ?? null,
+      salud: liqDe.salud ?? null,
+      tipoContrato: liqDe.tipoContrato,
+      imm: indicadores.imm,
+      utm: indicadores.utm,
+      tasasAfp: indicadores.tasasAfp,
+    });
+  }, [liqDe, indicadores]);
 
   // Eliminación definitiva con doble seguridad: solo admins + escribir "borrar"
   const [borrando, setBorrando] = useState<ContratoRow | null>(null);
@@ -292,6 +333,19 @@ export function ContratosClient({
                           <Download className="size-4" />
                         </Button>
                       ) : null}
+                      {indicadores &&
+                      f.tipoDocumento === "contrato" &&
+                      Number(f.remuneracion?.sueldo_base ?? 0) > 0 ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={ocupado}
+                          onClick={() => setLiqDe(f)}
+                          title="Ver liquidación ejemplo de un mes normal (líquido estimado)"
+                        >
+                          <Receipt className="size-4" />
+                        </Button>
+                      ) : null}
                       {f.tipoDocumento !== "anexo" &&
                       ["solicitado", "generado"].includes(f.estado) ? (
                         <Button
@@ -387,6 +441,52 @@ export function ContratosClient({
                 Guardar
               </Button>
             </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
+
+      {/* Liquidación de ejemplo: líquido estimado de un mes normal */}
+      <Dialog open={liqDe !== null} onOpenChange={(o) => { if (!o) setLiqDe(null); }}>
+        {liqDe && liq ? (
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-heading">
+                Liquidación ejemplo · {liqDe.trabajador}
+              </DialogTitle>
+              <DialogDescription>
+                Mes normal de 30 días, sin novedades — con los indicadores
+                Previred de {indicadores?.periodo}. Referencial.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-1.5 text-sm">
+              <div className="flex justify-between"><span>Sueldo base</span><span className="tabular-nums">{formatMonto(liq.sueldoBase)}</span></div>
+              <div className="flex justify-between"><span>Gratificación legal</span><span className="tabular-nums">{formatMonto(liq.gratificacion)}</span></div>
+              <div className="flex justify-between border-t pt-1.5 font-medium"><span>Total imponible</span><span className="tabular-nums">{formatMonto(liq.totalImponible)}</span></div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>AFP {liq.afpNombre ?? "—"}{liq.afpTasa !== null ? ` (${liq.afpTasa.toLocaleString("es-CL")}%)` : ""}</span>
+                <span className="tabular-nums">−{formatMonto(liq.afpMonto)}</span>
+              </div>
+              <div className="flex justify-between text-muted-foreground"><span>Salud 7%</span><span className="tabular-nums">−{formatMonto(liq.saludMonto)}</span></div>
+              <div className="flex justify-between text-muted-foreground"><span>Seguro cesantía AFC{liq.afcMonto > 0 ? " 0,6%" : ""}</span><span className="tabular-nums">−{formatMonto(liq.afcMonto)}</span></div>
+              <div className="flex justify-between text-muted-foreground"><span>Impuesto único</span><span className="tabular-nums">−{formatMonto(liq.impuestoUnico)}</span></div>
+              <div className="flex justify-between border-t pt-1.5"><span>Total descuentos</span><span className="tabular-nums">−{formatMonto(liq.totalDescuentos)}</span></div>
+              {liq.colacion > 0 ? (
+                <div className="flex justify-between"><span>Colación (no imponible)</span><span className="tabular-nums">+{formatMonto(liq.colacion)}</span></div>
+              ) : null}
+              {liq.movilizacion > 0 ? (
+                <div className="flex justify-between"><span>Movilización (no imponible)</span><span className="tabular-nums">+{formatMonto(liq.movilizacion)}</span></div>
+              ) : null}
+              <div className="flex justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-base font-semibold text-emerald-800">
+                <span>LÍQUIDO A PAGO</span><span className="tabular-nums">{formatMonto(liq.liquido)}</span>
+              </div>
+            </div>
+
+            {liq.notas.length > 0 ? (
+              <ul className="list-disc space-y-0.5 pl-5 text-xs text-muted-foreground">
+                {liq.notas.map((n) => <li key={n}>{n}</li>)}
+              </ul>
+            ) : null}
           </DialogContent>
         ) : null}
       </Dialog>
