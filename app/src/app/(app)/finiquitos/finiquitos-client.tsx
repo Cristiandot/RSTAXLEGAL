@@ -4,9 +4,16 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, Calculator, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Calculator, CheckCircle2, Mail, Search, Send, Trash2 } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
+import {
+  diasParaLimite,
+  plazoArt177,
+  textoCorreoFiniquito,
+  type ResumenCorreo,
+} from "@/lib/finiquito-correo";
 import { eliminarSolicitudFiniquito } from "./actions";
+import { cambiarEstadoGestion } from "../gestiones/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,8 +45,48 @@ export type FiniquitoRow = {
   estado: string;
   totalCalculado: number | null;
   calculadoEn: string | null;
+  resumen: ResumenCorreo | null;
   creada: string;
 };
+
+/** Badge del plazo Art. 177 (10 días hábiles desde la separación). */
+function PlazoBadge({ f }: { f: FiniquitoRow }) {
+  if (!f.fechaTermino) return <span className="text-muted-foreground">—</span>;
+  if (f.estado === "enviada") {
+    return (
+      <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+        <CheckCircle2 className="size-3" /> Gestionado
+      </Badge>
+    );
+  }
+  const plazo = plazoArt177(f.fechaTermino);
+  if (!plazo) return <span className="text-muted-foreground">—</span>;
+  const hoy = new Date().toISOString().slice(0, 10);
+  const dias = diasParaLimite(plazo.fechaLimite, hoy);
+  const clase =
+    dias < 0
+      ? "border-red-300 bg-red-100 text-red-800"
+      : dias <= 2
+        ? "border-red-200 bg-red-50 text-red-700"
+        : dias <= 5
+          ? "border-amber-200 bg-amber-50 text-amber-700"
+          : "border-slate-200 bg-slate-50 text-slate-600";
+  const texto =
+    dias < 0
+      ? `VENCIDO hace ${-dias} día${dias === -1 ? "" : "s"}`
+      : dias === 0
+        ? "VENCE HOY"
+        : `quedan ${dias} día${dias === 1 ? "" : "s"}`;
+  return (
+    <Badge
+      variant="outline"
+      className={clase}
+      title={`Suscribir y pagar a más tardar el ${formatFecha(plazo.fechaLimite)} (Art. 177 CT — 10 días hábiles desde la separación)`}
+    >
+      {formatFecha(plazo.fechaLimite)} · {texto}
+    </Badge>
+  );
+}
 
 const CAUSAL_PORTAL_LABEL: Record<string, string> = {
   renuncia: "Renuncia (159 N°2)",
@@ -79,6 +126,34 @@ export function FiniquitosClient({
   const [borrando, setBorrando] = useState<FiniquitoRow | null>(null);
   const [confirmacion, setConfirmacion] = useState("");
   const [ocupado, startBorrar] = useTransition();
+  const [avanzando, startAvanzar] = useTransition();
+
+  function copiarCorreo(f: FiniquitoRow) {
+    if (!f.resumen) {
+      toast.error("Primero calcula el finiquito — el correo incluye el desglose del cálculo.");
+      return;
+    }
+    navigator.clipboard.writeText(
+      textoCorreoFiniquito({
+        trabajador: f.trabajador,
+        rut: f.rut,
+        causal: f.causal,
+        fechaTermino: f.fechaTermino,
+        resumen: f.resumen,
+      }),
+    );
+    toast.success("Correo copiado — pégalo en el mail al cliente");
+  }
+
+  function avanzar(f: FiniquitoRow, nuevo: string, etiqueta: string) {
+    startAvanzar(async () => {
+      const res = await cambiarEstadoGestion(f.id, nuevo);
+      if (res.ok) {
+        toast.success(etiqueta);
+        router.refresh();
+      } else toast.error(res.error ?? "Error");
+    });
+  }
 
   const confirmacionOk = confirmacion.trim().toLowerCase() === "borrar";
 
@@ -166,7 +241,7 @@ export function FiniquitosClient({
               <TableHead className="w-[200px]">Empresa</TableHead>
               <TableHead>Causal</TableHead>
               <TableHead>Término</TableHead>
-              <TableHead>Recibida</TableHead>
+              <TableHead>Plazo Art. 177</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="text-right">Total calculado</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
@@ -196,7 +271,7 @@ export function FiniquitosClient({
                   </TableCell>
                   <TableCell>{CAUSAL_PORTAL_LABEL[f.causal] ?? f.causal ?? "—"}</TableCell>
                   <TableCell>{formatFecha(f.fechaTermino)}</TableCell>
-                  <TableCell>{formatFecha(f.creada?.slice(0, 10))}</TableCell>
+                  <TableCell><PlazoBadge f={f} /></TableCell>
                   <TableCell>
                     <Badge variant="outline" className={claseEstado(f.estado)}>{f.estado}</Badge>
                   </TableCell>
@@ -219,6 +294,40 @@ export function FiniquitosClient({
                         <Calculator className="size-3.5" />
                         {f.totalCalculado !== null ? "Recalcular" : "Calcular"}
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={f.resumen === null}
+                        title={
+                          f.resumen === null
+                            ? "Primero calcula el finiquito"
+                            : "Copiar correo para el cliente con el cálculo"
+                        }
+                        onClick={() => copiarCorreo(f)}
+                      >
+                        <Mail className="size-3.5" />
+                        Copiar correo
+                      </Button>
+                      {f.estado === "solicitada" && f.totalCalculado !== null ? (
+                        <Button
+                          size="sm"
+                          disabled={avanzando}
+                          onClick={() => avanzar(f, "aprobada", "Finiquito aprobado")}
+                        >
+                          <CheckCircle2 className="size-3.5" />
+                          Aprobar
+                        </Button>
+                      ) : null}
+                      {f.estado === "aprobada" ? (
+                        <Button
+                          size="sm"
+                          disabled={avanzando}
+                          onClick={() => avanzar(f, "enviada", "Finiquito marcado como enviado/gestionado")}
+                        >
+                          <Send className="size-3.5" />
+                          Marcar enviado
+                        </Button>
+                      ) : null}
                       {esAdmin ? (
                         <Button
                           size="sm"
@@ -243,8 +352,10 @@ export function FiniquitosClient({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        El flujo de aprobación y envío de la solicitud sigue en el módulo Gestiones RRHH;
-        acá se hace el cálculo y queda guardado en la misma solicitud.
+        Flujo: calcular → copiar correo al cliente (con el cálculo y el plazo) →
+        aprobar → marcar enviado cuando el finiquito esté suscrito y pagado. El
+        plazo del Art. 177 son 10 días hábiles desde la separación (el sábado
+        cuenta como hábil para este plazo; solo se excluyen domingos y feriados).
       </p>
 
       {/* Doble confirmación de borrado: hay que escribir "borrar" */}

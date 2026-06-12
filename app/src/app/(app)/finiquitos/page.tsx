@@ -21,8 +21,19 @@ export default async function FiniquitosPage() {
     const cli = g.clientes as unknown as { razon_social: string } | null;
     const datos = (g.datos ?? {}) as Record<string, unknown>;
     const calculo = datos.calculo_finiquito as
-      | { resumen?: { total?: number }; calculado_en?: string }
+      | {
+          resumen?: {
+            total?: number;
+            remuneracionPendiente?: number;
+            vacacionesMonto?: number;
+            vacacionesDias?: number;
+            indemAviso?: number;
+            indemAnios?: number;
+          };
+          calculado_en?: string;
+        }
       | undefined;
+    const r = calculo?.resumen;
     return {
       id: g.id,
       trabajador: g.trabajador_nombre,
@@ -31,8 +42,19 @@ export default async function FiniquitosPage() {
       causal: typeof datos.causal === "string" ? datos.causal : "",
       fechaTermino: typeof datos.fecha_termino === "string" ? datos.fecha_termino : null,
       estado: g.estado,
-      totalCalculado: calculo?.resumen?.total ?? null,
+      totalCalculado: r?.total ?? null,
       calculadoEn: calculo?.calculado_en ?? null,
+      resumen:
+        r && typeof r.total === "number"
+          ? {
+              total: r.total,
+              remuneracionPendiente: r.remuneracionPendiente ?? 0,
+              vacacionesMonto: r.vacacionesMonto ?? 0,
+              vacacionesDias: r.vacacionesDias ?? 0,
+              indemAviso: r.indemAviso ?? 0,
+              indemAnios: r.indemAnios ?? 0,
+            }
+          : null,
       creada: g.created_at,
     };
   });
