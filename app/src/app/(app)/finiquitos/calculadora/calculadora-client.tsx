@@ -133,10 +133,12 @@ function Linea({ label, valor, fuerte }: { label: string; valor: string; fuerte?
 export function CalculadoraClient({
   gestion,
   indicadores,
+  abrirCartaAlEntrar = false,
   errorCarga,
 }: {
   gestion: GestionFiniquito | null;
   indicadores: IndicadorUf[];
+  abrirCartaAlEntrar?: boolean;
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -181,12 +183,14 @@ export function CalculadoraClient({
   const [ufManual, setUfManual] = useState<number | null>(null);
 
   // ── Carta de aviso (Art. 162) ──
-  const [cartaAbierta, setCartaAbierta] = useState(false);
+  const [cartaAbierta, setCartaAbierta] = useState(abrirCartaAlEntrar);
   const [fechaEntrega, setFechaEntrega] = useState(hoyLocal());
   const [modalidad, setModalidad] = useState<"personal" | "certificada">("personal");
   const [domicilio, setDomicilio] = useState(gestion?.domicilio ?? "");
   const [hechos, setHechos] = useState("");
-  const [cotizacionesHasta, setCotizacionesHasta] = useState("");
+  const [cotizacionesHasta, setCotizacionesHasta] = useState(() =>
+    mesAnteriorA(gestion?.fechaTermino ?? hoyLocal()),
+  );
   const [generandoCarta, startCarta] = useTransition();
 
   // UF e IMM del período: indicadores Previred del mes ANTERIOR al término

@@ -11,9 +11,9 @@ export const metadata = { title: "Calculadora de finiquito — RS Tax & Legal" }
 export default async function CalculadoraFiniquitoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ gestion?: string }>;
+  searchParams: Promise<{ gestion?: string; carta?: string }>;
 }) {
-  const { gestion: gestionId } = await searchParams;
+  const { gestion: gestionId, carta } = await searchParams;
   const supabase = await createClient();
 
   // Indicadores Previred disponibles (UF para tope 90 UF, IMM para gratificación)
@@ -104,6 +104,7 @@ export default async function CalculadoraFiniquitoPage({
       <CalculadoraClient
         gestion={gestion}
         indicadores={(indicadores ?? []) as IndicadorUf[]}
+        abrirCartaAlEntrar={carta === "1" && gestion !== null}
         errorCarga={errorCarga}
       />
     </main>

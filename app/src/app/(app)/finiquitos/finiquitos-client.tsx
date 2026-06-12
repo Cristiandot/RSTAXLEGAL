@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, Calculator, CheckCircle2, Mail, Search, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Calculator, CheckCircle2, FileText, Mail, Search, Send, Trash2 } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import {
   diasParaLimite,
@@ -97,6 +97,14 @@ const CAUSAL_PORTAL_LABEL: Record<string, string> = {
   conducta: "Conducta (160)",
   no_seguro: "Por definir",
 };
+
+/** Causales del portal cuyo despido lleva carta de aviso del Art. 162. */
+const CAUSAL_PORTAL_CON_CARTA = new Set([
+  "necesidades_empresa",
+  "conducta",
+  "vencimiento_plazo",
+  "conclusion_obra",
+]);
 
 function claseEstado(estado: string): string {
   switch (estado) {
@@ -294,6 +302,17 @@ export function FiniquitosClient({
                         <Calculator className="size-3.5" />
                         {f.totalCalculado !== null ? "Recalcular" : "Calcular"}
                       </Button>
+                      {CAUSAL_PORTAL_CON_CARTA.has(f.causal) ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Generar la carta de aviso de término (Art. 162) con el cálculo"
+                          render={<Link href={`/finiquitos/calculadora?gestion=${f.id}&carta=1`} />}
+                        >
+                          <FileText className="size-3.5" />
+                          Carta aviso
+                        </Button>
+                      ) : null}
                       <Button
                         size="sm"
                         variant="outline"
