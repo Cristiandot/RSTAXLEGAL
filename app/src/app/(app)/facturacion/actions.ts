@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getUsuarioActual } from "@/lib/auth";
+import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
+import { etiquetaPeriodo } from "@/lib/periodos";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -108,6 +111,97 @@ export async function subirFactura(
 
   revalidatePath("/facturacion");
   return { ok: true };
+}
+
+/** Marca o desmarca el pago de una factura (estampa la fecha de hoy al marcar). */
+export async function marcarPago(
+  facturaId: string,
+  pagada: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("facturas")
+    .update({
+      pagada,
+      fecha_pago: pagada ? new Date().toISOString().slice(0, 10) : null,
+    })
+    .eq("id", facturaId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/facturacion");
+  return { ok: true };
+}
+
+/** Guarda la suscripción de pago automático del cliente (atributo del cliente). */
+export async function guardarSuscripcion(
+  clienteId: string,
+  suscrito: boolean,
+  diaPago: number | null,
+): Promise<{ ok: boolean; error?: string }> {
+  if (suscrito && (diaPago === null || diaPago < 1 || diaPago > 31)) {
+    return { ok: false, error: "Indica el día del mes en que se ejecuta el pago (1 a 31)." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("clientes")
+    .update({
+      suscripcion_pago: suscrito,
+      suscripcion_dia_pago: suscrito ? diaPago : null,
+    })
+    .eq("id", clienteId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/facturacion");
+  return { ok: true };
+}
+
+/**
+ * Envía la factura por correo al cliente vinculado (correo_empresa), con el
+ * PDF adjunto. Sale a nombre del usuario conectado (reply-to + copia oculta).
+ */
+export async function enviarFacturaAlCliente(
+  facturaId: string,
+): Promise<{ ok: boolean; error?: string; enviadoA?: string }> {
+  const supabase = await createClient();
+  const { data: f } = await supabase
+    .from("facturas")
+    .select("folio, tipo, periodo, razon_social_factura, archivo_path, cliente_id, clientes(razon_social, correo_empresa)")
+    .eq("id", facturaId)
+    .single();
+  if (!f) return { ok: false, error: "Factura no encontrada." };
+
+  const cli = f.clientes as unknown as { razon_social: string; correo_empresa: string | null } | null;
+  if (!f.cliente_id || !cli) {
+    return { ok: false, error: "La factura no está vinculada a un cliente de la cartera — vincúlala primero." };
+  }
+  if (!cli.correo_empresa) {
+    return { ok: false, error: `${cli.razon_social} no tiene correo asignado en su ficha. Cárgalo y reintenta.` };
+  }
+
+  const { data: pdf, error: errPdf } = await supabase.storage
+    .from("facturas")
+    .download(f.archivo_path);
+  if (errPdf || !pdf) {
+    return { ok: false, error: `No se pudo leer el PDF: ${errPdf?.message}` };
+  }
+
+  const etiqueta = f.tipo === "nota_credito" ? "Nota de crédito" : "Factura";
+  const usuario = await getUsuarioActual();
+  const res = await enviarCorreo({
+    para: cli.correo_empresa,
+    asunto: `${etiqueta} N° ${f.folio} · ${etiquetaPeriodo(f.periodo)} — RS Tax & Legal`,
+    html: htmlCorreoDocumento({
+      titulo: `${etiqueta} N° ${f.folio}`,
+      cuerpo: `<p>Estimados,</p><p>Adjuntamos la ${etiqueta.toLowerCase()} N° ${f.folio}, correspondiente a ${etiquetaPeriodo(f.periodo)}, emitida a <strong>${f.razon_social_factura}</strong>.</p>`,
+    }),
+    adjuntos: [
+      {
+        filename: `${etiqueta} ${f.folio} - ${f.razon_social_factura}.pdf`,
+        content: Buffer.from(await pdf.arrayBuffer()).toString("base64"),
+      },
+    ],
+    de: { nombre: usuario.nombre, correo: usuario.correo },
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+  return { ok: true, enviadoA: cli.correo_empresa };
 }
 
 /** Vincula (o desvincula con null) una factura a un cliente de la cartera. */

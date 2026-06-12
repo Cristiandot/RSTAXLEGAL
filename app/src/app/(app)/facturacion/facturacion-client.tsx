@@ -3,12 +3,19 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Download, Link2, Search, Upload } from "lucide-react";
-import { formatMonto } from "@/lib/format";
+import { Download, Link2, RefreshCcw, Search, Send, Upload } from "lucide-react";
+import { formatFecha, formatMonto } from "@/lib/format";
 import { etiquetaPeriodo } from "@/lib/periodos";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
-import { linkDescargaFactura, subirFactura, vincularCliente } from "./actions";
+import {
+  enviarFacturaAlCliente,
+  guardarSuscripcion,
+  linkDescargaFactura,
+  marcarPago,
+  subirFactura,
+  vincularCliente,
+} from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,11 +46,20 @@ export type FacturaRow = {
   periodo: string;
   monto: number | string | null;
   observaciones: string | null;
+  pagada: boolean;
+  fechaPago: string | null;
   clienteId: string | null;
   clienteNombre: string | null;
+  suscrito: boolean;
+  diaPago: number | null;
 };
 
-export type ClienteOpcion = { id: string; razon_social: string };
+export type ClienteOpcion = {
+  id: string;
+  razon_social: string;
+  suscripcion_pago: boolean;
+  suscripcion_dia_pago: number | null;
+};
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -71,6 +87,7 @@ export function FacturacionClient({
   const [periodoF, setPeriodoF] = useState("");
   const [tipoF, setTipoF] = useState("");
   const [vinculoF, setVinculoF] = useState("");
+  const [pagoF, setPagoF] = useState("");
   const [orden, setOrden] = useState<Orden>(null);
   const [ocupado, startAccion] = useTransition();
 
@@ -90,6 +107,9 @@ export function FacturacionClient({
       if (tipoF && f.tipo !== tipoF) return false;
       if (vinculoF === "si" && !f.clienteId) return false;
       if (vinculoF === "no" && f.clienteId) return false;
+      if (pagoF === "pagada" && !f.pagada) return false;
+      if (pagoF === "pendiente" && f.pagada) return false;
+      if (pagoF === "suscrito" && !f.suscrito) return false;
       return true;
     });
     if (!orden) return out;
@@ -103,12 +123,12 @@ export function FacturacionClient({
       }
     };
     return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
-  }, [filas, buscar, periodoF, tipoF, vinculoF, orden]);
+  }, [filas, buscar, periodoF, tipoF, vinculoF, pagoF, orden]);
 
   const resumen = [
     { label: "Documentos", valor: filas.length },
-    { label: "Facturas", valor: filas.filter((f) => f.tipo === "factura").length },
-    { label: "Notas de crédito", valor: filas.filter((f) => f.tipo === "nota_credito").length },
+    { label: "Pagadas", valor: filas.filter((f) => f.pagada).length },
+    { label: "Pendientes de pago", valor: filas.filter((f) => !f.pagada && f.tipo === "factura").length },
     { label: "Sin vincular a cliente", valor: filas.filter((f) => !f.clienteId).length },
   ];
 
@@ -117,6 +137,25 @@ export function FacturacionClient({
       const res = await linkDescargaFactura(id);
       if (res.ok && res.url) window.open(res.url, "_blank");
       else toast.error(res.error ?? "Error al descargar");
+    });
+  }
+
+  function enviar(f: FacturaRow) {
+    if (!window.confirm(`¿Enviar ${f.tipo === "nota_credito" ? "la NC" : "la factura"} ${f.folio} al correo de ${f.clienteNombre ?? f.razonFactura}?`)) return;
+    startAccion(async () => {
+      const res = await enviarFacturaAlCliente(f.id);
+      if (res.ok) toast.success(`Enviada a ${res.enviadoA}`);
+      else toast.error(res.error ?? "Error al enviar");
+    });
+  }
+
+  function togglePago(f: FacturaRow) {
+    startAccion(async () => {
+      const res = await marcarPago(f.id, !f.pagada);
+      if (res.ok) {
+        toast.success(f.pagada ? "Pago desmarcado" : "Marcada como pagada");
+        router.refresh();
+      } else toast.error(res.error ?? "Error");
     });
   }
 
@@ -148,12 +187,22 @@ export function FacturacionClient({
     });
   }
 
-  // ---- Vincular cliente ----
+  // ---- Vincular cliente + suscripción ----
   const [vinculando, setVinculando] = useState<FacturaRow | null>(null);
   const [clienteVinculo, setClienteVinculo] = useState("");
+  const [suscrito, setSuscrito] = useState(false);
+  const [diaPago, setDiaPago] = useState("");
+
+  function cargarSuscripcionDe(clienteId: string) {
+    const cli = clientes.find((c) => c.id === clienteId);
+    setSuscrito(cli?.suscripcion_pago ?? false);
+    setDiaPago(cli?.suscripcion_dia_pago ? String(cli.suscripcion_dia_pago) : "");
+  }
 
   function abrirVinculo(f: FacturaRow) {
     setClienteVinculo(f.clienteId ?? "");
+    setSuscrito(f.suscrito);
+    setDiaPago(f.diaPago ? String(f.diaPago) : "");
     setVinculando(f);
   }
 
@@ -161,13 +210,24 @@ export function FacturacionClient({
     if (!vinculando) return;
     const id = vinculando.id;
     const clienteId = clienteVinculo || null;
+    const susc = suscrito;
+    const dia = diaPago ? Number(diaPago) : null;
     startAccion(async () => {
       const res = await vincularCliente(id, clienteId);
-      if (res.ok) {
-        toast.success(clienteId ? "Factura vinculada" : "Vínculo eliminado");
-        setVinculando(null);
-        router.refresh();
-      } else toast.error(res.error ?? "Error");
+      if (!res.ok) {
+        toast.error(res.error ?? "Error");
+        return;
+      }
+      if (clienteId) {
+        const resSus = await guardarSuscripcion(clienteId, susc, dia);
+        if (!resSus.ok) {
+          toast.error(resSus.error ?? "Error al guardar la suscripción");
+          return;
+        }
+      }
+      toast.success("Guardado");
+      setVinculando(null);
+      router.refresh();
     });
   }
 
@@ -221,6 +281,12 @@ export function FacturacionClient({
           <option value="si">Vinculadas a cliente</option>
           <option value="no">Sin vincular</option>
         </select>
+        <select aria-label="Pago" className={selectCls} value={pagoF} onChange={(e) => setPagoF(e.target.value)}>
+          <option value="">Pago: todas</option>
+          <option value="pagada">Pagadas</option>
+          <option value="pendiente">Pendientes</option>
+          <option value="suscrito">Clientes suscritos</option>
+        </select>
         <span className="ml-auto text-sm text-muted-foreground">
           {filtradas.length} de {filas.length}
         </span>
@@ -241,13 +307,14 @@ export function FacturacionClient({
               <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[320px]">Cliente</ThSort>
               <ThSort col="periodo" orden={orden} setOrden={setOrden}>Mes</ThSort>
               <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Monto</ThSort>
+              <TableHead>Pago</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtradas.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                   Sin documentos para estos filtros.
                 </TableCell>
               </TableRow>
@@ -288,6 +355,30 @@ export function FacturacionClient({
                   <TableCell>{etiquetaPeriodo(f.periodo)}</TableCell>
                   <TableCell className="text-right">{formatMonto(f.monto)}</TableCell>
                   <TableCell>
+                    <button
+                      type="button"
+                      disabled={ocupado}
+                      onClick={() => togglePago(f)}
+                      title={f.pagada ? `Pagada el ${formatFecha(f.fechaPago)} — click para desmarcar` : "Click para marcar como pagada"}
+                    >
+                      {f.pagada ? (
+                        <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                          Pagada{f.fechaPago ? ` ${formatFecha(f.fechaPago)}` : ""}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-600">
+                          Pendiente
+                        </Badge>
+                      )}
+                    </button>
+                    {f.suscrito ? (
+                      <span className="mt-0.5 flex items-center gap-1 text-xs text-sky-600" title={`Cliente suscrito — pago automático${f.diaPago ? ` el día ${f.diaPago} de cada mes` : ""}`}>
+                        <RefreshCcw className="size-3" />
+                        suscrito{f.diaPago ? ` · día ${f.diaPago}` : ""}
+                      </span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
                     <div className="flex justify-end gap-1">
                       <Button
                         size="sm"
@@ -301,10 +392,20 @@ export function FacturacionClient({
                       </Button>
                       <Button
                         size="sm"
+                        variant="outline"
+                        disabled={ocupado}
+                        onClick={() => enviar(f)}
+                        title="Enviar por correo al cliente"
+                      >
+                        <Send className="size-3.5" />
+                        Enviar
+                      </Button>
+                      <Button
+                        size="sm"
                         variant="ghost"
                         disabled={ocupado}
                         onClick={() => abrirVinculo(f)}
-                        title="Vincular a un cliente de la cartera"
+                        title="Vincular a cliente / suscripción"
                       >
                         <Link2 className="size-3.5" />
                       </Button>
@@ -420,7 +521,10 @@ export function FacturacionClient({
                 id="vinculo"
                 className={selectCls}
                 value={clienteVinculo}
-                onChange={(e) => setClienteVinculo(e.target.value)}
+                onChange={(e) => {
+                  setClienteVinculo(e.target.value);
+                  cargarSuscripcionDe(e.target.value);
+                }}
               >
                 <option value="">— Sin vincular (externo) —</option>
                 {clientes.map((c) => (
@@ -428,6 +532,40 @@ export function FacturacionClient({
                 ))}
               </select>
             </div>
+            {clienteVinculo ? (
+              <div className="rounded-lg border bg-muted/40 p-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-[var(--brand-teal,#17A2B8)]"
+                    checked={suscrito}
+                    onChange={(e) => setSuscrito(e.target.checked)}
+                  />
+                  Cliente suscrito — pago automático mensual
+                </label>
+                {suscrito ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <Label htmlFor="dia_pago" className="text-xs whitespace-nowrap">
+                      Día del mes en que se ejecuta el pago
+                    </Label>
+                    <Input
+                      id="dia_pago"
+                      type="number"
+                      min={1}
+                      max={31}
+                      className="h-8 w-20"
+                      value={diaPago}
+                      onChange={(e) => setDiaPago(e.target.value)}
+                      placeholder="ej. 5"
+                    />
+                  </div>
+                ) : null}
+                <p className="mt-2 text-xs text-muted-foreground">
+                  La suscripción es del cliente (aplica a todas sus facturas), no
+                  de esta factura en particular.
+                </p>
+              </div>
+            ) : null}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setVinculando(null)}>
                 Cancelar

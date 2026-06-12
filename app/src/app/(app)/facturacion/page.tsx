@@ -10,20 +10,24 @@ export default async function FacturacionPage() {
     supabase
       .from("facturas")
       .select(
-        "id, folio, tipo, folio_ref, razon_social_factura, periodo, monto, observaciones, cliente_id, clientes(razon_social)",
+        "id, folio, tipo, folio_ref, razon_social_factura, periodo, monto, observaciones, pagada, fecha_pago, cliente_id, clientes(razon_social, suscripcion_pago, suscripcion_dia_pago)",
       )
       .order("periodo", { ascending: false })
       .order("folio", { ascending: false })
       .limit(3000),
     supabase
       .from("clientes")
-      .select("id, razon_social")
+      .select("id, razon_social, suscripcion_pago, suscripcion_dia_pago")
       .eq("activo", true)
       .order("razon_social"),
   ]);
 
   const filas: FacturaRow[] = (facturasRes.data ?? []).map((f) => {
-    const cli = f.clientes as unknown as { razon_social: string } | null;
+    const cli = f.clientes as unknown as {
+      razon_social: string;
+      suscripcion_pago: boolean;
+      suscripcion_dia_pago: number | null;
+    } | null;
     return {
       id: f.id,
       folio: f.folio,
@@ -33,8 +37,12 @@ export default async function FacturacionPage() {
       periodo: f.periodo,
       monto: f.monto,
       observaciones: f.observaciones,
+      pagada: f.pagada,
+      fechaPago: f.fecha_pago,
       clienteId: f.cliente_id,
       clienteNombre: cli?.razon_social ?? null,
+      suscrito: cli?.suscripcion_pago ?? false,
+      diaPago: cli?.suscripcion_dia_pago ?? null,
     };
   });
 
