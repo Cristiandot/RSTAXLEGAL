@@ -168,6 +168,7 @@ export function ClienteContabilidadClient({
   documentos,
   ivaEjecuciones,
   gastosMenores,
+  contabilidadCompleta = false,
   errorCarga,
 }: {
   periodo: string;
@@ -176,6 +177,7 @@ export function ClienteContabilidadClient({
   documentos: DocumentoContable[];
   ivaEjecuciones: IvaEjecucionRow[];
   gastosMenores: GastoMenor[];
+  contabilidadCompleta?: boolean;
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -364,6 +366,25 @@ export function ClienteContabilidadClient({
           ))}
         </select>
       </div>
+
+      {/* ── Contabilidad completa: acceso a los libros RCV ── */}
+      {contabilidadCompleta ? (
+        <Link
+          href={`/contabilidad/${fila.cliente_id}/rcv?periodo=${periodo}`}
+          className="card-soft flex items-center justify-between rounded-xl border-l-4 border-l-primary bg-card px-4 py-3 transition-colors hover:bg-muted/40"
+        >
+          <div>
+            <p className="text-sm font-semibold">
+              Libros de compras y ventas (contabilidad completa)
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Importar los CSV del RCV del SII, asignar cuentas de gasto y %
+              pagado, y validar contra el F29 del período.
+            </p>
+          </div>
+          <span className="text-sm font-medium text-primary">Abrir →</span>
+        </Link>
+      ) : null}
 
       {/* ── Casillas de documentos ── */}
       <div>

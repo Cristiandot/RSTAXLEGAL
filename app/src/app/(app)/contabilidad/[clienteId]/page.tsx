@@ -27,7 +27,7 @@ export default async function ClienteContabilidadPage({
   const { inicio, fin } = rangoPeriodo(periodo);
   const anio = Number(periodo.slice(0, 4));
 
-  const [usuariosRes, filaRes, docsRes, ivaRes, gastosRes] = await Promise.all([
+  const [usuariosRes, filaRes, docsRes, ivaRes, gastosRes, clienteRes] = await Promise.all([
     supabase.from("usuarios").select("id, nombre").eq("activo", true).order("nombre"),
     supabase
       .from("v_checklist_conciliacion")
@@ -59,6 +59,11 @@ export default async function ClienteContabilidadPage({
       .gte("fecha", `${anio}-01-01`)
       .lte("fecha", `${anio}-12-31`)
       .order("fecha", { ascending: false }),
+    supabase
+      .from("clientes")
+      .select("hace_contabilidad_completa")
+      .eq("id", clienteId)
+      .maybeSingle(),
   ]);
 
   const documentos: DocumentoContable[] = (docsRes.data ?? []).map((d) => {
@@ -102,6 +107,7 @@ export default async function ClienteContabilidadPage({
         documentos={documentos}
         ivaEjecuciones={ivaEjecuciones}
         gastosMenores={(gastosRes.data ?? []) as GastoMenor[]}
+        contabilidadCompleta={clienteRes.data?.hace_contabilidad_completa === true}
         errorCarga={filaRes.error?.message ?? null}
       />
     </main>
