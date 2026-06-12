@@ -1,12 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { LicenciasClient, type LicenciaRow } from "./licencias-client";
+import { DirectorioInstituciones, type ContactoInstitucion } from "./directorio";
 
 export const metadata = { title: "Licencias médicas — RS Tax & Legal" };
 
 export default async function LicenciasPage() {
   const supabase = await createClient();
 
-  const [{ data: licencias, error }, { data: clientes }] = await Promise.all([
+  const [{ data: licencias, error }, { data: clientes }, { data: contactos }] = await Promise.all([
     supabase
       .from("licencias_medicas")
       .select(
@@ -19,6 +20,11 @@ export default async function LicenciasPage() {
       .select("id, razon_social, rut_empresa")
       .eq("activo", true)
       .order("razon_social"),
+    supabase
+      .from("contactos_instituciones")
+      .select("id, institucion, area, telefono, correo, notas")
+      .order("institucion")
+      .order("area"),
   ]);
 
   const filas: LicenciaRow[] = (licencias ?? []).map((l) => {
@@ -47,6 +53,9 @@ export default async function LicenciasPage() {
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
+      <div className="mb-2 flex justify-end">
+        <DirectorioInstituciones contactos={(contactos ?? []) as ContactoInstitucion[]} />
+      </div>
       <LicenciasClient
         filas={filas}
         clientes={(clientes ?? []).map((c) => ({
