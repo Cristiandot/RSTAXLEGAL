@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Carga de documentos SII (RCV) vía Server Actions: el default de 1 MB
-  // queda corto para algunos CSV/Excel mensuales.
+  // Carga de documentos vía Server Actions (RCV SII, facturas en lote): el
+  // default de 1 MB queda corto. OJO: el límite duro de Vercel por request es
+  // ~4.5MB — las cargas masivas deben ir en tandas bajo ese tope.
   experimental: {
     serverActions: { bodySizeLimit: "25mb" },
   },

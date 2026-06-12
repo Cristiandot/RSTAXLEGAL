@@ -13,8 +13,9 @@ import {
   guardarSuscripcion,
   linkDescargaFactura,
   marcarPago,
-  subirFactura,
+  subirFacturasLote,
   vincularCliente,
+  type ResultadoCarga,
 } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -159,31 +160,64 @@ export function FacturacionClient({
     });
   }
 
-  // ---- Subida de documento nuevo ----
+  // ---- Carga masiva: el mes + N PDFs; todo lo demás se extrae solo ----
   const [subiendo, setSubiendo] = useState(false);
-  const [tipoNuevo, setTipoNuevo] = useState("factura");
-  const [clienteNuevo, setClienteNuevo] = useState("");
-  const [razonNueva, setRazonNueva] = useState("");
-  const formRef = useRef<HTMLFormElement>(null);
+  const [progreso, setProgreso] = useState<string | null>(null);
+  const [resultados, setResultados] = useState<ResultadoCarga[] | null>(null);
+  const archivosRef = useRef<HTMLInputElement>(null);
+  const periodoRef = useRef<HTMLInputElement>(null);
 
-  function elegirCliente(id: string) {
-    setClienteNuevo(id);
-    const cli = clientes.find((c) => c.id === id);
-    if (cli) setRazonNueva(cli.razon_social);
+  function cerrarSubida() {
+    setSubiendo(false);
+    setProgreso(null);
+    setResultados(null);
   }
 
   function onSubirSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+    const archivos = Array.from(archivosRef.current?.files ?? []);
+    const periodo = periodoRef.current?.value ?? "";
+    if (archivos.length === 0) {
+      toast.error("Selecciona los PDFs del mes.");
+      return;
+    }
     startAccion(async () => {
-      const res = await subirFactura(fd);
-      if (res.ok) {
-        toast.success("Documento cargado");
-        setSubiendo(false);
-        setClienteNuevo("");
-        setRazonNueva("");
-        router.refresh();
-      } else toast.error(res.error ?? "Error al subir");
+      // tandas bajo el límite de payload (~4MB): por cantidad y por peso
+      const tandas: File[][] = [];
+      let actual: File[] = [];
+      let peso = 0;
+      for (const a of archivos) {
+        if (actual.length >= 8 || peso + a.size > 3_000_000) {
+          if (actual.length) tandas.push(actual);
+          actual = [];
+          peso = 0;
+        }
+        actual.push(a);
+        peso += a.size;
+      }
+      if (actual.length) tandas.push(actual);
+
+      const acumulado: ResultadoCarga[] = [];
+      for (let i = 0; i < tandas.length; i++) {
+        setProgreso(`Subiendo tanda ${i + 1} de ${tandas.length}… (${acumulado.length}/${archivos.length} procesados)`);
+        const fd = new FormData();
+        fd.set("periodo", periodo);
+        tandas[i].forEach((a) => fd.append("archivos", a));
+        const res = await subirFacturasLote(fd);
+        if (!res.ok) {
+          toast.error(res.error ?? "Error en la carga");
+          setProgreso(null);
+          return;
+        }
+        acumulado.push(...(res.resultados ?? []));
+      }
+      setProgreso(null);
+      setResultados(acumulado);
+      const okCount = acumulado.filter((r) => r.ok).length;
+      const malCount = acumulado.length - okCount;
+      if (malCount === 0) toast.success(`${okCount} documentos cargados`);
+      else toast.warning(`${okCount} cargados · ${malCount} con problemas — revisa el detalle`);
+      router.refresh();
     });
   }
 
@@ -245,7 +279,7 @@ export function FacturacionClient({
         </div>
         <Button onClick={() => setSubiendo(true)}>
           <Upload className="size-4" />
-          Subir documento
+          Cargar facturas del mes
         </Button>
       </div>
 
@@ -418,87 +452,77 @@ export function FacturacionClient({
         </Table>
       </div>
 
-      {/* ---- Diálogo: subir documento ---- */}
-      <Dialog open={subiendo} onOpenChange={(o) => { if (!o) setSubiendo(false); }}>
+      {/* ---- Diálogo: carga masiva del mes ---- */}
+      <Dialog open={subiendo} onOpenChange={(o) => { if (!o) cerrarSubida(); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-heading">Subir documento</DialogTitle>
+            <DialogTitle className="font-heading">Cargar facturas del mes</DialogTitle>
             <DialogDescription>
-              Factura o nota de crédito emitida por la oficina. El PDF queda
-              disponible para descarga inmediata.
+              Selecciona todos los PDFs de una vez (con el nombre
+              &quot;(folio) RAZÓN SOCIAL.pdf&quot;, como salen de la carpeta).
+              El folio, el monto, el RUT y el cliente se leen automáticamente de
+              cada documento. Las notas de crédito (&quot;NC (folio) - …&quot;)
+              también se reconocen.
             </DialogDescription>
           </DialogHeader>
-          <form ref={formRef} id="form-factura" onSubmit={onSubirSubmit} className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tipo">Tipo</Label>
-              <select
-                id="tipo"
-                name="tipo"
-                className={selectCls}
-                value={tipoNuevo}
-                onChange={(e) => setTipoNuevo(e.target.value)}
-              >
-                <option value="factura">Factura</option>
-                <option value="nota_credito">Nota de crédito</option>
-              </select>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="folio">N° (folio)</Label>
-              <Input id="folio" name="folio" type="number" min={1} required placeholder="ej. 1120" />
-            </div>
-            {tipoNuevo === "nota_credito" ? (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="folio_ref">Factura de referencia (N°)</Label>
-                <Input id="folio_ref" name="folio_ref" type="number" min={1} placeholder="opcional" />
-              </div>
-            ) : null}
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="periodo">Mes</Label>
-              <Input id="periodo" name="periodo" type="month" required defaultValue={new Date().toISOString().slice(0, 7)} />
-            </div>
-            <div className="col-span-2 flex flex-col gap-1.5">
-              <Label htmlFor="cliente_id">Cliente (cartera)</Label>
-              <select
-                id="cliente_id"
-                name="cliente_id"
-                className={selectCls}
-                value={clienteNuevo}
-                onChange={(e) => elegirCliente(e.target.value)}
-              >
-                <option value="">— No es cliente de cartera —</option>
-                {clientes.map((c) => (
-                  <option key={c.id} value={c.id}>{c.razon_social}</option>
+
+          {resultados === null ? (
+            <>
+              <form id="form-factura" onSubmit={onSubirSubmit} className="grid gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="periodo">Mes de los documentos</Label>
+                  <Input
+                    id="periodo"
+                    ref={periodoRef}
+                    type="month"
+                    required
+                    defaultValue={new Date().toISOString().slice(0, 7)}
+                    className="w-44"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="archivos">PDFs (puedes seleccionar todos juntos)</Label>
+                  <Input
+                    id="archivos"
+                    ref={archivosRef}
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    multiple
+                    required
+                  />
+                </div>
+              </form>
+              {progreso ? (
+                <p className="text-sm text-muted-foreground">{progreso}</p>
+              ) : null}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={cerrarSubida} disabled={ocupado}>
+                  Cancelar
+                </Button>
+                <Button type="submit" form="form-factura" disabled={ocupado}>
+                  {ocupado ? "Subiendo…" : "Cargar todo"}
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <div className="max-h-72 space-y-1 overflow-y-auto text-sm">
+                {resultados.map((r) => (
+                  <div key={r.nombre} className="flex items-start justify-between gap-2 border-b pb-1 last:border-0">
+                    <span className="min-w-0 truncate" title={r.nombre}>
+                      {r.ok ? "✔" : "✗"} {r.nombre}
+                    </span>
+                    <span className={`shrink-0 text-xs ${r.ok ? "text-muted-foreground" : "text-red-600"}`}>
+                      {r.detalle}
+                    </span>
+                  </div>
                 ))}
-              </select>
-            </div>
-            <div className="col-span-2 flex flex-col gap-1.5">
-              <Label htmlFor="razon_social">Razón social en el documento</Label>
-              <Input
-                id="razon_social"
-                name="razon_social"
-                required
-                value={razonNueva}
-                onChange={(e) => setRazonNueva(e.target.value)}
-                placeholder="Como aparece en la factura"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="monto">Monto ($, opcional)</Label>
-              <Input id="monto" name="monto" type="number" min={0} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="archivo">PDF</Label>
-              <Input id="archivo" name="archivo" type="file" accept="application/pdf,.pdf" required />
-            </div>
-          </form>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setSubiendo(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" form="form-factura" disabled={ocupado}>
-              {ocupado ? "Subiendo…" : "Subir"}
-            </Button>
-          </DialogFooter>
+              </div>
+              <DialogFooter>
+                <Button onClick={cerrarSubida}>Listo</Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
