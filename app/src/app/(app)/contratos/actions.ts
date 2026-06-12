@@ -148,6 +148,46 @@ export async function enviarContratoAlCliente(
   return { ok: true, enviadoA: cli.correo_empresa };
 }
 
+/**
+ * Elimina definitivamente un contrato/anexo. La RLS solo permite DELETE a
+ * administradores ("Admins borran contratos", es_admin()); para operadores el
+ * delete devuelve 0 filas. El documento de Storage se borra best-effort.
+ * La fila del trabajador NO se toca.
+ */
+export async function eliminarContrato(
+  contratoId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+
+  const { data: con } = await supabase
+    .from("contratos")
+    .select("documento_path")
+    .eq("id", contratoId)
+    .maybeSingle();
+
+  const { data, error } = await supabase
+    .from("contratos")
+    .delete()
+    .eq("id", contratoId)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) {
+    return {
+      ok: false,
+      error:
+        "No se pudo eliminar: el contrato no existe o tu cuenta no tiene permisos de administrador.",
+    };
+  }
+
+  if (con?.documento_path) {
+    await supabase.storage.from("contratos").remove([con.documento_path]);
+  }
+
+  revalidatePath("/contratos");
+  revalidatePath("/anexos");
+  return { ok: true };
+}
+
 /** Genera un link firmado (1 hora) para descargar el documento. */
 export async function linkDescargaContrato(
   contratoId: string,

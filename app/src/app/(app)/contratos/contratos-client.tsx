@@ -4,17 +4,19 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Download, FilePlus2, Pencil, Search, Send } from "lucide-react";
+import { AlertTriangle, Download, FilePlus2, Pencil, Search, Send, Trash2 } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import {
   actualizarClausulas,
   cambiarEstadoContrato,
+  eliminarContrato,
   enviarContratoAlCliente,
   generarContrato,
   linkDescargaContrato,
 } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -79,6 +81,7 @@ export function ContratosClient({
   titulo = "Contratos",
   descripcion = "Solicitudes, generación y revisión. Flujo: generado → aprobado → enviado.",
   mostrarHerramientasContrato = true,
+  esAdmin = false,
 }: {
   filas: ContratoRow[];
   errorCarga: string | null;
@@ -86,6 +89,8 @@ export function ContratosClient({
   descripcion?: string;
   /** Botón "Contrato nuevo" (solo en el módulo Contratos). */
   mostrarHerramientasContrato?: boolean;
+  /** Habilita la eliminación definitiva (doble confirmación, solo admins). */
+  esAdmin?: boolean;
 }) {
   const router = useRouter();
   const [buscar, setBuscar] = useState("");
@@ -158,6 +163,25 @@ export function ContratosClient({
         toast.success(`Contrato enviado a ${res.enviadoA}`);
         router.refresh();
       } else toast.error(res.error ?? "Error al enviar");
+    });
+  }
+
+  // Eliminación definitiva con doble seguridad: solo admins + escribir "borrar"
+  const [borrando, setBorrando] = useState<ContratoRow | null>(null);
+  const [confirmacion, setConfirmacion] = useState("");
+  const confirmacionOk = confirmacion.trim().toLowerCase() === "borrar";
+
+  function borrar() {
+    if (!borrando || !confirmacionOk) return;
+    const id = borrando.id;
+    startAccion(async () => {
+      const res = await eliminarContrato(id);
+      if (res.ok) {
+        toast.success("Eliminado definitivamente");
+        setBorrando(null);
+        setConfirmacion("");
+        router.refresh();
+      } else toast.error(res.error ?? "No se pudo eliminar.");
     });
   }
 
@@ -312,6 +336,21 @@ export function ContratosClient({
                           Anular
                         </Button>
                       ) : null}
+                      {esAdmin ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive"
+                          disabled={ocupado}
+                          title="Eliminar definitivamente (solo administradores)"
+                          onClick={() => {
+                            setConfirmacion("");
+                            setBorrando(f);
+                          }}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      ) : null}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -346,6 +385,73 @@ export function ContratosClient({
               </Button>
               <Button onClick={guardarClausulas} disabled={ocupado}>
                 Guardar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
+
+      {/* Doble confirmación de borrado definitivo: hay que escribir "borrar" */}
+      <Dialog
+        open={borrando !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setBorrando(null);
+            setConfirmacion("");
+          }
+        }}
+      >
+        {borrando ? (
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-heading">
+                Eliminar {borrando.tipoDocumento === "anexo" ? "anexo" : "contrato"} definitivamente
+              </DialogTitle>
+              <DialogDescription>
+                {borrando.trabajador} · {borrando.empresa} · estado {borrando.estado}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Esta acción es definitiva: se borra la solicitud
+                {borrando.tieneDocumento ? " y su documento generado" : ""}. No
+                se puede deshacer. Si solo quieres dejarlo sin efecto, usa
+                "Anular" — el registro se conserva.
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="confirmar-borrado-contrato">
+                Escribe <span className="font-mono font-semibold">borrar</span> para confirmar
+              </Label>
+              <Input
+                id="confirmar-borrado-contrato"
+                autoFocus
+                value={confirmacion}
+                onChange={(e) => setConfirmacion(e.target.value)}
+                placeholder="borrar"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setBorrando(null);
+                  setConfirmacion("");
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={!confirmacionOk || ocupado}
+                onClick={borrar}
+              >
+                <Trash2 className="size-4" />
+                {ocupado ? "Eliminando…" : "Eliminar definitivamente"}
               </Button>
             </DialogFooter>
           </DialogContent>

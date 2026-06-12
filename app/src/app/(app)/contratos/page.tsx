@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
+import { getUsuarioActual } from "@/lib/auth";
 import { ContratosClient, type ContratoRow } from "./contratos-client";
 
 export const metadata = { title: "Contratos — RS Tax & Legal" };
 
 export default async function ContratosPage() {
+  const usuario = await getUsuarioActual();
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -47,7 +49,11 @@ export default async function ContratosPage() {
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
-      <ContratosClient filas={filas} errorCarga={error?.message ?? null} />
+      <ContratosClient
+        filas={filas}
+        errorCarga={error?.message ?? null}
+        esAdmin={usuario.rol === "admin"}
+      />
     </main>
   );
 }

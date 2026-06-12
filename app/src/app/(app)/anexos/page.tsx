@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getUsuarioActual } from "@/lib/auth";
 import {
   ContratosClient,
   type ContratoRow,
@@ -7,6 +8,7 @@ import {
 export const metadata = { title: "Anexos — RS Tax & Legal" };
 
 export default async function AnexosPage() {
+  const usuario = await getUsuarioActual();
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -57,6 +59,7 @@ export default async function AnexosPage() {
         titulo="Anexos"
         descripcion="Anexos de contrato solicitados por los clientes: renovaciones, cambios de jornada y otras modificaciones."
         mostrarHerramientasContrato={false}
+        esAdmin={usuario.rol === "admin"}
       />
     </main>
   );
