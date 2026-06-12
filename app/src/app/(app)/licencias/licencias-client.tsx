@@ -720,7 +720,7 @@ function RegistroLicencia({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
         <div className="space-y-1 md:col-span-2">
           <Label>Empresa</Label>
           <select
@@ -760,11 +760,11 @@ function RegistroLicencia({
 
         {!trabajadorId ? (
           <>
-            <div className="space-y-1 md:col-span-2">
+            <div className="space-y-1 md:col-span-2 xl:col-span-1">
               <Label>Nombre trabajador</Label>
               <Input value={nombre} onChange={(e) => setNombre(e.target.value)} />
             </div>
-            <div className="space-y-1 md:col-span-2">
+            <div className="space-y-1 md:col-span-2 xl:col-span-1">
               <Label>RUT trabajador</Label>
               <Input
                 value={rut}
@@ -838,7 +838,7 @@ function RegistroLicencia({
           </select>
         </div>
 
-        <div className="space-y-1 md:col-span-3">
+        <div className="space-y-1 md:col-span-3 xl:col-span-5">
           <Label>Observación</Label>
           <Input
             value={observacion}

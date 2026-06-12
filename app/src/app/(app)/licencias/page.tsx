@@ -46,7 +46,8 @@ export default async function LicenciasPage() {
   });
 
   return (
-    <main className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
+    // grilla ancha: usa toda la pantalla (tope 1920px para ultrawide)
+    <main className="mx-auto max-w-[1920px] px-4 pb-10 sm:px-6">
       <LicenciasClient
         filas={filas}
         clientes={(clientes ?? []).map((c) => ({
