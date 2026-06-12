@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ClipboardCopy, Download, FilePlus2, Link2, Pencil, Search, Send } from "lucide-react";
+import { Download, FilePlus2, Pencil, Search, Send } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import {
   actualizarClausulas,
@@ -33,12 +33,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-export type EmpresaForm = {
-  id: string;
-  razonSocial: string;
-  formToken: string | null;
-};
 
 export type ContratoRow = {
   id: string;
@@ -79,44 +73,18 @@ function claseEstadoContrato(estado: string): string {
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-function FormUrlEmpresa({ empresa }: { empresa: EmpresaForm }) {
-  if (!empresa.formToken) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
-      <Link2 className="size-4 shrink-0 text-[var(--brand-teal)]" />
-      <span className="max-w-[220px] truncate font-medium" title={empresa.razonSocial}>
-        {empresa.razonSocial}
-      </span>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => {
-          const url = `${window.location.origin}/solicitud/${empresa.formToken}`;
-          navigator.clipboard.writeText(url);
-          toast.success("Link de solicitud copiado — pégaselo al cliente");
-        }}
-      >
-        <ClipboardCopy className="size-3.5" />
-        Copiar link de solicitud
-      </Button>
-    </div>
-  );
-}
-
 export function ContratosClient({
   filas,
-  empresas,
   errorCarga,
   titulo = "Contratos",
   descripcion = "Solicitudes, generación y revisión. Flujo: generado → aprobado → enviado.",
   mostrarHerramientasContrato = true,
 }: {
   filas: ContratoRow[];
-  empresas: EmpresaForm[];
   errorCarga: string | null;
   titulo?: string;
   descripcion?: string;
-  /** Botón "Contrato nuevo" + links de solicitud (solo en el módulo Contratos). */
+  /** Botón "Contrato nuevo" (solo en el módulo Contratos). */
   mostrarHerramientasContrato?: boolean;
 }) {
   const router = useRouter();
@@ -207,19 +175,6 @@ export function ContratosClient({
           </Button>
         ) : null}
       </div>
-
-      {mostrarHerramientasContrato && empresas.length > 0 ? (
-        <div className="space-y-2">
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Formularios de solicitud por cliente (Microsoft Forms)
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {empresas.map((e) => (
-              <FormUrlEmpresa key={e.id} empresa={e} />
-            ))}
-          </div>
-        </div>
-      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">

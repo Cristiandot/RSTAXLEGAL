@@ -53,7 +53,6 @@ export default async function AnexosPage() {
     <main className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
       <ContratosClient
         filas={filas}
-        empresas={[]}
         errorCarga={error?.message ?? null}
         titulo="Anexos"
         descripcion="Anexos de contrato solicitados por los clientes: renovaciones, cambios de jornada y otras modificaciones."

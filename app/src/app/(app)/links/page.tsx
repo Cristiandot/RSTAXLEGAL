@@ -1,28 +1,42 @@
 import { createClient } from "@/lib/supabase/server";
-import { LinksClient, type LinkClienteRow } from "./links-client";
+import { LinksClient, type GrupoCliente, type LinkClienteRow } from "./links-client";
 
 export const metadata = { title: "Links clientes — RS Tax & Legal" };
 
 export default async function LinksPage() {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("clientes")
-    .select("id, razon_social, rut_empresa, form_token, correo_empresa")
-    .eq("activo", true)
-    .order("razon_social");
+  const [grupRes, cliRes] = await Promise.all([
+    supabase.from("grupos_cliente").select("id, codigo, nombre").order("codigo"),
+    supabase
+      .from("clientes")
+      .select("id, razon_social, rut_empresa, form_token, correo_empresa, grupo_id")
+      .eq("activo", true)
+      .order("razon_social"),
+  ]);
 
-  const filas: LinkClienteRow[] = (data ?? []).map((c) => ({
+  const grupos: GrupoCliente[] = (grupRes.data ?? []).map((g) => ({
+    id: g.id,
+    codigo: g.codigo,
+    nombre: g.nombre,
+  }));
+
+  const filas: LinkClienteRow[] = (cliRes.data ?? []).map((c) => ({
     id: c.id,
     razonSocial: c.razon_social,
     rut: c.rut_empresa,
     token: c.form_token,
     correo: c.correo_empresa,
+    grupoId: c.grupo_id,
   }));
 
   return (
     <main className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
-      <LinksClient filas={filas} errorCarga={error?.message ?? null} />
+      <LinksClient
+        grupos={grupos}
+        filas={filas}
+        errorCarga={grupRes.error?.message ?? cliRes.error?.message ?? null}
+      />
     </main>
   );
 }
