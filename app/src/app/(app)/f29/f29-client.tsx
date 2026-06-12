@@ -46,6 +46,12 @@ const PASOS_F29: { columna: "fecha_f29_presentado"; label: string }[] = [
   { columna: "fecha_f29_presentado", label: "F29" },
 ];
 
+/** Fecha de hoy en zona local del usuario (YYYY-MM-DD), para estampar hitos. */
+function hoyLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /** Input de monto que guarda al salir del campo o con Enter. */
 function MontoInline({
   valor,
@@ -106,8 +112,17 @@ export function F29Client({
   const [concilF, setConcilF] = useState("");
   const [respF, setRespF] = useState("");
   const [editando, setEditando] = useState<F29Row | null>(null);
+  // Hitos del modal como checklist: tildar estampa la fecha de hoy al guardar.
+  const [armadoChk, setArmadoChk] = useState(false);
+  const [presentadoChk, setPresentadoChk] = useState(false);
   const [guardando, startGuardar] = useTransition();
   const [marcando, startMarcar] = useTransition();
+
+  function abrirModal(c: F29Row) {
+    setArmadoChk(c.fecha_f29_armado !== null);
+    setPresentadoChk(c.fecha_f29_presentado !== null);
+    setEditando(c);
+  }
 
   function togglePaso(cicloId: string, columna: string, hecho: boolean) {
     startMarcar(async () => {
@@ -195,12 +210,17 @@ export function F29Client({
       return v === null || v === "" ? null : String(v);
     };
     const ciclo = editando;
+    // El hito conserva su fecha original si ya estaba marcado; si se tilda
+    // recién ahora, se estampa hoy; si se destilda, queda en blanco.
+    const hoy = hoyLocal();
     startGuardar(async () => {
       const res = await guardarF29({
         cicloId: ciclo.ciclo_id,
         responsableId: get("responsable"),
-        fechaArmado: get("fecha_armado"),
-        fechaPresentado: get("fecha_presentado"),
+        fechaArmado: armadoChk ? (ciclo.fecha_f29_armado ?? hoy) : null,
+        fechaPresentado: presentadoChk
+          ? (ciclo.fecha_f29_presentado ?? hoy)
+          : null,
         monto: get("monto"),
         folio: get("folio"),
         pagoPor: get("pago_por"),
@@ -342,7 +362,7 @@ export function F29Client({
               filtradas.map((c) => (
                 <TableRow
                   key={c.ciclo_id}
-                  onClick={() => setEditando(c)}
+                  onClick={() => abrirModal(c)}
                   className="cursor-pointer"
                 >
                   <TableCell className="font-medium">
@@ -491,23 +511,45 @@ export function F29Client({
                 </select>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="fecha_armado">F29 armado</Label>
-                <Input
-                  id="fecha_armado"
-                  name="fecha_armado"
-                  type="date"
-                  defaultValue={editando.fecha_f29_armado ?? ""}
+              <div className="flex items-start gap-2.5 rounded-lg border border-input bg-card p-3">
+                <Checkbox
+                  id="chk_armado"
+                  checked={armadoChk}
+                  onCheckedChange={(v) => setArmadoChk(v === true)}
                 />
+                <Label
+                  htmlFor="chk_armado"
+                  className="flex cursor-pointer flex-col items-start gap-0.5"
+                >
+                  <span className="font-medium">F29 armado</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {armadoChk
+                      ? editando.fecha_f29_armado
+                        ? formatFecha(editando.fecha_f29_armado)
+                        : "Se estampa hoy al guardar"
+                      : "Pendiente"}
+                  </span>
+                </Label>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="fecha_presentado">F29 presentado</Label>
-                <Input
-                  id="fecha_presentado"
-                  name="fecha_presentado"
-                  type="date"
-                  defaultValue={editando.fecha_f29_presentado ?? ""}
+              <div className="flex items-start gap-2.5 rounded-lg border border-input bg-card p-3">
+                <Checkbox
+                  id="chk_presentado"
+                  checked={presentadoChk}
+                  onCheckedChange={(v) => setPresentadoChk(v === true)}
                 />
+                <Label
+                  htmlFor="chk_presentado"
+                  className="flex cursor-pointer flex-col items-start gap-0.5"
+                >
+                  <span className="font-medium">F29 presentado</span>
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {presentadoChk
+                      ? editando.fecha_f29_presentado
+                        ? formatFecha(editando.fecha_f29_presentado)
+                        : "Se estampa hoy al guardar"
+                      : "Pendiente"}
+                  </span>
+                </Label>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="monto">Monto a pagar</Label>
