@@ -15,6 +15,7 @@ import {
   TrendingUp,
   Calculator,
   Link2,
+  Receipt,
   Stethoscope,
   type LucideIcon,
 } from "lucide-react";
@@ -225,6 +226,20 @@ export const MODULOS: SeccionModulos[] = [
           "El link del portal de cada empresa: copiar, abrir y generar para las que no tienen.",
         href: "/links",
         icon: Link2,
+        estado: "activo",
+      },
+    ],
+  },
+  {
+    seccion: "Oficina",
+    modulos: [
+      {
+        key: "facturacion",
+        label: "Facturación",
+        descripcion:
+          "Facturas emitidas por la oficina a los clientes: descarga por cliente y carga mensual.",
+        href: "/facturacion",
+        icon: Receipt,
         estado: "activo",
       },
     ],
