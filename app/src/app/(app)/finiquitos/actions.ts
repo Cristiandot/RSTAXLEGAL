@@ -49,6 +49,7 @@ export type ResultadoExportDt = {
   csv?: string;
   nombreArchivo?: string;
   faltantes?: { trabajador: string; campos: string[] }[];
+  advertencias?: string[];
 };
 
 /**
@@ -129,12 +130,32 @@ export async function exportarCsvDt(
     .filter((f) => f.faltantes.length > 0)
     .map((f) => ({ trabajador: f.trabajador, campos: f.faltantes }));
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  // La DT rechaza finiquitos con fecha de término futura: avisar para que el
+  // archivo se suba recién cuando la separación ya haya ocurrido.
+  const hoyChile = new Date().toLocaleDateString("sv-SE", {
+    timeZone: "America/Santiago",
+  });
+  const advertencias: string[] = [];
+  for (const g of gestiones ?? []) {
+    const datos = (g.datos ?? {}) as Record<string, unknown>;
+    const calculo = datos.calculo_finiquito as
+      | { entrada?: { fechaTermino?: string } }
+      | undefined;
+    const termino = calculo?.entrada?.fechaTermino ?? (datos.fecha_termino as string | undefined);
+    if (termino && termino > hoyChile) {
+      const [y, m, d] = termino.split("-");
+      advertencias.push(
+        `${g.trabajador_nombre}: la fecha de término (${d}-${m}-${y}) es futura — la DT rechaza el archivo hasta esa fecha; súbelo a partir del ${d}-${m}-${y}.`,
+      );
+    }
+  }
+
   return {
     ok: true,
     csv: csvDt(filas),
-    nombreArchivo: `PlantillaCargaFiniquitos-RSTL-${hoy}.csv`,
+    nombreArchivo: `PlantillaCargaFiniquitos-RSTL-${hoyChile}.csv`,
     faltantes,
+    advertencias,
   };
 }
 

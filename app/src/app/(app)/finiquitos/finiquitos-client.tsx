@@ -139,6 +139,7 @@ export function FiniquitosClient({
   const [faltantesDt, setFaltantesDt] = useState<
     { trabajador: string; campos: string[] }[] | null
   >(null);
+  const [advertenciasDt, setAdvertenciasDt] = useState<string[]>([]);
   const [exportando, startExportar] = useTransition();
 
   function alternarSeleccion(id: string) {
@@ -157,16 +158,18 @@ export function FiniquitosClient({
         toast.error(res.error ?? "No se pudo exportar.");
         return;
       }
-      // descarga con BOM para que Excel respete los acentos
-      const blob = new Blob(["﻿" + res.csv], { type: "text/csv;charset=utf-8" });
+      // sin BOM: el validador de la DT lo lee pegado a "RutEmpresa" y rechaza la columna
+      const blob = new Blob([res.csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = res.nombreArchivo ?? "PlantillaCargaFiniquitos.csv";
       a.click();
       URL.revokeObjectURL(url);
-      if (res.faltantes && res.faltantes.length > 0) {
-        setFaltantesDt(res.faltantes);
+      const advertencias = res.advertencias ?? [];
+      if ((res.faltantes && res.faltantes.length > 0) || advertencias.length > 0) {
+        setAdvertenciasDt(advertencias);
+        setFaltantesDt(res.faltantes ?? []);
       } else {
         toast.success("CSV DT generado — completo, listo para subir a Mi DT");
       }
@@ -528,15 +531,26 @@ export function FiniquitosClient({
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle className="font-heading">
-                CSV descargado — faltan datos obligatorios
+                CSV descargado — revisa antes de subir
               </DialogTitle>
               <DialogDescription>
-                El archivo se descargó con todo lo que el panel tiene, pero la DT
-                exige estos campos: complétalos en el CSV antes de subirlo a Mi DT
-                (o carga los datos en la ficha del trabajador y vuelve a exportar).
+                El archivo se descargó con todo lo que el panel tiene. Antes de
+                subirlo a Mi DT considera lo siguiente.
               </DialogDescription>
             </DialogHeader>
             <div className="max-h-64 space-y-2 overflow-y-auto text-sm">
+              {advertenciasDt.map((a) => (
+                <div key={a} className="flex gap-2 rounded-lg border border-red-200 bg-red-50 p-2.5 text-red-700">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  <span>{a}</span>
+                </div>
+              ))}
+              {faltantesDt.length > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Campos obligatorios de la DT sin dato — complétalos en el CSV o
+                  en la ficha del trabajador y vuelve a exportar:
+                </p>
+              ) : null}
               {faltantesDt.map((f) => (
                 <div key={f.trabajador} className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
                   <p className="font-medium text-amber-900">{f.trabajador}</p>

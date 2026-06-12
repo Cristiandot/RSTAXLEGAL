@@ -210,8 +210,9 @@ function separarDireccion(dir: string | null | undefined): { calle: string; nume
   return { calle: limpia, numero: "" };
 }
 
+/** La DT exige número entero en TODOS los campos de monto: 0 si no aplica. */
 function monto(n: number | null | undefined): string {
-  if (n === null || n === undefined || n === 0) return "";
+  if (n === null || n === undefined) return "0";
   return String(Math.round(n));
 }
 
@@ -248,15 +249,15 @@ export function construirFilaDt(e: EntradaFilaDt): FilaDt {
     monto(e.indemFeriado),
     monto(e.indemAvisoPrevio),
     monto(e.indemServicio),
-    "", // IndemnizacionOtras
-    "", // IndemnizacionArticulo163
+    "0", // IndemnizacionOtras
+    "0", // IndemnizacionArticulo163
     monto(e.remuneracionPendiente),
-    "", // Gratificaciones
-    "", "", "", "", "", "", "", "", "", "", "", // Bonos…AsignacionesFamiliares (19-29)
-    "", // DescuentoSeguridadSocial
-    "", // DescuentoImpuestos
+    "0", // Gratificaciones
+    "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", // Bonos…AsignacionesFamiliares (19-29)
+    "0", // DescuentoSeguridadSocial
+    "0", // DescuentoImpuestos
     "0", // DescuentoAfc — el instructivo manda digitar 0 (lo calcula el sistema)
-    "", "", "", "", "", "", "", // DescuentoAnticipado…VacacionesAnticipadas (33-39)
+    "0", "0", "0", "0", "0", "0", "0", // DescuentoAnticipado…VacacionesAnticipadas (33-39)
     req((e.email ?? "").trim(), "Email"),
     req(comunaPersonalId ? String(comunaPersonalId) : "", "CodigoComunaPersonal"),
     req(dirPersonal.calle.slice(0, 50), "CallePersonal"),
