@@ -8,6 +8,7 @@ import { formatFecha, formatMonto } from "@/lib/format";
 import { opcionesPeriodo } from "@/lib/periodos";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
+import { RutCopiable } from "@/components/rut-copiable";
 import {
   claseDias,
   claseEstado,
@@ -336,7 +337,7 @@ export function LiquidacionesClient({
                       {c.razon_social}
                     </span>
                   </TableCell>
-                  <TableCell>{c.previred_rut ?? "—"}</TableCell>
+                  <TableCell><RutCopiable rut={c.previred_rut} /></TableCell>
                   <TableCell>
                     <Badge variant="outline" className="uppercase">
                       {c.modalidad_previred}

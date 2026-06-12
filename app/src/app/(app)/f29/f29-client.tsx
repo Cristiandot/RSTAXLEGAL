@@ -8,6 +8,7 @@ import { formatFecha } from "@/lib/format";
 import { opcionesPeriodo } from "@/lib/periodos";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
+import { RutCopiable } from "@/components/rut-copiable";
 import {
   claseDias,
   claseEstado,
@@ -352,7 +353,7 @@ export function F29Client({
                       {c.razon_social}
                     </span>
                   </TableCell>
-                  <TableCell>{c.rut_empresa ?? "—"}</TableCell>
+                  <TableCell><RutCopiable rut={c.rut_empresa} /></TableCell>
                   <TableCell>
                     {c.conciliacion_ok ? (
                       <Badge
