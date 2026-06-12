@@ -67,7 +67,11 @@ export async function generarYSubirContrato(
     };
   }
 
-  const jornada = (con.jornada ?? {}) as { tipo?: string; horas_semanales?: number | null };
+  const jornada = (con.jornada ?? {}) as {
+    tipo?: string;
+    horas_semanales?: number | null;
+    distribucion?: string | null;
+  };
   const rem = (con.remuneracion ?? {}) as {
     sueldo_base?: number;
     movilizacion?: number;
@@ -167,6 +171,9 @@ export async function generarYSubirContrato(
     INSTITUCION_SALUD: (t.salud as string) ?? "",
     REGIMEN_PREVISIONAL: "chileno",
     HORAS_SEMANALES: horas !== null ? String(horas) : "42",
+    // Distribución semanal/horario de la jornada (plantillas C.6 y futuras);
+    // si no viene, queda en blanco para completar a mano en la revisión.
+    DISTRIBUCION_JORNADA: jornada.distribucion ?? "",
     CLAUSULAS_ADICIONALES: clausulasFinales
       ? `CLÁUSULA ADICIONAL PACTADA: ${clausulasFinales}`
       : "",
