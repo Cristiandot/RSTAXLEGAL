@@ -151,39 +151,48 @@ export function FacturacionClient({
     });
   }
 
-  // ---- Marcar pago con fecha elegida ----
+  // ---- Diálogo de pago: registrar pago con fecha + suscripción del cliente ----
   const [pagando, setPagando] = useState<FacturaRow | null>(null);
+  const [pagoMarcado, setPagoMarcado] = useState(false);
   const [fechaPagoNueva, setFechaPagoNueva] = useState("");
+  const [pagoSuscrito, setPagoSuscrito] = useState(false);
+  const [pagoDia, setPagoDia] = useState("");
 
   function abrirPago(f: FacturaRow) {
+    setPagoMarcado(f.pagada);
     setFechaPagoNueva(f.fechaPago ?? new Date().toISOString().slice(0, 10));
+    setPagoSuscrito(f.suscrito);
+    setPagoDia(f.diaPago ? String(f.diaPago) : "");
     setPagando(f);
   }
 
-  function confirmarPago() {
+  function guardarPago() {
     if (!pagando) return;
-    const id = pagando.id;
+    const f = pagando;
+    const marcado = pagoMarcado;
     const fecha = fechaPagoNueva || null;
+    const susc = pagoSuscrito;
+    const dia = pagoDia ? Number(pagoDia) : null;
     startAccion(async () => {
-      const res = await marcarPago(id, true, fecha);
-      if (res.ok) {
-        toast.success("Marcada como pagada");
-        setPagando(null);
-        router.refresh();
-      } else toast.error(res.error ?? "Error");
-    });
-  }
-
-  function quitarPago() {
-    if (!pagando) return;
-    const id = pagando.id;
-    startAccion(async () => {
-      const res = await marcarPago(id, false);
-      if (res.ok) {
-        toast.success("Pago desmarcado");
-        setPagando(null);
-        router.refresh();
-      } else toast.error(res.error ?? "Error");
+      // 1) Estado de pago (solo si cambió o cambió la fecha)
+      if (marcado !== f.pagada || (marcado && fecha !== f.fechaPago)) {
+        const res = await marcarPago(f.id, marcado, fecha);
+        if (!res.ok) {
+          toast.error(res.error ?? "Error al guardar el pago");
+          return;
+        }
+      }
+      // 2) Suscripción del cliente (aplica a esta y a las próximas facturas)
+      if (f.clienteId && (susc !== f.suscrito || dia !== f.diaPago)) {
+        const res = await guardarSuscripcion(f.clienteId, susc, dia);
+        if (!res.ok) {
+          toast.error(res.error ?? "Error al guardar la suscripción");
+          return;
+        }
+      }
+      toast.success("Guardado");
+      setPagando(null);
+      router.refresh();
     });
   }
 
@@ -572,27 +581,78 @@ export function FacturacionClient({
                 {pagando.suscrito ? " · cliente en suscripción" : ""}
               </DialogDescription>
             </DialogHeader>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="fecha_pago">Fecha de pago</Label>
-              <Input
-                id="fecha_pago"
-                type="date"
-                className="w-44"
-                value={fechaPagoNueva}
-                onChange={(e) => setFechaPagoNueva(e.target.value)}
-              />
-            </div>
-            <DialogFooter>
-              {pagando.pagada ? (
-                <Button variant="outline" className="text-destructive" onClick={quitarPago} disabled={ocupado}>
-                  Quitar pago
-                </Button>
+            <div className="rounded-lg border bg-muted/40 p-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-emerald-600"
+                  checked={pagoMarcado}
+                  onChange={(e) => setPagoMarcado(e.target.checked)}
+                />
+                Pagada
+              </label>
+              {pagoMarcado ? (
+                <div className="mt-2 flex items-center gap-2">
+                  <Label htmlFor="fecha_pago" className="text-xs whitespace-nowrap">
+                    Fecha de pago
+                  </Label>
+                  <Input
+                    id="fecha_pago"
+                    type="date"
+                    className="h-8 w-40"
+                    value={fechaPagoNueva}
+                    onChange={(e) => setFechaPagoNueva(e.target.value)}
+                  />
+                </div>
               ) : null}
+            </div>
+
+            {pagando.clienteId ? (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-emerald-600"
+                    checked={pagoSuscrito}
+                    onChange={(e) => setPagoSuscrito(e.target.checked)}
+                  />
+                  Cliente suscrito — pago automático mensual
+                </label>
+                {pagoSuscrito ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <Label htmlFor="pago_dia" className="text-xs whitespace-nowrap">
+                      Día del mes en que se paga (opcional)
+                    </Label>
+                    <Input
+                      id="pago_dia"
+                      type="number"
+                      min={1}
+                      max={31}
+                      className="h-8 w-20"
+                      value={pagoDia}
+                      onChange={(e) => setPagoDia(e.target.value)}
+                      placeholder="¿?"
+                    />
+                  </div>
+                ) : null}
+                <p className="mt-2 text-xs text-muted-foreground">
+                  La suscripción es del cliente: esta factura y las de los meses
+                  siguientes aparecerán como &quot;Suscripción&quot; automáticamente.
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Para configurar suscripción, primero vincula la factura a un
+                cliente de la cartera (botón 🔗 de la fila).
+              </p>
+            )}
+
+            <DialogFooter>
               <Button variant="outline" onClick={() => setPagando(null)}>
                 Cancelar
               </Button>
-              <Button onClick={confirmarPago} disabled={ocupado}>
-                {pagando.pagada ? "Actualizar fecha" : "Marcar pagada"}
+              <Button onClick={guardarPago} disabled={ocupado}>
+                Guardar
               </Button>
             </DialogFooter>
           </DialogContent>
