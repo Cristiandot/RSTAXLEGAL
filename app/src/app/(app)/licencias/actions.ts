@@ -19,6 +19,7 @@ export type NuevaLicenciaInput = {
   dias: number | null;
   entidad: string | null;
   estado: string;
+  enPlanilla: boolean;
   observacion: string | null;
 };
 
@@ -44,6 +45,7 @@ export async function crearLicencia(
     dias: input.dias,
     entidad: input.entidad?.trim() || null,
     estado: input.estado,
+    en_planilla: input.enPlanilla,
     observacion: input.observacion?.trim() || null,
   });
   if (error) return { ok: false, error: error.message };

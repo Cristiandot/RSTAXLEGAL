@@ -106,7 +106,7 @@ export function LicenciasClient({
   const [soloVigentes, setSoloVigentes] = useState(false);
   const [orden, setOrden] = useState<Orden>(null);
   const [viendo, setViendo] = useState<LicenciaRow | null>(null);
-  const [creando, setCreando] = useState(false);
+  const [mostrarForm, setMostrarForm] = useState(true);
 
   const empresas = useMemo(
     () => [...new Set(filas.map((f) => f.empresa))].sort((a, b) => a.localeCompare(b, "es")),
@@ -154,10 +154,18 @@ export function LicenciasClient({
             {sinPlanilla > 0 ? ` ${sinPlanilla} sin ingresar a planilla.` : ""}
           </p>
         </div>
-        <Button onClick={() => setCreando(true)}>
-          <Plus className="size-4" /> Registrar licencia
+        <Button
+          variant={mostrarForm ? "outline" : "default"}
+          onClick={() => setMostrarForm((v) => !v)}
+        >
+          <Plus className="size-4" />
+          {mostrarForm ? "Ocultar registro" : "Registrar licencia"}
         </Button>
       </div>
+
+      {mostrarForm ? (
+        <RegistroLicencia clientes={clientes} onCreated={() => router.refresh()} />
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
@@ -315,16 +323,6 @@ export function LicenciasClient({
         />
       ) : null}
 
-      {creando ? (
-        <NuevaLicencia
-          clientes={clientes}
-          onClose={() => setCreando(false)}
-          onCreated={() => {
-            setCreando(false);
-            router.refresh();
-          }}
-        />
-      ) : null}
     </div>
   );
 }
@@ -600,16 +598,14 @@ function FichaDatos({ ficha }: { ficha: FichaTramitacion }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Registro de una licencia nueva                                      */
+/* Panel de registro arriba de la grilla (carga rápida estilo Excel)   */
 /* ------------------------------------------------------------------ */
 
-function NuevaLicencia({
+function RegistroLicencia({
   clientes,
-  onClose,
   onCreated,
 }: {
   clientes: ClienteOption[];
-  onClose: () => void;
   onCreated: () => void;
 }) {
   const [clienteId, setClienteId] = useState("");
@@ -622,8 +618,10 @@ function NuevaLicencia({
   const [codigo, setCodigo] = useState("");
   const [inicio, setInicio] = useState("");
   const [termino, setTermino] = useState("");
+  const [diasManual, setDiasManual] = useState("");
   const [entidad, setEntidad] = useState("");
   const [estado, setEstado] = useState("por_tramitar");
+  const [enPlanilla, setEnPlanilla] = useState(false);
   const [observacion, setObservacion] = useState("");
   const [ocupado, startAccion] = useTransition();
 
@@ -634,7 +632,8 @@ function NuevaLicencia({
     listarTrabajadoresCliente(clienteId).then(setNomina);
   }, [clienteId]);
 
-  const dias = inicio && termino ? diasEntre(inicio, termino) : null;
+  const diasAuto = inicio && termino ? diasEntre(inicio, termino) : null;
+  const dias = diasManual !== "" ? Number(diasManual) : diasAuto;
   const cliente = clientes.find((c) => c.id === clienteId) ?? null;
   const elegido = nomina.find((t) => t.id === trabajadorId) ?? null;
 
@@ -644,8 +643,12 @@ function NuevaLicencia({
       toast.error("Indica el trabajador.");
       return;
     }
-    if (inicio && termino && dias === null) {
+    if (inicio && termino && diasAuto === null) {
       toast.error("El término no puede ser anterior al inicio.");
+      return;
+    }
+    if (diasManual !== "" && (!Number.isInteger(dias) || (dias as number) <= 0)) {
+      toast.error("Los días deben ser un número entero positivo.");
       return;
     }
     startAccion(async () => {
@@ -664,159 +667,181 @@ function NuevaLicencia({
         dias,
         entidad: entidad || null,
         estado,
+        enPlanilla,
         observacion: observacion || null,
       });
       if (res.ok) {
-        toast.success("Licencia registrada");
+        toast.success(`Licencia de ${nombreFinal} registrada`);
+        // la empresa queda elegida para cargar varias seguidas del mismo cliente
+        setTrabajadorId("");
+        setNombre("");
+        setRut("");
+        setTipo("nueva");
+        setFolio("");
+        setCodigo("");
+        setInicio("");
+        setTermino("");
+        setDiasManual("");
+        setEntidad("");
+        setEstado("por_tramitar");
+        setEnPlanilla(false);
+        setObservacion("");
         onCreated();
       } else toast.error(res.error ?? "Error al registrar");
     });
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Registrar licencia médica</DialogTitle>
-          <DialogDescription>
-            Queda en estado &quot;{ESTADO_LICENCIA_LABEL[estado]}&quot; para seguimiento.
-          </DialogDescription>
-        </DialogHeader>
+    <div className="card-soft space-y-3 rounded-xl bg-card p-4">
+      <div>
+        <h2 className="text-sm font-semibold">Nueva licencia</h2>
+        <p className="text-xs text-muted-foreground">
+          Los mismos datos de la planilla: empresa, trabajador, folio, fechas, estado y
+          observación. La empresa queda seleccionada para cargar varias seguidas.
+        </p>
+      </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2 space-y-1">
-            <Label>Empresa</Label>
-            <select
-              className={`${selectCls} w-full`}
-              value={clienteId}
-              onChange={(e) => setClienteId(e.target.value)}
-            >
-              <option value="">— Elegir cliente —</option>
-              {clientes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-span-2 space-y-1">
-            <Label>Trabajador</Label>
-            <select
-              className={`${selectCls} w-full`}
-              value={trabajadorId}
-              onChange={(e) => setTrabajadorId(e.target.value)}
-              disabled={!clienteId}
-            >
-              <option value="">
-                {nomina.length
-                  ? "— No está en la nómina (escribir abajo) —"
-                  : "Sin nómina cargada (escribir abajo)"}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="space-y-1 md:col-span-2">
+          <Label>Empresa</Label>
+          <select
+            className={`${selectCls} w-full`}
+            value={clienteId}
+            onChange={(e) => setClienteId(e.target.value)}
+          >
+            <option value="">— Elegir cliente —</option>
+            {clientes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nombre}
               </option>
-              {nomina.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.nombre} {t.rut ? `· ${t.rut}` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {!trabajadorId ? (
-            <>
-              <div className="space-y-1">
-                <Label>Nombre trabajador</Label>
-                <Input value={nombre} onChange={(e) => setNombre(e.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <Label>RUT trabajador</Label>
-                <Input
-                  value={rut}
-                  onChange={(e) => setRut(e.target.value)}
-                  placeholder="12.345.678-9"
-                />
-              </div>
-            </>
-          ) : null}
-
-          <div className="space-y-1">
-            <Label>Tipo</Label>
-            <select
-              className={`${selectCls} w-full`}
-              value={tipo}
-              onChange={(e) => setTipo(e.target.value)}
-            >
-              {Object.entries(TIPO_LICENCIA_LABEL).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label>Entidad (opcional)</Label>
-            <Input
-              value={entidad}
-              onChange={(e) => setEntidad(e.target.value)}
-              placeholder="ACHS, IST, CCAF…"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label>Folio</Label>
-            <Input value={folio} onChange={(e) => setFolio(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label>Código verificación</Label>
-            <Input value={codigo} onChange={(e) => setCodigo(e.target.value)} />
-          </div>
-
-          <div className="space-y-1">
-            <Label>Fecha inicio</Label>
-            <Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label>Fecha término</Label>
-            <Input type="date" value={termino} onChange={(e) => setTermino(e.target.value)} />
-          </div>
-
-          <div className="space-y-1">
-            <Label>Días</Label>
-            <Input value={dias ?? ""} disabled placeholder="Se calcula con las fechas" />
-          </div>
-          <div className="space-y-1">
-            <Label>Estado inicial</Label>
-            <select
-              className={`${selectCls} w-full`}
-              value={estado}
-              onChange={(e) => setEstado(e.target.value)}
-            >
-              {Object.entries(ESTADO_LICENCIA_LABEL).map(([k, v]) => (
-                <option key={k} value={k}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-span-2 space-y-1">
-            <Label>Observación</Label>
-            <Textarea
-              rows={2}
-              value={observacion}
-              onChange={(e) => setObservacion(e.target.value)}
-            />
-          </div>
+            ))}
+          </select>
         </div>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            Cancelar
-          </Button>
+        <div className="space-y-1 md:col-span-2">
+          <Label>Trabajador (nómina del cliente)</Label>
+          <select
+            className={`${selectCls} w-full`}
+            value={trabajadorId}
+            onChange={(e) => setTrabajadorId(e.target.value)}
+            disabled={!clienteId}
+          >
+            <option value="">
+              {nomina.length
+                ? "— No está en la nómina (escribir al lado) —"
+                : "Sin nómina cargada (escribir al lado)"}
+            </option>
+            {nomina.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.nombre} {t.rut ? `· ${t.rut}` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {!trabajadorId ? (
+          <>
+            <div className="space-y-1 md:col-span-2">
+              <Label>Nombre trabajador</Label>
+              <Input value={nombre} onChange={(e) => setNombre(e.target.value)} />
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <Label>RUT trabajador</Label>
+              <Input
+                value={rut}
+                onChange={(e) => setRut(e.target.value)}
+                placeholder="12.345.678-9"
+              />
+            </div>
+          </>
+        ) : null}
+
+        <div className="space-y-1">
+          <Label>Detalle</Label>
+          <select
+            className={`${selectCls} w-full`}
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value)}
+          >
+            {Object.entries(TIPO_LICENCIA_LABEL).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label>N° folio</Label>
+          <Input value={folio} onChange={(e) => setFolio(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label>Código de verificación</Label>
+          <Input value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label>Entidad</Label>
+          <Input
+            value={entidad}
+            onChange={(e) => setEntidad(e.target.value)}
+            placeholder="ACHS, IST, CCAF…"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label>Fecha inicio</Label>
+          <Input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label>Fecha término</Label>
+          <Input type="date" value={termino} onChange={(e) => setTermino(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label>N° días</Label>
+          <Input
+            inputMode="numeric"
+            value={diasManual !== "" ? diasManual : (diasAuto ?? "")}
+            onChange={(e) => setDiasManual(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="Auto con las fechas"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label>Estado</Label>
+          <select
+            className={`${selectCls} w-full`}
+            value={estado}
+            onChange={(e) => setEstado(e.target.value)}
+          >
+            {Object.entries(ESTADO_LICENCIA_LABEL).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1 md:col-span-3">
+          <Label>Observación</Label>
+          <Input
+            value={observacion}
+            onChange={(e) => setObservacion(e.target.value)}
+            placeholder="Notas: COMPIN, apelación, etc."
+          />
+        </div>
+        <div className="flex items-end justify-between gap-3 pb-1">
+          <label className="flex items-center gap-1.5 text-sm whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={enPlanilla}
+              onChange={(e) => setEnPlanilla(e.target.checked)}
+            />
+            En planilla
+          </label>
           <Button onClick={guardar} disabled={ocupado}>
-            {ocupado ? "Guardando…" : "Registrar"}
+            <Plus className="size-4" />
+            {ocupado ? "Guardando…" : "Agregar"}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </div>
   );
 }
