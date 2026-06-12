@@ -15,6 +15,7 @@ import {
   TrendingUp,
   Calculator,
   Link2,
+  Stethoscope,
   type LucideIcon,
 } from "lucide-react";
 
@@ -135,6 +136,15 @@ export const MODULOS: SeccionModulos[] = [
           "Permisos con y sin goce solicitados por los clientes. No descuentan vacaciones.",
         href: "/permisos",
         icon: Clock4,
+        estado: "activo",
+      },
+      {
+        key: "licencias",
+        label: "Licencias médicas",
+        descripcion:
+          "Registro y tramitación de licencias médicas con los datos del trabajador a mano.",
+        href: "/licencias",
+        icon: Stethoscope,
         estado: "activo",
       },
       {
