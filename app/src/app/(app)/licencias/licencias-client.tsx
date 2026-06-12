@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { ClipboardCopy, Plus, Search, Stethoscope } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { formatearRut } from "@/lib/rut";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import {
   TIPO_LICENCIA_LABEL,
   ESTADO_LICENCIA_LABEL,
@@ -69,6 +71,19 @@ export type ClienteOption = { id: string; nombre: string; rut: string | null };
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
+/** Valor por columna para el ordenamiento de la grilla. */
+const VALOR_COL: Record<string, (f: LicenciaRow) => unknown> = {
+  empresa: (f) => f.empresa,
+  trabajador: (f) => f.trabajador,
+  tipo: (f) => TIPO_LICENCIA_LABEL[f.tipo] ?? f.tipo,
+  folio: (f) => f.folio,
+  inicio: (f) => f.inicio,
+  termino: (f) => f.termino,
+  dias: (f) => f.dias,
+  estado: (f) => ESTADO_LICENCIA_LABEL[f.estado] ?? f.estado,
+  planilla: (f) => (f.enPlanilla ? 1 : 0),
+};
+
 function hoyISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -89,6 +104,7 @@ export function LicenciasClient({
   const [empresaF, setEmpresaF] = useState("");
   const [estadoF, setEstadoF] = useState("");
   const [soloVigentes, setSoloVigentes] = useState(false);
+  const [orden, setOrden] = useState<Orden>(null);
   const [viendo, setViendo] = useState<LicenciaRow | null>(null);
   const [creando, setCreando] = useState(false);
 
@@ -99,7 +115,7 @@ export function LicenciasClient({
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return filas.filter((f) => {
+    const lista = filas.filter((f) => {
       if (
         q &&
         !`${f.trabajador} ${f.trabajadorRut ?? ""} ${f.empresa} ${f.folio ?? ""}`
@@ -112,7 +128,13 @@ export function LicenciasClient({
       if (soloVigentes && !licenciaVigente(f.inicio, f.termino, hoy)) return false;
       return true;
     });
-  }, [filas, buscar, empresaF, estadoF, soloVigentes, hoy]);
+    // sin orden elegido, queda el del servidor (fecha de inicio descendente)
+    if (orden && VALOR_COL[orden.col]) {
+      const valor = VALOR_COL[orden.col];
+      lista.sort((a, b) => comparar(valor(a), valor(b), orden.dir));
+    }
+    return lista;
+  }, [filas, buscar, empresaF, estadoF, soloVigentes, hoy, orden]);
 
   const vigentes = filas.filter((f) => licenciaVigente(f.inicio, f.termino, hoy)).length;
   const porTramitar = filas.filter((f) => f.estado === "por_tramitar").length;
@@ -196,15 +218,33 @@ export function LicenciasClient({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[200px]">Empresa</TableHead>
-              <TableHead className="w-[200px]">Trabajador</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Folio</TableHead>
-              <TableHead>Inicio</TableHead>
-              <TableHead>Término</TableHead>
-              <TableHead className="text-right">Días</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Planilla</TableHead>
+              <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[200px]">
+                Empresa
+              </ThSort>
+              <ThSort col="trabajador" orden={orden} setOrden={setOrden} className="w-[200px]">
+                Trabajador
+              </ThSort>
+              <ThSort col="tipo" orden={orden} setOrden={setOrden}>
+                Tipo
+              </ThSort>
+              <ThSort col="folio" orden={orden} setOrden={setOrden}>
+                Folio
+              </ThSort>
+              <ThSort col="inicio" orden={orden} setOrden={setOrden}>
+                Inicio
+              </ThSort>
+              <ThSort col="termino" orden={orden} setOrden={setOrden}>
+                Término
+              </ThSort>
+              <ThSort col="dias" orden={orden} setOrden={setOrden} className="text-right">
+                Días
+              </ThSort>
+              <ThSort col="estado" orden={orden} setOrden={setOrden}>
+                Estado
+              </ThSort>
+              <ThSort col="planilla" orden={orden} setOrden={setOrden}>
+                Planilla
+              </ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>
