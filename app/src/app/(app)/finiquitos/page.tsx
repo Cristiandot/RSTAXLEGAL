@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
+import { getUsuarioActual } from "@/lib/auth";
 import { FiniquitosClient, type FiniquitoRow } from "./finiquitos-client";
 
 export const metadata = { title: "Finiquitos — RS Tax & Legal" };
 
 export default async function FiniquitosPage() {
+  const usuario = await getUsuarioActual();
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -37,7 +39,11 @@ export default async function FiniquitosPage() {
 
   return (
     <main className="mx-auto max-w-7xl px-4 pb-10 sm:px-6">
-      <FiniquitosClient filas={filas} errorCarga={error?.message ?? null} />
+      <FiniquitosClient
+        filas={filas}
+        esAdmin={usuario.rol === "admin"}
+        errorCarga={error?.message ?? null}
+      />
     </main>
   );
 }

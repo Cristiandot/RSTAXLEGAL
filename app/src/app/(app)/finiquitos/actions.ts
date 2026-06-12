@@ -19,6 +19,36 @@ export type ResumenCalculo = {
 };
 
 /**
+ * Elimina definitivamente una solicitud de finiquito. La política RLS solo
+ * permite DELETE a administradores; para operadores no borra ninguna fila y
+ * se informa. El trigger de auditoría registra la eliminación en audit_log.
+ */
+export async function eliminarSolicitudFiniquito(
+  gestionId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("solicitudes_rrhh")
+    .delete()
+    .eq("id", gestionId)
+    .eq("tipo", "finiquito")
+    .select("id");
+
+  if (error) return { ok: false, error: error.message };
+  if (!data || data.length === 0) {
+    return {
+      ok: false,
+      error:
+        "No se pudo eliminar: la solicitud no existe o tu cuenta no tiene permisos de administrador.",
+    };
+  }
+
+  revalidatePath("/finiquitos");
+  return { ok: true };
+}
+
+/**
  * Persiste el cálculo dentro de `datos.calculo_finiquito` de la solicitud,
  * sin tocar el resto de los campos que mandó el cliente. La auditoría queda
  * en `audit_log` vía trigger.

@@ -1,11 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Calculator, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { AlertTriangle, Calculator, Search, Trash2 } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
+import { eliminarSolicitudFiniquito } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -15,6 +19,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export type FiniquitoRow = {
   id: string;
@@ -54,13 +66,37 @@ function claseEstado(estado: string): string {
 
 export function FiniquitosClient({
   filas,
+  esAdmin,
   errorCarga,
 }: {
   filas: FiniquitoRow[];
+  esAdmin: boolean;
   errorCarga: string | null;
 }) {
+  const router = useRouter();
   const [buscar, setBuscar] = useState("");
   const [estadoF, setEstadoF] = useState("");
+  const [borrando, setBorrando] = useState<FiniquitoRow | null>(null);
+  const [confirmacion, setConfirmacion] = useState("");
+  const [ocupado, startBorrar] = useTransition();
+
+  const confirmacionOk = confirmacion.trim().toLowerCase() === "borrar";
+
+  function borrar() {
+    if (!borrando || !confirmacionOk) return;
+    const id = borrando.id;
+    startBorrar(async () => {
+      const res = await eliminarSolicitudFiniquito(id);
+      if (res.ok) {
+        toast.success("Solicitud de finiquito eliminada");
+        setBorrando(null);
+        setConfirmacion("");
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "No se pudo eliminar.");
+      }
+    });
+  }
 
   const selectCls =
     "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -174,14 +210,30 @@ export function FiniquitosClient({
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      render={<Link href={`/finiquitos/calculadora?gestion=${f.id}`} />}
-                    >
-                      <Calculator className="size-3.5" />
-                      {f.totalCalculado !== null ? "Recalcular" : "Calcular"}
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        render={<Link href={`/finiquitos/calculadora?gestion=${f.id}`} />}
+                      >
+                        <Calculator className="size-3.5" />
+                        {f.totalCalculado !== null ? "Recalcular" : "Calcular"}
+                      </Button>
+                      {esAdmin ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive"
+                          title="Eliminar solicitud (solo administradores)"
+                          onClick={() => {
+                            setConfirmacion("");
+                            setBorrando(f);
+                          }}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -194,6 +246,77 @@ export function FiniquitosClient({
         El flujo de aprobación y envío de la solicitud sigue en el módulo Gestiones RRHH;
         acá se hace el cálculo y queda guardado en la misma solicitud.
       </p>
+
+      {/* Doble confirmación de borrado: hay que escribir "borrar" */}
+      <Dialog
+        open={borrando !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setBorrando(null);
+            setConfirmacion("");
+          }
+        }}
+      >
+        {borrando ? (
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-heading">
+                Eliminar solicitud de finiquito
+              </DialogTitle>
+              <DialogDescription>
+                {borrando.trabajador} · {borrando.empresa}
+                {borrando.fechaTermino ? ` · término ${formatFecha(borrando.fechaTermino)}` : ""}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Esta acción es definitiva: se borra la solicitud del cliente
+                {borrando.totalCalculado !== null
+                  ? ` y su cálculo guardado (${formatMonto(borrando.totalCalculado)})`
+                  : ""}
+                . No se puede deshacer.
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="confirmar-borrado">
+                Escribe <span className="font-mono font-semibold">borrar</span> para confirmar
+              </Label>
+              <Input
+                id="confirmar-borrado"
+                autoFocus
+                value={confirmacion}
+                onChange={(e) => setConfirmacion(e.target.value)}
+                placeholder="borrar"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setBorrando(null);
+                  setConfirmacion("");
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={!confirmacionOk || ocupado}
+                onClick={borrar}
+              >
+                <Trash2 className="size-4" />
+                {ocupado ? "Eliminando…" : "Eliminar definitivamente"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
     </div>
   );
 }
