@@ -3,6 +3,25 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { EntradaFiniquito } from "@/lib/finiquito";
+import {
+  generarYSubirCartaAviso,
+  type ParametrosCartaAviso,
+  type ResultadoCartaAviso,
+} from "@/lib/carta-aviso";
+
+/**
+ * Genera la carta de aviso de término (Art. 162 CT) con los datos de la
+ * solicitud + el cálculo vigente, y devuelve el link de descarga.
+ */
+export async function generarCartaAviso(
+  gestionId: string,
+  parametros: ParametrosCartaAviso,
+): Promise<ResultadoCartaAviso> {
+  const supabase = await createClient();
+  const res = await generarYSubirCartaAviso(supabase, gestionId, parametros);
+  if (res.ok) revalidatePath("/finiquitos");
+  return res;
+}
 
 export type ResumenCalculo = {
   total: number;

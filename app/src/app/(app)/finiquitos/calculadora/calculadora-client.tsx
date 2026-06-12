@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowLeft, Save } from "lucide-react";
+import { AlertTriangle, ArrowLeft, FileText, Save } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import {
   CAUSALES_FINIQUITO,
@@ -12,11 +12,38 @@ import {
   gratificacionLegalMensual,
   type EntradaFiniquito,
 } from "@/lib/finiquito";
-import { guardarCalculoFiniquito, type ResumenCalculo } from "../actions";
+import {
+  generarCartaAviso,
+  guardarCalculoFiniquito,
+  type ResumenCalculo,
+} from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+/** Causales sin carta de aviso Art. 162 (renuncia, mutuo acuerdo, muerte). */
+const SIN_CARTA_AVISO = new Set(["", "159-1", "159-2", "159-3"]);
+
+function hoyLocal(): string {
+  return new Date().toLocaleDateString("sv-SE");
+}
+
+/** "2026-06-12" → mes anterior "2026-05" (cotizaciones pagadas hasta). */
+function mesAnteriorA(fechaIso: string): string {
+  const [y, m] = fechaIso.split("-").map(Number);
+  const d = new Date(y, (m ?? 1) - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
 
 export type GestionFiniquito = {
   id: string;
@@ -37,6 +64,8 @@ export type GestionFiniquito = {
   diasObtenidos: number | null;
   /** Remuneración pendiente del mes EN LÍQUIDO (criterio RSTL), precalculada por el equipo. */
   remuneracionPendiente: number | null;
+  /** Domicilio del trabajador (para la carta de aviso por correo certificado). */
+  domicilio: string | null;
   licenciaVigente: string | null;
   fuero: string | null;
   calculoGuardado: {
@@ -151,6 +180,15 @@ export function CalculadoraClient({
   const [descuentoAfc, setDescuentoAfc] = useState(guardado?.descuentoAfc ?? 0);
   const [ufManual, setUfManual] = useState<number | null>(null);
 
+  // ── Carta de aviso (Art. 162) ──
+  const [cartaAbierta, setCartaAbierta] = useState(false);
+  const [fechaEntrega, setFechaEntrega] = useState(hoyLocal());
+  const [modalidad, setModalidad] = useState<"personal" | "certificada">("personal");
+  const [domicilio, setDomicilio] = useState(gestion?.domicilio ?? "");
+  const [hechos, setHechos] = useState("");
+  const [cotizacionesHasta, setCotizacionesHasta] = useState("");
+  const [generandoCarta, startCarta] = useTransition();
+
   // UF e IMM del período: indicadores Previred del mes ANTERIOR al término
   // (Art. 172: UF del último día del mes anterior). Fallback: el más reciente
   // disponible anterior o igual a ese mes.
@@ -226,6 +264,45 @@ export function CalculadoraClient({
     });
   }
 
+  function abrirCarta() {
+    if (!cotizacionesHasta) {
+      setCotizacionesHasta(fechaTermino ? mesAnteriorA(fechaTermino) : mesAnteriorA(hoyLocal()));
+    }
+    setCartaAbierta(true);
+  }
+
+  function generarCarta() {
+    if (!gestion) return;
+    startCarta(async () => {
+      const res = await generarCartaAviso(gestion.id, {
+        fechaEntrega,
+        fechaTermino,
+        modalidadEntrega: modalidad,
+        domicilioEmpleado: domicilio.trim(),
+        hechos,
+        cotizacionesHasta,
+        avisoCon30Dias: avisoCon30,
+        causal,
+        resumen: {
+          indemAnios: r.indemAnios,
+          indemAviso: r.indemAviso,
+          vacacionesMonto: r.vacaciones.monto,
+          vacacionesDias: Math.round(r.vacaciones.diasCorridosPago * 100) / 100,
+          remuneracionPendiente: r.remuneracionPendiente,
+          total: r.total,
+        },
+      });
+      if (res.ok && res.downloadUrl) {
+        toast.success("Carta de aviso generada — descargando");
+        window.open(res.downloadUrl, "_blank");
+        setCartaAbierta(false);
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Error al generar la carta");
+      }
+    });
+  }
+
   const numInput = (valor: number, setear: (n: number) => void) => (
     <Input
       type="number"
@@ -255,10 +332,18 @@ export function CalculadoraClient({
           </p>
         </div>
         {gestion ? (
-          <Button onClick={guardar} disabled={guardando}>
-            <Save className="size-4" />
-            {guardando ? "Guardando…" : "Guardar cálculo en la solicitud"}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {!SIN_CARTA_AVISO.has(causal) ? (
+              <Button variant="outline" onClick={abrirCarta} disabled={generandoCarta}>
+                <FileText className="size-4" />
+                Generar carta de aviso
+              </Button>
+            ) : null}
+            <Button onClick={guardar} disabled={guardando}>
+              <Save className="size-4" />
+              {guardando ? "Guardando…" : "Guardar cálculo en la solicitud"}
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -482,6 +567,118 @@ export function CalculadoraClient({
           ) : null}
         </div>
       </div>
+
+      {/* ── Diálogo carta de aviso (Art. 162) ── */}
+      <Dialog open={cartaAbierta} onOpenChange={setCartaAbierta}>
+        {cartaAbierta && gestion ? (
+          <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="font-heading">
+                Carta de aviso de término — {gestion.trabajador}
+              </DialogTitle>
+              <DialogDescription>
+                Art. 162 CT: la carta lleva la causal, los hechos, el detalle de
+                indemnizaciones del cálculo actual y el estado de cotizaciones.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ca-entrega">Fecha de entrega de la carta</Label>
+                <Input
+                  id="ca-entrega"
+                  type="date"
+                  value={fechaEntrega}
+                  onChange={(e) => setFechaEntrega(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ca-termino">Despido efectivo desde</Label>
+                <Input
+                  id="ca-termino"
+                  type="date"
+                  value={fechaTermino}
+                  onChange={(e) => setFechaTermino(e.target.value)}
+                />
+              </div>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="ca-modalidad">Forma de entrega</Label>
+                <select
+                  id="ca-modalidad"
+                  className={selectCls}
+                  value={modalidad}
+                  onChange={(e) => setModalidad(e.target.value as typeof modalidad)}
+                >
+                  <option value="personal">Entrega personal (firma recepción al pie)</option>
+                  <option value="certificada">Correo certificado al domicilio</option>
+                </select>
+              </div>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="ca-domicilio">Domicilio del trabajador</Label>
+                <Input
+                  id="ca-domicilio"
+                  value={domicilio}
+                  onChange={(e) => setDomicilio(e.target.value)}
+                  placeholder="calle, número, comuna (según contrato)"
+                />
+              </div>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="ca-hechos">Hechos que fundan la causal</Label>
+                <Textarea
+                  id="ca-hechos"
+                  rows={4}
+                  value={hechos}
+                  onChange={(e) => setHechos(e.target.value)}
+                  placeholder={
+                    causal.startsWith("161")
+                      ? "Ej.: racionalización de la dotación del área de taller por baja sostenida de servicios durante el primer semestre 2026, que hace necesaria la supresión del puesto…"
+                      : "Describe los hechos concretos (fechas, lugares, conductas) que configuran la causal…"
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  El texto va literal en la carta — redacción a validar por Felipe.
+                </p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ca-cotizaciones">Cotizaciones pagadas hasta</Label>
+                <Input
+                  id="ca-cotizaciones"
+                  type="month"
+                  value={cotizacionesHasta}
+                  onChange={(e) => setCotizacionesHasta(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col justify-end pb-1 text-xs text-muted-foreground">
+                Verifica el pago en Previred antes de entregar (Ley Bustos: con
+                cotizaciones impagas el despido no pone término).
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+              <p className="mb-1 font-medium">Montos que llevará la carta (cálculo actual):</p>
+              <p className="text-xs text-muted-foreground">
+                Indem. años de servicio {formatMonto(r.indemAnios)} · aviso previo{" "}
+                {formatMonto(r.indemAviso)} · feriado {formatMonto(r.vacaciones.monto)} (
+                {fmtDias(r.vacaciones.diasCorridosPago)} días) · rem. pendiente{" "}
+                {formatMonto(r.remuneracionPendiente)} ·{" "}
+                <span className="font-semibold text-foreground">
+                  total {formatMonto(r.total)}
+                </span>
+              </p>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCartaAbierta(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={generarCarta} disabled={generandoCarta}>
+                <FileText className="size-4" />
+                {generandoCarta ? "Generando…" : "Generar carta (.docx)"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
     </div>
   );
 }

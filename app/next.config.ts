@@ -13,6 +13,8 @@ const nextConfig: NextConfig = {
     "/contratos/**": ["./plantillas/**/*"],
     "/gestiones": ["./plantillas/**/*"],
     "/gestiones/**": ["./plantillas/**/*"],
+    "/finiquitos": ["./plantillas/**/*"],
+    "/finiquitos/**": ["./plantillas/**/*"],
   },
 };
 

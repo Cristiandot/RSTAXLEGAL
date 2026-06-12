@@ -46,7 +46,16 @@ export default async function CalculadoraFiniquitoPage({
       // contrato registrado del trabajador (si vino con trabajador_id).
       let fechaIngresoContrato: string | null = null;
       let sueldoContrato: number | null = null;
+      let domicilioTrabajador: string | null = null;
       if (g.trabajador_id) {
+        const { data: trab } = await supabase
+          .from("trabajadores")
+          .select("direccion, comuna")
+          .eq("id", g.trabajador_id)
+          .maybeSingle();
+        if (trab?.direccion) {
+          domicilioTrabajador = [trab.direccion, trab.comuna].filter(Boolean).join(", ");
+        }
         const { data: contrato } = await supabase
           .from("contratos")
           .select("fecha_inicio, remuneracion")
@@ -82,6 +91,7 @@ export default async function CalculadoraFiniquitoPage({
         diasTomados: str("vacaciones_dias_tomados") ? Number(str("vacaciones_dias_tomados")) : null,
         diasObtenidos: str("vacaciones_dias_obtenidos") ? Number(str("vacaciones_dias_obtenidos")) : null,
         remuneracionPendiente: str("remuneracion_pendiente") ? Number(str("remuneracion_pendiente")) : null,
+        domicilio: domicilioTrabajador,
         licenciaVigente: str("licencia_vigente"),
         fuero: str("fuero"),
         calculoGuardado: (datos.calculo_finiquito ?? null) as GestionFiniquito["calculoGuardado"],
