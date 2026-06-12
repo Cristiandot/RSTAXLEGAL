@@ -168,6 +168,24 @@ export async function subirDocumentoContable(
   return { ok: true };
 }
 
+/**
+ * Activa la contabilidad completa de una empresa (libros RCV, plan de
+ * cuentas, validación F29). Las empresas parten en standby y se van
+ * activando una a una a medida que el equipo replica el proceso piloto.
+ */
+export async function activarContabilidadCompleta(
+  clienteId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("clientes")
+    .update({ hace_contabilidad_completa: true })
+    .eq("id", clienteId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/contabilidad", "layout");
+  return { ok: true };
+}
+
 /** Anulación lógica: el registro sale del checklist pero el archivo queda. */
 export async function anularDocumentoContable(
   id: string,

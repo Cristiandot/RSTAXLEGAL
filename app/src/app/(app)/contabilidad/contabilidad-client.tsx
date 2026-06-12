@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Search } from "lucide-react";
+import { activarContabilidadCompleta } from "./actions";
 import { opcionesPeriodo } from "@/lib/periodos";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
@@ -96,6 +98,51 @@ function BadgeKame({ estado }: { estado: string | null }) {
     <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
       OFF
     </Badge>
+  );
+}
+
+/** Celda standby: la empresa aún no entra a contabilidad completa. */
+function CeldaStandby({
+  clienteId,
+  razonSocial,
+}: {
+  clienteId: string;
+  razonSocial: string;
+}) {
+  const router = useRouter();
+  const [activando, start] = useTransition();
+
+  function activar(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (
+      !window.confirm(
+        `¿Activar la contabilidad completa de ${razonSocial}?\n\nLa empresa entra al proceso de libros RCV, plan de cuentas y validación F29 (como las pilotos).`,
+      )
+    )
+      return;
+    start(async () => {
+      const res = await activarContabilidadCompleta(clienteId);
+      if (res.ok) {
+        toast.success(`${razonSocial}: contabilidad completa activada`);
+        router.refresh();
+      } else toast.error(res.error ?? "Error al activar");
+    });
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex h-6 items-center rounded-md border border-dashed border-border px-1.5 text-[11px] font-medium text-muted-foreground/70">
+        standby
+      </span>
+      <button
+        type="button"
+        onClick={activar}
+        disabled={activando}
+        className="rounded-md px-1 text-[11px] font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100 hover:underline"
+      >
+        {activando ? "Activando…" : "Activar"}
+      </button>
+    </span>
   );
 }
 
@@ -213,6 +260,10 @@ export function ContabilidadClient({
 }) {
   const router = useRouter();
   const [buscar, setBuscar] = useState("");
+  // Proceso de aprendizaje contabilidad completa: la grilla parte mostrando
+  // solo las empresas activadas (pilotos); el resto queda en standby y se va
+  // activando una a una desde la misma grilla.
+  const [contabF, setContabF] = useState("activadas");
   const [estadoF, setEstadoF] = useState("");
   const [docsF, setDocsF] = useState("");
   const [kameF, setKameF] = useState("");
@@ -259,6 +310,8 @@ export function ContabilidadClient({
         const t = `${c.razon_social} ${c.rut_empresa ?? ""}`.toLowerCase();
         if (!t.includes(q)) return false;
       }
+      if (contabF === "activadas" && !rcvPorCliente.has(c.cliente_id)) return false;
+      if (contabF === "standby" && rcvPorCliente.has(c.cliente_id)) return false;
       if (estadoF && c.estado !== estadoF) return false;
       if (docsF === "completos" && !facturasCompletas(c.cliente_id)) return false;
       if (docsF === "parciales" && (facturasCompletas(c.cliente_id) || sinDocumentos(c.cliente_id))) return false;
@@ -289,7 +342,7 @@ export function ContabilidadClient({
     };
     return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filas, buscar, estadoF, docsF, kameF, saludF, respF, orden, conteosPorCliente]);
+  }, [filas, buscar, contabF, estadoF, docsF, kameF, saludF, respF, orden, conteosPorCliente, rcvPorCliente]);
 
   const resumen: {
     label: string;
@@ -370,6 +423,17 @@ export function ContabilidadClient({
             onChange={(e) => setBuscar(e.target.value)}
           />
         </div>
+
+        <select
+          aria-label="Contabilidad completa"
+          className={selectCls}
+          value={contabF}
+          onChange={(e) => setContabF(e.target.value)}
+        >
+          <option value="activadas">Contabilidad: activadas</option>
+          <option value="standby">Contabilidad: en standby</option>
+          <option value="">Todas las empresas</option>
+        </select>
 
         <select
           aria-label="Documentos"
@@ -477,7 +541,7 @@ export function ContabilidadClient({
                   onClick={() =>
                     router.push(`/contabilidad/${c.cliente_id}?periodo=${periodo}`)
                   }
-                  className="cursor-pointer"
+                  className="group cursor-pointer"
                 >
                   <TableCell className="font-medium">
                     <span
@@ -501,7 +565,10 @@ export function ContabilidadClient({
                         href={`/contabilidad/${c.cliente_id}/rcv?periodo=${periodo}`}
                       />
                     ) : (
-                      <span className="text-muted-foreground">—</span>
+                      <CeldaStandby
+                        clienteId={c.cliente_id}
+                        razonSocial={c.razon_social}
+                      />
                     )}
                   </TableCell>
                   <TableCell>
@@ -551,9 +618,11 @@ export function ContabilidadClient({
         Checklist: FC facturas de compras · FV facturas de ventas · BV ventas
         con boleta · BC compras con boleta · +N documentos adicionales
         (honorarios, otros gastos/ingresos). Verde = archivo cargado este mes.
-        Libros RCV (empresas con contabilidad completa): C/V = documentos
-        importados del SII · ✓ F29 = el IVA del RCV cuadra exacto con el F29
-        del período.
+        Libros RCV (contabilidad completa): C/V = documentos importados del
+        SII · ✓ F29 = el IVA del RCV cuadra exacto con el F29 del período ·
+        standby = empresa aún no activada (pasa el cursor sobre la fila para
+        activarla). La grilla parte mostrando solo las activadas — usa el
+        filtro &quot;Contabilidad&quot; para ver el resto.
       </p>
     </div>
   );
