@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, Calculator, CheckCircle2, FileText, Mail, Search, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Calculator, CheckCircle2, FileSpreadsheet, FileText, Mail, Search, Send, Trash2 } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import {
   diasParaLimite,
@@ -12,8 +12,9 @@ import {
   textoCorreoFiniquito,
   type ResumenCorreo,
 } from "@/lib/finiquito-correo";
-import { eliminarSolicitudFiniquito } from "./actions";
+import { eliminarSolicitudFiniquito, exportarCsvDt } from "./actions";
 import { cambiarEstadoGestion } from "../gestiones/actions";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -134,6 +135,44 @@ export function FiniquitosClient({
   const [borrando, setBorrando] = useState<FiniquitoRow | null>(null);
   const [confirmacion, setConfirmacion] = useState("");
   const [ocupado, startBorrar] = useTransition();
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [faltantesDt, setFaltantesDt] = useState<
+    { trabajador: string; campos: string[] }[] | null
+  >(null);
+  const [exportando, startExportar] = useTransition();
+
+  function alternarSeleccion(id: string) {
+    setSeleccionados((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
+    });
+  }
+
+  function exportarDt() {
+    const ids = [...seleccionados];
+    startExportar(async () => {
+      const res = await exportarCsvDt(ids);
+      if (!res.ok || !res.csv) {
+        toast.error(res.error ?? "No se pudo exportar.");
+        return;
+      }
+      // descarga con BOM para que Excel respete los acentos
+      const blob = new Blob(["﻿" + res.csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.nombreArchivo ?? "PlantillaCargaFiniquitos.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      if (res.faltantes && res.faltantes.length > 0) {
+        setFaltantesDt(res.faltantes);
+      } else {
+        toast.success("CSV DT generado — completo, listo para subir a Mi DT");
+      }
+    });
+  }
   const [avanzando, startAvanzar] = useTransition();
 
   function copiarCorreo(f: FiniquitoRow) {
@@ -229,6 +268,15 @@ export function FiniquitosClient({
           <option value="enviada">Enviada</option>
           <option value="rechazada">Rechazada</option>
         </select>
+        <Button
+          variant="outline"
+          disabled={seleccionados.size === 0 || exportando}
+          onClick={exportarDt}
+          title="Genera el CSV de carga masiva del Finiquito Electrónico (Mi DT) con los seleccionados"
+        >
+          <FileSpreadsheet className="size-4" />
+          {exportando ? "Generando…" : `CSV DT (${seleccionados.size})`}
+        </Button>
         <span className="ml-auto text-sm text-muted-foreground">
           {filtradas.length} de {filas.length}
         </span>
@@ -244,6 +292,7 @@ export function FiniquitosClient({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              <TableHead className="w-8" title="Seleccionar para el CSV DT (requiere cálculo guardado)" />
               <TableHead className="w-[200px]">Trabajador</TableHead>
               <TableHead>RUT</TableHead>
               <TableHead className="w-[200px]">Empresa</TableHead>
@@ -258,7 +307,7 @@ export function FiniquitosClient({
           <TableBody>
             {filtradas.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                   Sin solicitudes de finiquito todavía. Llegan solas desde el portal del
                   cliente; también puedes usar el cálculo libre.
                 </TableCell>
@@ -266,6 +315,18 @@ export function FiniquitosClient({
             ) : (
               filtradas.map((f) => (
                 <TableRow key={f.id}>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={seleccionados.has(f.id)}
+                      disabled={f.resumen === null}
+                      title={
+                        f.resumen === null
+                          ? "Primero calcula y guarda el finiquito"
+                          : "Incluir en el CSV DT"
+                      }
+                      onCheckedChange={() => alternarSeleccion(f.id)}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium">
                     <span className="block max-w-[200px] truncate" title={f.trabajador}>
                       {f.trabajador}
@@ -442,6 +503,42 @@ export function FiniquitosClient({
               >
                 <Trash2 className="size-4" />
                 {ocupado ? "Eliminando…" : "Eliminar definitivamente"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
+
+      {/* Aviso de campos faltantes en el CSV DT */}
+      <Dialog open={faltantesDt !== null} onOpenChange={(o) => { if (!o) setFaltantesDt(null); }}>
+        {faltantesDt ? (
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="font-heading">
+                CSV descargado — faltan datos obligatorios
+              </DialogTitle>
+              <DialogDescription>
+                El archivo se descargó con todo lo que el panel tiene, pero la DT
+                exige estos campos: complétalos en el CSV antes de subirlo a Mi DT
+                (o carga los datos en la ficha del trabajador y vuelve a exportar).
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-64 space-y-2 overflow-y-auto text-sm">
+              {faltantesDt.map((f) => (
+                <div key={f.trabajador} className="rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+                  <p className="font-medium text-amber-900">{f.trabajador}</p>
+                  <p className="text-xs text-amber-700">{f.campos.join(" · ")}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Datos bancarios: la cuenta debe ser unipersonal, número sin guiones
+              ni ceros a la izquierda. La carga masiva acepta máximo 100
+              extrabajadores por archivo y demora ~15 minutos en procesar.
+            </p>
+            <DialogFooter>
+              <Button type="button" onClick={() => setFaltantesDt(null)}>
+                Entendido
               </Button>
             </DialogFooter>
           </DialogContent>

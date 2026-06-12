@@ -37,6 +37,107 @@ export type ResumenCalculo = {
   periodoUf: string | null;
 };
 
+import {
+  construirFilaDt,
+  csvDt,
+  type FilaDt,
+} from "@/lib/dt-finiquitos";
+
+export type ResultadoExportDt = {
+  ok: boolean;
+  error?: string;
+  csv?: string;
+  nombreArchivo?: string;
+  faltantes?: { trabajador: string; campos: string[] }[];
+};
+
+/**
+ * Arma el CSV de carga masiva del Finiquito Electrónico de la DT con las
+ * solicitudes seleccionadas (requieren cálculo guardado). Los obligatorios
+ * que el panel no tiene se reportan para completarlos en el Excel antes de
+ * subir a la DT (máx. 100 filas por archivo según instructivo).
+ */
+export async function exportarCsvDt(
+  gestionIds: string[],
+): Promise<ResultadoExportDt> {
+  if (gestionIds.length === 0) return { ok: false, error: "Selecciona al menos un finiquito." };
+  if (gestionIds.length > 100) return { ok: false, error: "La DT acepta máximo 100 finiquitos por archivo." };
+
+  const supabase = await createClient();
+  const { data: gestiones, error } = await supabase
+    .from("solicitudes_rrhh")
+    .select(
+      "id, tipo, trabajador_id, trabajador_nombre, trabajador_rut, datos, clientes(rut_empresa, comuna, domicilio), trabajadores(cargo, correo, comuna, direccion, fono, banco, tipo_cuenta, numero_cuenta)",
+    )
+    .in("id", gestionIds)
+    .eq("tipo", "finiquito");
+  if (error) return { ok: false, error: error.message };
+
+  const filas: FilaDt[] = [];
+  for (const g of gestiones ?? []) {
+    const datos = (g.datos ?? {}) as Record<string, unknown>;
+    const calculo = datos.calculo_finiquito as
+      | {
+          entrada?: { causal?: string; fechaInicio?: string; fechaTermino?: string };
+          resumen?: {
+            indemAnios?: number;
+            indemAviso?: number;
+            vacacionesMonto?: number;
+            vacacionesDias?: number;
+            remuneracionPendiente?: number;
+          };
+        }
+      | undefined;
+    if (!calculo?.resumen) {
+      return {
+        ok: false,
+        error: `${g.trabajador_nombre}: no tiene cálculo guardado — calcula y guarda antes de exportar.`,
+      };
+    }
+    const cli = g.clientes as unknown as Record<string, unknown> | null;
+    const t = g.trabajadores as unknown as Record<string, unknown> | null;
+    const str = (k: string) => (typeof datos[k] === "string" ? (datos[k] as string) : null);
+
+    filas.push(
+      construirFilaDt({
+        trabajadorNombre: g.trabajador_nombre ?? "",
+        rutEmpresa: (cli?.rut_empresa as string) ?? null,
+        rutTrabajador: g.trabajador_rut,
+        fechaInicio: calculo.entrada?.fechaInicio ?? str("fecha_ingreso"),
+        fechaTermino: calculo.entrada?.fechaTermino ?? str("fecha_termino"),
+        causal: calculo.entrada?.causal ?? "",
+        funciones: (t?.cargo as string) ?? null,
+        comunaTrabajo: (cli?.comuna as string) ?? null,
+        direccionTrabajo: (cli?.domicilio as string) ?? null,
+        diasVacaciones: calculo.resumen.vacacionesDias ?? null,
+        indemFeriado: calculo.resumen.vacacionesMonto ?? null,
+        indemAvisoPrevio: calculo.resumen.indemAviso ?? null,
+        indemServicio: calculo.resumen.indemAnios ?? null,
+        remuneracionPendiente: calculo.resumen.remuneracionPendiente ?? null,
+        email: (t?.correo as string) ?? null,
+        comunaPersonal: (t?.comuna as string) ?? null,
+        direccionPersonal: (t?.direccion as string) ?? null,
+        telefono: (t?.fono as string) ?? null,
+        cuentaNumero: (t?.numero_cuenta as string) ?? null,
+        bancoNombre: (t?.banco as string) ?? null,
+        tipoCuentaNombre: (t?.tipo_cuenta as string) ?? null,
+      }),
+    );
+  }
+
+  const faltantes = filas
+    .filter((f) => f.faltantes.length > 0)
+    .map((f) => ({ trabajador: f.trabajador, campos: f.faltantes }));
+
+  const hoy = new Date().toISOString().slice(0, 10);
+  return {
+    ok: true,
+    csv: csvDt(filas),
+    nombreArchivo: `PlantillaCargaFiniquitos-RSTL-${hoy}.csv`,
+    faltantes,
+  };
+}
+
 /**
  * Elimina definitivamente una solicitud de finiquito. La política RLS solo
  * permite DELETE a administradores; para operadores no borra ninguna fila y
