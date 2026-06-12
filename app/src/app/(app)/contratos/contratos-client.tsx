@@ -188,12 +188,14 @@ export function ContratosClient({
   // Liquidación de ejemplo (mes normal, sin novedades). Para contratos con
   // pago por día, los días del mes simulado son editables (ej. 10 días).
   const [liqDe, setLiqDe] = useState<ContratoRow | null>(null);
-  const [liqDias, setLiqDias] = useState(30);
+  // texto libre para poder borrar y reescribir; el cálculo usa liqDiasNum
+  const [liqDias, setLiqDias] = useState("30");
+  const liqDiasNum = Math.min(Math.max(Number(liqDias) || 1, 1), 30);
   const esPorDia = (f: ContratoRow | null) =>
     f?.remuneracion?.modalidad === "por_dia" && Number(f.remuneracion?.valor_dia ?? 0) > 0;
 
   function abrirLiquidacion(f: ContratoRow) {
-    setLiqDias(30);
+    setLiqDias("30");
     setLiqDe(f);
   }
 
@@ -202,12 +204,12 @@ export function ContratosClient({
     const r = liqDe.remuneracion ?? {};
     const porDia = esPorDia(liqDe);
     const sueldo = porDia
-      ? Number(r.valor_dia) * liqDias
+      ? Number(r.valor_dia) * liqDiasNum
       : Number(r.sueldo_base ?? 0);
     if (!sueldo) return null;
     return calcularLiquidacionEjemplo({
       sueldoBase: Math.round(sueldo),
-      dias: porDia ? liqDias : 30,
+      dias: porDia ? liqDiasNum : 30,
       gratificacionTipo: String(r.gratificacion_tipo ?? "25"),
       gratificacionMonto: Number(r.gratificacion_monto ?? 0),
       colacion: Number(r.colacion ?? 0),
@@ -219,7 +221,7 @@ export function ContratosClient({
       utm: indicadores.utm,
       tasasAfp: indicadores.tasasAfp,
     });
-  }, [liqDe, liqDias, indicadores]);
+  }, [liqDe, liqDiasNum, indicadores]);
 
   // Eliminación definitiva con doble seguridad: solo admins + escribir "borrar"
   const [borrando, setBorrando] = useState<ContratoRow | null>(null);
@@ -484,8 +486,10 @@ export function ContratosClient({
                   inputMode="numeric"
                   value={liqDias}
                   onChange={(e) => {
-                    const n = Number(e.target.value.replace(/[^0-9]/g, ""));
-                    setLiqDias(Math.max(1, Math.min(n || 1, 30)));
+                    // permitir vaciar el campo mientras se escribe; tope 30
+                    let limpio = e.target.value.replace(/[^0-9]/g, "").slice(0, 2);
+                    if (limpio !== "" && Number(limpio) > 30) limpio = "30";
+                    setLiqDias(limpio);
                   }}
                 />
                 <span className="text-xs text-muted-foreground">
@@ -498,7 +502,7 @@ export function ContratosClient({
               <div className="flex justify-between">
                 <span>
                   Sueldo base
-                  {esPorDia(liqDe) ? ` (${liqDias} día${liqDias === 1 ? "" : "s"})` : ""}
+                  {esPorDia(liqDe) ? ` (${liqDiasNum} día${liqDiasNum === 1 ? "" : "s"})` : ""}
                 </span>
                 <span className="tabular-nums">{formatMonto(liq.sueldoBase)}</span>
               </div>
