@@ -47,15 +47,27 @@ export default async function CalculadoraFiniquitoPage({
       let fechaIngresoContrato: string | null = null;
       let sueldoContrato: number | null = null;
       let domicilioTrabajador: string | null = null;
+      let fichaPago: {
+        correo: string | null;
+        banco: string | null;
+        tipoCuenta: string | null;
+        numeroCuenta: string | null;
+      } | null = null;
       if (g.trabajador_id) {
         const { data: trab } = await supabase
           .from("trabajadores")
-          .select("direccion, comuna")
+          .select("direccion, comuna, correo, banco, tipo_cuenta, numero_cuenta")
           .eq("id", g.trabajador_id)
           .maybeSingle();
         if (trab?.direccion) {
           domicilioTrabajador = [trab.direccion, trab.comuna].filter(Boolean).join(", ");
         }
+        fichaPago = {
+          correo: (trab?.correo as string) ?? null,
+          banco: (trab?.banco as string) ?? null,
+          tipoCuenta: (trab?.tipo_cuenta as string) ?? null,
+          numeroCuenta: (trab?.numero_cuenta as string) ?? null,
+        };
         const { data: contrato } = await supabase
           .from("contratos")
           .select("fecha_inicio, remuneracion")
@@ -92,6 +104,11 @@ export default async function CalculadoraFiniquitoPage({
         diasObtenidos: str("vacaciones_dias_obtenidos") ? Number(str("vacaciones_dias_obtenidos")) : null,
         remuneracionPendiente: str("remuneracion_pendiente") ? Number(str("remuneracion_pendiente")) : null,
         domicilio: domicilioTrabajador,
+        // datos de pago: ficha del trabajador primero, lo del portal de respaldo
+        correo: fichaPago?.correo ?? str("correo_trabajador"),
+        banco: fichaPago?.banco ?? str("banco"),
+        tipoCuenta: fichaPago?.tipoCuenta ?? str("tipo_cuenta"),
+        numeroCuenta: fichaPago?.numeroCuenta ?? str("numero_cuenta"),
         licenciaVigente: str("licencia_vigente"),
         fuero: str("fuero"),
         calculoGuardado: (datos.calculo_finiquito ?? null) as GestionFiniquito["calculoGuardado"],

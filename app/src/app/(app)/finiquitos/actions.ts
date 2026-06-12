@@ -115,13 +115,14 @@ export async function exportarCsvDt(
         indemAvisoPrevio: calculo.resumen.indemAviso ?? null,
         indemServicio: calculo.resumen.indemAnios ?? null,
         remuneracionPendiente: calculo.resumen.remuneracionPendiente ?? null,
-        email: (t?.correo as string) ?? null,
+        // ficha del trabajador primero; lo informado por el portal de respaldo
+        email: (t?.correo as string) ?? str("correo_trabajador"),
         comunaPersonal: (t?.comuna as string) ?? null,
         direccionPersonal: (t?.direccion as string) ?? null,
         telefono: (t?.fono as string) ?? null,
-        cuentaNumero: (t?.numero_cuenta as string) ?? null,
-        bancoNombre: (t?.banco as string) ?? null,
-        tipoCuentaNombre: (t?.tipo_cuenta as string) ?? null,
+        cuentaNumero: (t?.numero_cuenta as string) ?? str("numero_cuenta"),
+        bancoNombre: (t?.banco as string) ?? str("banco"),
+        tipoCuentaNombre: (t?.tipo_cuenta as string) ?? str("tipo_cuenta"),
       }),
     );
   }
@@ -157,6 +158,66 @@ export async function exportarCsvDt(
     faltantes,
     advertencias,
   };
+}
+
+export type DatosPago = {
+  correo: string;
+  banco: string;
+  tipoCuenta: string;
+  numeroCuenta: string;
+};
+
+/**
+ * Guarda los datos de pago del trabajador (correo + cuenta bancaria para la
+ * transferencia DT). Escribe en la ficha del trabajador si la solicitud está
+ * vinculada, y siempre deja copia en `datos` de la solicitud — de ahí los lee
+ * el export CSV DT como respaldo.
+ */
+export async function guardarDatosPago(
+  gestionId: string,
+  p: DatosPago,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+
+  const { data: g, error: errSel } = await supabase
+    .from("solicitudes_rrhh")
+    .select("id, trabajador_id, datos")
+    .eq("id", gestionId)
+    .eq("tipo", "finiquito")
+    .maybeSingle();
+  if (errSel) return { ok: false, error: errSel.message };
+  if (!g) return { ok: false, error: "Solicitud no encontrada." };
+
+  if (g.trabajador_id) {
+    const { error: errT } = await supabase
+      .from("trabajadores")
+      .update({
+        correo: p.correo.trim() || null,
+        banco: p.banco.trim() || null,
+        tipo_cuenta: p.tipoCuenta.trim() || null,
+        numero_cuenta: p.numeroCuenta.replace(/\D/g, "") || null,
+      })
+      .eq("id", g.trabajador_id);
+    if (errT) return { ok: false, error: errT.message };
+  }
+
+  const datos = (g.datos ?? {}) as Record<string, unknown>;
+  const { error: errD } = await supabase
+    .from("solicitudes_rrhh")
+    .update({
+      datos: {
+        ...datos,
+        correo_trabajador: p.correo.trim(),
+        banco: p.banco.trim(),
+        tipo_cuenta: p.tipoCuenta.trim(),
+        numero_cuenta: p.numeroCuenta.replace(/\D/g, ""),
+      },
+    })
+    .eq("id", gestionId);
+  if (errD) return { ok: false, error: errD.message };
+
+  revalidatePath("/finiquitos", "layout");
+  return { ok: true };
 }
 
 /**

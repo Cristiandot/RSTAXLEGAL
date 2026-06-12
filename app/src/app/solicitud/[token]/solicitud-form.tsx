@@ -8,6 +8,7 @@ import { MOTIVOS_AMONESTACION } from "@/lib/amonestaciones";
 import { TIPOS_PERMISO } from "@/lib/permisos";
 import { formatFecha } from "@/lib/format";
 import { calcularVacaciones } from "@/lib/feriados";
+import { BANCOS_DT, TIPOS_CUENTA_DT } from "@/lib/dt-finiquitos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -265,6 +266,10 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
                   fecha_aviso: s("fecha_aviso"),
                   fecha_termino: s("fecha_termino"),
                   aviso_modalidad: s("aviso_modalidad"),
+                  correo_trabajador: s("correo_trabajador"),
+                  banco: s("banco_trabajador"),
+                  tipo_cuenta: s("tipo_cuenta_trabajador"),
+                  numero_cuenta: s("numero_cuenta_trabajador"),
                 }
               : gestion === "permiso"
                 ? {
@@ -749,6 +754,37 @@ export function SolicitudForm({ token, empresa }: { token: string; empresa: Info
               equipo legal revise esta solicitud — hay causales y fueros que
               cambian completamente el procedimiento.
             </p>
+
+            <div className="sm:col-span-2">
+              <p className="text-sm font-medium">Datos de pago del trabajador</p>
+              <p className="text-xs text-muted-foreground">
+                Cuenta bancaria UNIPERSONAL del trabajador y su correo personal —
+                se usan para pagarle el finiquito por transferencia. Si no los
+                tienes ahora puedes dejarlos en blanco y el equipo los pedirá.
+              </p>
+            </div>
+            <Campo label="Correo personal del trabajador">
+              <Input name="correo_trabajador" type="email" placeholder="correo@ejemplo.cl" />
+            </Campo>
+            <Campo label="Banco">
+              <select name="banco_trabajador" className={selectCls} defaultValue="">
+                <option value="">— No lo sé aún —</option>
+                {Object.values(BANCOS_DT).map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </Campo>
+            <Campo label="Tipo de cuenta">
+              <select name="tipo_cuenta_trabajador" className={selectCls} defaultValue="">
+                <option value="">— No lo sé aún —</option>
+                {Object.values(TIPOS_CUENTA_DT).map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </Campo>
+            <Campo label="N° de cuenta (sin guiones ni espacios)">
+              <Input name="numero_cuenta_trabajador" inputMode="numeric" placeholder="ej. 20319708" />
+            </Campo>
           </CardContent>
         </Card>
       ) : null}

@@ -15,8 +15,10 @@ import {
 import {
   generarCartaAviso,
   guardarCalculoFiniquito,
+  guardarDatosPago,
   type ResumenCalculo,
 } from "../actions";
+import { BANCOS_DT, TIPOS_CUENTA_DT } from "@/lib/dt-finiquitos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +68,11 @@ export type GestionFiniquito = {
   remuneracionPendiente: number | null;
   /** Domicilio del trabajador (para la carta de aviso por correo certificado). */
   domicilio: string | null;
+  /** Datos de pago (ficha del trabajador, o lo informado por el cliente). */
+  correo: string | null;
+  banco: string | null;
+  tipoCuenta: string | null;
+  numeroCuenta: string | null;
   licenciaVigente: string | null;
   fuero: string | null;
   calculoGuardado: {
@@ -192,6 +199,35 @@ export function CalculadoraClient({
     mesAnteriorA(gestion?.fechaTermino ?? hoyLocal()),
   );
   const [generandoCarta, startCarta] = useTransition();
+
+  // ── Datos de pago del trabajador (para el CSV DT / transferencia) ──
+  const opcionCanonica = (v: string | null, opciones: string[]) =>
+    opciones.find((o) => o.toUpperCase() === (v ?? "").trim().toUpperCase()) ?? (v ?? "");
+  const [pagoCorreo, setPagoCorreo] = useState(gestion?.correo ?? "");
+  const [pagoBanco, setPagoBanco] = useState(
+    opcionCanonica(gestion?.banco ?? null, Object.values(BANCOS_DT)),
+  );
+  const [pagoTipoCuenta, setPagoTipoCuenta] = useState(
+    opcionCanonica(gestion?.tipoCuenta ?? null, Object.values(TIPOS_CUENTA_DT)),
+  );
+  const [pagoCuenta, setPagoCuenta] = useState(gestion?.numeroCuenta ?? "");
+  const [guardandoPago, startPago] = useTransition();
+
+  function guardarPago() {
+    if (!gestion) return;
+    startPago(async () => {
+      const res = await guardarDatosPago(gestion.id, {
+        correo: pagoCorreo,
+        banco: pagoBanco,
+        tipoCuenta: pagoTipoCuenta,
+        numeroCuenta: pagoCuenta,
+      });
+      if (res.ok) {
+        toast.success("Datos de pago guardados");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al guardar");
+    });
+  }
 
   // UF e IMM del período: indicadores Previred del mes ANTERIOR al término
   // (Art. 172: UF del último día del mes anterior). Fallback: el más reciente
@@ -508,6 +544,69 @@ export function CalculadoraClient({
               </Campo>
             </div>
           </SeccionCard>
+
+          {gestion ? (
+            <SeccionCard titulo="Datos de pago del trabajador (transferencia DT)">
+              <p className="text-xs text-muted-foreground">
+                Cuenta UNIPERSONAL y correo personal — los exige la DT para pagar
+                el finiquito electrónico vía TGR. Si el cliente los mandó por el
+                portal vienen precargados; corrígelos acá si vienen malos.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Campo label="Correo personal">
+                  <Input
+                    type="email"
+                    value={pagoCorreo}
+                    onChange={(e) => setPagoCorreo(e.target.value)}
+                    placeholder="correo@ejemplo.cl"
+                  />
+                </Campo>
+                <Campo label="Banco">
+                  <select
+                    className={selectCls}
+                    value={pagoBanco}
+                    onChange={(e) => setPagoBanco(e.target.value)}
+                  >
+                    <option value="">— Sin dato —</option>
+                    {Object.values(BANCOS_DT).map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </Campo>
+                <Campo label="Tipo de cuenta">
+                  <select
+                    className={selectCls}
+                    value={pagoTipoCuenta}
+                    onChange={(e) => setPagoTipoCuenta(e.target.value)}
+                  >
+                    <option value="">— Sin dato —</option>
+                    {Object.values(TIPOS_CUENTA_DT).map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </Campo>
+                <Campo label="N° de cuenta (sin guiones)">
+                  <Input
+                    inputMode="numeric"
+                    value={pagoCuenta}
+                    onChange={(e) => setPagoCuenta(e.target.value)}
+                    placeholder="ej. 20319708"
+                  />
+                </Campo>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={guardarPago}
+                  disabled={guardandoPago}
+                >
+                  {guardandoPago ? "Guardando…" : "Guardar datos de pago"}
+                </Button>
+              </div>
+            </SeccionCard>
+          ) : null}
         </div>
 
         {/* ── Resultado ── */}
