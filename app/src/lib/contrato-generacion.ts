@@ -30,6 +30,15 @@ function textoGratificacion(tipo: string | undefined, monto: number): string {
 }
 
 /**
+ * Denominación del cargo en el documento cuando difiere del valor corto que
+ * usan las plantillas en BD. Cargos sin entrada acá van con su valor tal cual.
+ */
+const CARGO_LABEL: Record<string, string> = {
+  aStop: "Atendedor de Tienda de Conveniencia (aStop)",
+  Atendedor: "Atendedor de Estación de Servicio",
+};
+
+/**
  * Genera el .docx de un contrato existente (cualquiera sea su origen: formulario
  * interno o solicitud pública), lo sube a Storage y marca el contrato 'generado'.
  * Resuelve la plantilla por cliente × cargo × jornada × nacionalidad × tipo.
@@ -131,10 +140,7 @@ export async function generarYSubirContrato(
     COMUNA_EMPLEADO: (t.comuna as string) ?? "",
     ESTADO_CIVIL: (t.estado_civil as string) ?? "",
     FECHA_NACIMIENTO: fechaLarga(t.fecha_nacimiento as string),
-    CARGO:
-      con.cargo === "aStop"
-        ? "Atendedor de Tienda de Conveniencia (aStop)"
-        : "Atendedor de Estación de Servicio",
+    CARGO: CARGO_LABEL[con.cargo as string] ?? (con.cargo as string) ?? "",
     FECHA_INICIO_CONTRATO: fechaLarga(con.fecha_inicio),
     FECHA_TERMINO_CONTRATO: fechaLarga(con.fecha_vencimiento),
     TIPO_CONTRATO: con.tipo_contrato === "plazo_fijo" ? "plazo fijo" : "indefinido",
