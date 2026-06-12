@@ -79,6 +79,11 @@ export async function generarYSubirContrato(
     perdida_caja?: number | string | null;
     gratificacion_tipo?: string;
     gratificacion_monto?: number | string | null;
+    /** "por_dia" = jornal diario; el sueldo base del documento va por día. */
+    modalidad?: string;
+    valor_dia?: number;
+    valor_hora_base?: number;
+    horas_diarias?: number;
   };
   const nacionalidad = ((t.nacionalidad as string) ?? "Chilena").trim();
   const nacPlantilla = nacionalidad.toLowerCase().startsWith("chilen") ? "chileno" : "extranjero";
@@ -128,6 +133,23 @@ export async function generarYSubirContrato(
   const movilizacion = Number(rem.movilizacion ?? 0);
   const colacion = Number(rem.colacion ?? 0);
 
+  // Jornal diario: el "sueldo base" del documento se expresa por día trabajado
+  // (con su equivalencia por hora si está pactada), no como suma mensual.
+  let sueldoTexto = montoCLP(sueldo);
+  let sueldoPalabra = montoEnPalabras(sueldo);
+  if (rem.modalidad === "por_dia" && Number(rem.valor_dia ?? 0) > 0) {
+    const dia = Number(rem.valor_dia);
+    const horaBase = Number(rem.valor_hora_base ?? 0);
+    const horasDia = Number(rem.horas_diarias ?? 0);
+    sueldoTexto = `${montoCLP(dia)} por día efectivamente trabajado`;
+    sueldoPalabra =
+      montoEnPalabras(dia).toLowerCase().replace(/ pesos?$/, "") +
+      " pesos diarios" +
+      (horaBase > 0 && horasDia > 0
+        ? `, equivalentes a $${montoCLP(horaBase)} por hora base en jornada de ${String(horasDia).replace(".", ",")} horas diarias`
+        : "");
+  }
+
   const variables: Record<string, string> = {
     RAZON_SOCIAL: (cli.razon_social as string) ?? "",
     RUT_EMPRESA: (cli.rut_empresa as string) ?? "",
@@ -148,8 +170,8 @@ export async function generarYSubirContrato(
     FECHA_INICIO_CONTRATO: fechaLarga(con.fecha_inicio),
     FECHA_TERMINO_CONTRATO: fechaLarga(con.fecha_vencimiento),
     TIPO_CONTRATO: con.tipo_contrato === "plazo_fijo" ? "plazo fijo" : "indefinido",
-    SUELDO_BASE: montoCLP(sueldo),
-    SUELDO_BASE_PALABRA: montoEnPalabras(sueldo),
+    SUELDO_BASE: sueldoTexto,
+    SUELDO_BASE_PALABRA: sueldoPalabra,
     ASIGNACION_MOVILIZACION: montoCLP(movilizacion),
     ASIGNACION_MOVILIZACION_PALABRA: montoEnPalabras(movilizacion),
     ASIGNACION_COLACION: montoCLP(colacion),
@@ -170,7 +192,7 @@ export async function generarYSubirContrato(
     PREVISION: (t.afp as string) ?? "",
     INSTITUCION_SALUD: (t.salud as string) ?? "",
     REGIMEN_PREVISIONAL: "chileno",
-    HORAS_SEMANALES: horas !== null ? String(horas) : "42",
+    HORAS_SEMANALES: horas !== null ? String(horas).replace(".", ",") : "42",
     // Distribución semanal/horario de la jornada (plantillas C.6 y futuras);
     // si no viene, queda en blanco para completar a mano en la revisión.
     DISTRIBUCION_JORNADA: jornada.distribucion ?? "",
