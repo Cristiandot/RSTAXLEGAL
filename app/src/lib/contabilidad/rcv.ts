@@ -243,8 +243,11 @@ export function parsearRcv(texto: string): ResultadoRcv {
     if (!indices.has(h)) indices.set(h, i);
   });
 
+  // Ventas detalle trae "Rut cliente"; el export de BOLETAS del RCV usa
+  // "RUT Receptor" (formato corto: Tipo Doc;RUT Receptor;Fecha Docto;Fecha
+  // Venc.;Indicador Servicio;Folio;Monto Neto;Monto IVA;Monto Exento;Monto Total)
   const esCompra = idx(indices, "rut proveedor") >= 0;
-  const esVenta = idx(indices, "rut cliente") >= 0;
+  const esVenta = idx(indices, "rut cliente", "rut receptor") >= 0;
   if (!esCompra && !esVenta) {
     return {
       ok: false,
@@ -326,7 +329,7 @@ export function parsearRcv(texto: string): ResultadoRcv {
 
   const col = {
     tipoVenta: idx(indices, "tipo venta"),
-    rut: idx(indices, "rut cliente"),
+    rut: idx(indices, "rut cliente", "rut receptor"),
     razon: idx(indices, "razon social"),
     fDocto: idx(indices, "fecha docto"),
     fRecep: idx(indices, "fecha recepcion"),
