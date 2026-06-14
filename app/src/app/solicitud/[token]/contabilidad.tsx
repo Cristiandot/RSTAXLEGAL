@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  TrendingUp, ShoppingCart, Coins, ReceiptText,
-  ArrowLeft, ArrowRight, Receipt, Truck, Store,
+  TrendingUp, ShoppingCart, Coins, ReceiptText, Truck, Store,
 } from "lucide-react";
 import {
   cargarContabilidad, cargarContabilidadMes,
@@ -12,8 +11,6 @@ import {
 } from "./portal-actions";
 import { BarrasVentasCompras, BarrasHorizontales } from "./mini-charts";
 import { DocumentosSolicitar, type TipoDoc } from "./documentos";
-import { GastosMenores } from "./gastos-menores";
-import { type InfoEmpresa } from "./solicitud-form";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,12 +56,11 @@ function Kpi({
   );
 }
 
-export function Contabilidad({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
+export function Contabilidad({ token }: { token: string }) {
   const anioActual = new Date().getFullYear();
   const [anio, setAnio] = useState(anioActual);
   const [info, setInfo] = useState<ContabilidadInfo | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [subvista, setSubvista] = useState<"panel" | "gastos">("panel");
   const [mesSel, setMesSel] = useState("");
   const [mesInfo, setMesInfo] = useState<MesDetalle | null>(null);
 
@@ -144,21 +140,6 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
       };
   const resultadoBruto = vista.ventas_neto - vista.compras_neto;
 
-  if (subvista === "gastos") {
-    return (
-      <div className="space-y-4">
-        <button
-          type="button"
-          onClick={() => setSubvista("panel")}
-          className="inline-flex items-center gap-1 text-sm text-[var(--brand-teal)]"
-        >
-          <ArrowLeft className="size-4" /> Volver a contabilidad
-        </button>
-        <GastosMenores token={token} empresa={empresa} />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-5">
       {/* Barra de período */}
@@ -173,28 +154,6 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
           ))}
         </select>
       </div>
-
-      {/* Acceso a gastos e ingresos menores */}
-      <button type="button" onClick={() => setSubvista("gastos")} className="block w-full text-left">
-        <Card className="card-soft border-transparent transition-shadow hover:shadow-md">
-          <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal)]/10 text-[var(--brand-teal)]">
-                  <Receipt className="size-5" />
-                </span>
-                <div>
-                  <CardTitle className="text-base">Gastos e ingresos menores</CardTitle>
-                  <CardDescription className="mt-1">
-                    Compras y ventas con boleta que no van al SII mensual, pero sí a tu Operación Renta.
-                  </CardDescription>
-                </div>
-              </div>
-              <ArrowRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
-            </div>
-          </CardHeader>
-        </Card>
-      </button>
 
       {cargando ? (
         <p className="py-10 text-center text-sm text-muted-foreground">Cargando…</p>

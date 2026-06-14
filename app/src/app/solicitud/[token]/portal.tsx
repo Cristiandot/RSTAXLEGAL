@@ -1,21 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, PieChart, Users } from "lucide-react";
-import { type InfoEmpresa } from "./solicitud-form";
+import {
+  Building2, PieChart, Users, Receipt, Table2, ClipboardList,
+} from "lucide-react";
+import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
+import { DetalleRemuneraciones } from "./remuneraciones";
+import { GastosMenores } from "./gastos-menores";
 import { FranjaIndicadores } from "./indicadores";
 import { Empresa } from "./empresa";
 import { Contabilidad } from "./contabilidad";
 import { RecursosHumanos } from "./rrhh";
 
-type Tab = "empresa" | "contabilidad" | "rrhh";
+type Tab =
+  | "empresa"
+  | "contabilidad"
+  | "rrhh"
+  | "gastos"
+  | "remuneraciones"
+  | "solicitudes";
 
 /**
- * Portal del cliente — pestañas Empresa (inicio) · Contabilidad · Recursos
- * humanos, sobre la marca RSTL y con la franja de indicadores Previred.
- * Contabilidad reúne sus datos + gastos e ingresos menores; Recursos humanos
- * reúne su panel + detalle de remuneraciones + solicitudes laborales. Empresa
- * muestra los datos editables y un resumen del mes.
+ * Portal del cliente — menú de pestañas: Empresa (inicio) · Contabilidad ·
+ * Recursos humanos · Ingreso gastos menores · Detalle remuneraciones ·
+ * Solicitudes laborales. Sobre la marca RSTL, con la franja de indicadores
+ * Previred. Cada pestaña carga datos por RPC de token.
  */
 export function PortalCliente({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
   const [tab, setTab] = useState<Tab>("empresa");
@@ -24,6 +33,9 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
     { key: "empresa", label: "Empresa", icon: <Building2 className="size-4" /> },
     { key: "contabilidad", label: "Contabilidad", icon: <PieChart className="size-4" /> },
     { key: "rrhh", label: "Recursos humanos", icon: <Users className="size-4" /> },
+    { key: "gastos", label: "Ingreso gastos menores", icon: <Receipt className="size-4" /> },
+    { key: "remuneraciones", label: "Detalle remuneraciones", icon: <Table2 className="size-4" /> },
+    { key: "solicitudes", label: "Solicitudes laborales", icon: <ClipboardList className="size-4" /> },
   ];
 
   return (
@@ -51,7 +63,7 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm transition-colors ${
+            className={`flex items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-sm transition-colors ${
               tab === t.key
                 ? "border-[var(--brand-teal)] font-semibold text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -64,8 +76,11 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
       </div>
 
       {tab === "empresa" ? <Empresa token={token} onIr={setTab} /> : null}
-      {tab === "contabilidad" ? <Contabilidad token={token} empresa={empresa} /> : null}
-      {tab === "rrhh" ? <RecursosHumanos token={token} empresa={empresa} /> : null}
+      {tab === "contabilidad" ? <Contabilidad token={token} /> : null}
+      {tab === "rrhh" ? <RecursosHumanos token={token} /> : null}
+      {tab === "gastos" ? <GastosMenores token={token} empresa={empresa} /> : null}
+      {tab === "remuneraciones" ? <DetalleRemuneraciones token={token} empresa={empresa} /> : null}
+      {tab === "solicitudes" ? <SolicitudForm token={token} empresa={empresa} /> : null}
     </div>
   );
 }
