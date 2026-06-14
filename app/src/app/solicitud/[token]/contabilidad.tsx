@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   TrendingUp, ShoppingCart, Coins, ReceiptText, Download, FileSpreadsheet,
-  ArrowLeft, ArrowRight, Receipt, ChevronDown, Truck, Store,
+  ArrowLeft, ArrowRight, Receipt, Truck, Store,
 } from "lucide-react";
 import {
   cargarContabilidad, cargarContabilidadMes,
@@ -67,7 +67,6 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
   const [subvista, setSubvista] = useState<"panel" | "gastos">("panel");
   const [mesSel, setMesSel] = useState("");
   const [mesInfo, setMesInfo] = useState<MesDetalle | null>(null);
-  const [verHistorial, setVerHistorial] = useState(false);
 
   const recargar = useCallback(async (a: number) => {
     setCargando(true);
@@ -312,61 +311,6 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
               </CardContent>
             </Card>
           </div>
-
-          {/* Historial de facturas — secundario, colapsable */}
-          <Card className="card-soft border-transparent">
-            <CardHeader>
-              <button
-                type="button"
-                onClick={() => setVerHistorial((v) => !v)}
-                className="flex w-full items-center justify-between gap-2 text-left"
-              >
-                <CardTitle className="text-base">
-                  Historial de facturas{esMes ? <span className="font-normal text-muted-foreground"> · <span className="capitalize">{vista.titulo}</span></span> : null}
-                </CardTitle>
-                <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                  {verHistorial ? "Ocultar" : "Ver detalle"}
-                  <ChevronDown className={`size-4 transition-transform ${verHistorial ? "rotate-180" : ""}`} />
-                </span>
-              </button>
-            </CardHeader>
-            {verHistorial ? (
-            <CardContent>
-              {vista.ultimas_facturas && vista.ultimas_facturas.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-xs text-muted-foreground">
-                        <th className="py-2 pr-2 font-medium">Fecha</th>
-                        <th className="py-2 pr-2 font-medium">Folio</th>
-                        <th className="py-2 pr-2 font-medium">Proveedor / cliente</th>
-                        <th className="py-2 pr-2 text-right font-medium">Total</th>
-                        <th className="py-2 font-medium">Tipo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {vista.ultimas_facturas.map((f, i) => (
-                        <tr key={i} className="border-b last:border-0">
-                          <td className="py-2 pr-2 tabular-nums">{formatFecha(f.fecha)}</td>
-                          <td className="py-2 pr-2 tabular-nums">{f.folio}</td>
-                          <td className="py-2 pr-2">{f.contraparte}</td>
-                          <td className="py-2 pr-2 text-right tabular-nums">{formatMonto(f.total)}</td>
-                          <td className="py-2">
-                            <span className={`rounded-full px-2 py-0.5 text-xs ${f.tipo === "venta" ? "bg-sky-100 text-sky-800" : "bg-pink-100 text-pink-800"}`}>
-                              {f.tipo === "venta" ? "Venta" : "Compra"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Sin facturas en el período.</p>
-              )}
-            </CardContent>
-            ) : null}
-          </Card>
 
           <DocumentosSolicitar token={token} area="contabilidad" titulo="Documentos contables" docs={DOCS_CONTAB} periodos={periodos} />
         </>
