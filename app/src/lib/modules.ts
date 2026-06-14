@@ -93,7 +93,7 @@ export const MODULOS: SeccionModulos[] = [
     ],
   },
   {
-    seccion: "Gestiones",
+    seccion: "Gestiones — Recursos humanos",
     modulos: [
       {
         key: "contratos",
@@ -158,11 +158,16 @@ export const MODULOS: SeccionModulos[] = [
         icon: Calculator,
         estado: "activo",
       },
+    ],
+  },
+  {
+    seccion: "Gestiones — Contabilidad",
+    modulos: [
       {
         key: "documentos",
         label: "Solicitudes de documentos",
         descripcion:
-          "Documentos contables y de personal que piden los clientes desde su portal (balance, libro mayor, certificados).",
+          "Documentos contables (balance, libro mayor, libro diario, estado de resultados) que piden los clientes desde su portal. También recibe las solicitudes de documentos de personal.",
         href: "/documentos",
         icon: FileDown,
         estado: "activo",
