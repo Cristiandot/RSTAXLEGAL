@@ -57,9 +57,9 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
     { key: "empresa", label: "Empresa", icon: <Building2 className="size-4" /> },
     { key: "contabilidad", label: "Contabilidad", icon: <PieChart className="size-4" /> },
     { key: "rrhh", label: "Recursos humanos", icon: <Users className="size-4" /> },
-    { key: "gastos", label: "Ingreso gastos menores", icon: <Receipt className="size-4" /> },
     { key: "remuneraciones", label: "Detalle remuneraciones", icon: <Table2 className="size-4" /> },
     { key: "solicitudes", label: "Solicitudes laborales", icon: <ClipboardList className="size-4" /> },
+    { key: "gastos", label: "Ingreso gastos menores", icon: <Receipt className="size-4" /> },
   ];
 
   return (
