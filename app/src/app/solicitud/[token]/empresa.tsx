@@ -18,6 +18,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Tab = "empresa" | "contabilidad" | "rrhh";
 
+const MESES_PORTAL = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+const selectPortalCls =
+  "h-9 flex-1 rounded-md border border-input bg-card px-2 text-sm";
+
 function periodoPorDefecto(): string {
   const d = new Date();
   const x = new Date(Date.UTC(d.getFullYear(), d.getMonth() - 1, 1));
@@ -55,6 +62,9 @@ export function Empresa({
   const [contab, setContab] = useState<ContabilidadInfo | null>(null);
   const [rrhh, setRrhh] = useState<RrhhInfo | null>(null);
   const [guardando, startGuardar] = useTransition();
+  const anioActual = new Date().getFullYear();
+  const [anioSel, setAnioSel] = useState(anioActual);
+  const [mesSel, setMesSel] = useState(""); // "" = año completo (acumulado)
 
   const recargar = useCallback(async () => {
     const r = await cargarEmpresa(token);
@@ -73,11 +83,11 @@ export function Empresa({
 
   useEffect(() => {
     if (emp?.hace_contabilidad_completa) {
-      void cargarContabilidad(token, new Date().getFullYear()).then((r) => {
+      void cargarContabilidad(token, anioSel).then((r) => {
         if (r.ok && r.info) setContab(r.info);
       });
     }
-  }, [token, emp?.hace_contabilidad_completa]);
+  }, [token, emp?.hace_contabilidad_completa, anioSel]);
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -109,6 +119,16 @@ export function Empresa({
 
   const totales = contab?.totales;
   const ultimoF29 = contab?.f29 && contab.f29.length > 0 ? contab.f29[contab.f29.length - 1] : null;
+  const mesData = mesSel
+    ? (contab?.meses ?? []).find((m) => m.periodo === `${anioSel}-${mesSel}`) ?? null
+    : null;
+  const ventasResumen = mesSel ? (mesData?.ventas_neto ?? 0) : (totales?.ventas_neto ?? 0);
+  const ivaResumen = mesSel
+    ? (mesData?.iva_debito ?? 0) - (mesData?.iva_credito ?? 0)
+    : (totales?.iva_pagar ?? 0);
+  const etiquetaResumen = mesSel
+    ? `${MESES_PORTAL[Number(mesSel) - 1].toLowerCase()} ${anioSel}`
+    : `${anioSel}`;
 
   return (
     <div className="space-y-5">
@@ -123,9 +143,39 @@ export function Empresa({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              <div className="flex gap-2">
+                <select
+                  aria-label="Mes"
+                  className={selectPortalCls}
+                  value={mesSel}
+                  onChange={(e) => setMesSel(e.target.value)}
+                >
+                  <option value="">Año completo</option>
+                  {MESES_PORTAL.map((m, i) => (
+                    <option key={m} value={String(i + 1).padStart(2, "0")}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Año"
+                  className={selectPortalCls}
+                  value={anioSel}
+                  onChange={(e) => setAnioSel(Number(e.target.value))}
+                >
+                  {[anioActual, anioActual - 1].map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="grid grid-cols-2 gap-2">
-                <Mini label={`Ventas netas ${new Date().getFullYear()}`} valor={formatMonto(totales?.ventas_neto ?? 0)} />
-                <Mini label="IVA a pagar (acum.)" valor={formatMonto(totales?.iva_pagar ?? 0)} />
+                <Mini label={`Ventas netas ${etiquetaResumen}`} valor={formatMonto(ventasResumen)} />
+                <Mini
+                  label={mesSel ? "IVA a pagar" : "IVA a pagar (acum.)"}
+                  valor={formatMonto(ivaResumen)}
+                />
               </div>
               {ultimoF29 ? (
                 <p className="text-xs text-muted-foreground">
