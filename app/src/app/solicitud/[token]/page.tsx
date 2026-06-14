@@ -21,19 +21,18 @@ export default async function SolicitudPage({
   return (
     <main className="min-h-svh bg-background px-4 py-8">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-6 flex justify-center">
-          <Image
-            src="/logo-claro.png"
-            alt="Rodríguez Samith Tax & Legal"
-            width={240}
-            height={68}
-            priority
-            className="h-auto w-[240px]"
-          />
-        </div>
-
         {!info ? (
           <div className="card-soft rounded-xl bg-card p-8 text-center">
+            <div className="mb-4 flex justify-center">
+              <Image
+                src="/logo-claro.png"
+                alt="Rodríguez Samith Tax & Legal"
+                width={220}
+                height={62}
+                priority
+                className="h-auto w-[200px]"
+              />
+            </div>
             <h1 className="font-heading text-xl font-semibold">Link no válido</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Este link de solicitud no existe o fue desactivado. Contacta a tu

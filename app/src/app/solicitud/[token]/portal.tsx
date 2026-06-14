@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import {
   Building2, PieChart, Users, Receipt, Table2, ClipboardList,
 } from "lucide-react";
@@ -40,18 +41,28 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
 
   return (
     <div className="space-y-5">
-      {/* Encabezado de la empresa */}
-      <div className="text-center">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          {empresa.razon_social}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {empresa.rut_empresa ? `RUT ${empresa.rut_empresa}` : null}
-          {empresa.rut_empresa && empresa.giro ? " · " : null}
-          {empresa.giro ? empresa.giro : null}
-          {(empresa.rut_empresa || empresa.giro) ? " · " : null}
-          Portal de la empresa
-        </p>
+      {/* Encabezado: empresa a la izquierda, logo a la derecha */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">
+            {empresa.razon_social}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {empresa.rut_empresa ? `RUT ${empresa.rut_empresa}` : null}
+            {empresa.rut_empresa && empresa.giro ? " · " : null}
+            {empresa.giro ? empresa.giro : null}
+            {(empresa.rut_empresa || empresa.giro) ? " · " : null}
+            Portal de la empresa
+          </p>
+        </div>
+        <Image
+          src="/logo-claro.png"
+          alt="Rodríguez Samith Tax & Legal"
+          width={200}
+          height={56}
+          priority
+          className="h-auto w-[130px] shrink-0 sm:w-[180px]"
+        />
       </div>
 
       <FranjaIndicadores token={token} />
