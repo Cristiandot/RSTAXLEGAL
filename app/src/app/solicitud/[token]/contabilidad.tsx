@@ -9,7 +9,7 @@ import {
   cargarContabilidad, cargarContabilidadMes,
   type ContabilidadInfo, type MesDetalle,
 } from "./portal-actions";
-import { BarrasVentasCompras, BarrasHorizontales, ResultadoMensual } from "./mini-charts";
+import { BarrasVentasCompras, BarrasHorizontales } from "./mini-charts";
 import { DocumentosSolicitar, type TipoDoc } from "./documentos";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -203,20 +203,6 @@ export function Contabilidad({ token }: { token: string }) {
                 seleccionado={mesSel || null}
                 onSeleccionar={(p) => setMesSel((prev) => (prev === p ? "" : p))}
               />
-            </CardContent>
-          </Card>
-
-          {/* Resultado mensual — margen ventas − compras (columnas +/-) */}
-          <Card className="card-soft border-transparent">
-            <CardHeader>
-              <CardTitle className="text-base">Resultado mensual · ventas − compras</CardTitle>
-              <CardDescription className="mt-1">
-                Lo que queda cada mes: ventas netas menos compras netas. Verde si es
-                positivo, rojo si es negativo.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResultadoMensual meses={info.meses ?? []} />
             </CardContent>
           </Card>
 
