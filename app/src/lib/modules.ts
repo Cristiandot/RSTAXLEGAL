@@ -17,6 +17,7 @@ import {
   Link2,
   Receipt,
   Stethoscope,
+  FileDown,
   type LucideIcon,
 } from "lucide-react";
 
@@ -155,6 +156,15 @@ export const MODULOS: SeccionModulos[] = [
           "Solicitudes de término del portal y calculadora de indemnizaciones con indicadores Previred.",
         href: "/finiquitos",
         icon: Calculator,
+        estado: "activo",
+      },
+      {
+        key: "documentos",
+        label: "Solicitudes de documentos",
+        descripcion:
+          "Documentos contables y de personal que piden los clientes desde su portal (balance, libro mayor, certificados).",
+        href: "/documentos",
+        icon: FileDown,
         estado: "activo",
       },
     ],

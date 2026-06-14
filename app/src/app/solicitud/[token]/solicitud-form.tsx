@@ -35,6 +35,9 @@ export type TrabajadorRegistrado = {
 
 export type InfoEmpresa = {
   razon_social: string;
+  rut_empresa?: string | null;
+  giro?: string | null;
+  hace_contabilidad_completa?: boolean;
   opciones: {
     cargo: string;
     jornada: string;

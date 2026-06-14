@@ -1,36 +1,99 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, ClipboardList, Receipt, Table2, Users } from "lucide-react";
+import {
+  ArrowLeft, ArrowRight, PieChart, Users, ClipboardList,
+  ClipboardType, Table2, Receipt,
+} from "lucide-react";
 import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
 import { DetalleRemuneraciones } from "./remuneraciones";
 import { GastosMenores } from "./gastos-menores";
-import { Button } from "@/components/ui/button";
+import { FranjaIndicadores } from "./indicadores";
+import { Contabilidad } from "./contabilidad";
+import { RecursosHumanos } from "./rrhh";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+  Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
 
+type Tab = "contabilidad" | "rrhh" | "solicitudes";
+type VistaSol = "inicio" | "solicitudes" | "remuneraciones" | "gastos";
+
 /**
- * Portada del portal del cliente: resumen de la empresa y acceso a las
- * secciones. "Panel de solicitudes" es el formulario de gestiones;
- * "Detalle remuneraciones" (novedades del mes) está en construcción.
+ * Portal del cliente — diseño de pestañas (Contabilidad · Recursos humanos ·
+ * Solicitudes) sobre la marca RSTL, con la franja de indicadores Previred.
+ * Contabilidad y RRHH leen datos reales por RPC de token; Solicitudes reúne las
+ * gestiones existentes (formulario, novedades del mes y gastos menores).
  */
 export function PortalCliente({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
-  const [vista, setVista] = useState<
-    "inicio" | "solicitudes" | "remuneraciones" | "gastos"
-  >("inicio");
+  const [tab, setTab] = useState<Tab>(
+    empresa.hace_contabilidad_completa ? "contabilidad" : "solicitudes",
+  );
+
+  const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: "contabilidad", label: "Contabilidad", icon: <PieChart className="size-4" /> },
+    { key: "rrhh", label: "Recursos humanos", icon: <Users className="size-4" /> },
+    { key: "solicitudes", label: "Solicitudes", icon: <ClipboardList className="size-4" /> },
+  ];
+
+  return (
+    <div className="space-y-5">
+      {/* Encabezado de la empresa */}
+      <div className="text-center">
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+          {empresa.razon_social}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {empresa.rut_empresa ? `RUT ${empresa.rut_empresa}` : null}
+          {empresa.rut_empresa && empresa.giro ? " · " : null}
+          {empresa.giro ? empresa.giro : null}
+          {(empresa.rut_empresa || empresa.giro) ? " · " : null}
+          Portal de la empresa
+        </p>
+      </div>
+
+      <FranjaIndicadores token={token} />
+
+      {/* Pestañas */}
+      <div className="flex flex-wrap justify-center gap-1 border-b">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm transition-colors ${
+              tab === t.key
+                ? "border-[var(--brand-teal)] font-semibold text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "contabilidad" ? <Contabilidad token={token} /> : null}
+      {tab === "rrhh" ? <RecursosHumanos token={token} /> : null}
+      {tab === "solicitudes" ? <SeccionSolicitudes token={token} empresa={empresa} /> : null}
+    </div>
+  );
+}
+
+/** Sub-sección Solicitudes: los 3 accesos existentes con navegación propia. */
+function SeccionSolicitudes({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
+  const [vista, setVista] = useState<VistaSol>("inicio");
 
   if (vista !== "inicio") {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => setVista("inicio")}>
+        <button
+          type="button"
+          onClick={() => setVista("inicio")}
+          className="inline-flex items-center gap-1 text-sm text-[var(--brand-teal)]"
+        >
           <ArrowLeft className="size-4" />
-          Volver al inicio
-        </Button>
+          Volver a solicitudes
+        </button>
         {vista === "solicitudes" ? (
           <SolicitudForm token={token} empresa={empresa} />
         ) : vista === "remuneraciones" ? (
@@ -42,119 +105,54 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
     );
   }
 
+  const accesos: {
+    key: VistaSol;
+    icon: React.ReactNode;
+    titulo: string;
+    desc: string;
+  }[] = [
+    {
+      key: "solicitudes",
+      icon: <ClipboardType className="size-5" />,
+      titulo: "Panel de solicitudes",
+      desc: "Contratos nuevos, anexos, cartas de amonestación, finiquitos, papeletas de vacaciones y permisos.",
+    },
+    {
+      key: "remuneraciones",
+      icon: <Table2 className="size-5" />,
+      titulo: "Detalle remuneraciones",
+      desc: "Novedades del mes para las liquidaciones: horas extra, turnos, anticipos y bonos. Cierre mensual.",
+    },
+    {
+      key: "gastos",
+      icon: <Receipt className="size-5" />,
+      titulo: "Gastos e ingresos menores",
+      desc: "Compras y ventas con boleta que no van al SII mensual, pero sí a tu Operación Renta.",
+    },
+  ];
+
   return (
-    <div className="space-y-5">
-      <div className="text-center">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          {empresa.razon_social}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Portal de la empresa · RS Tax &amp; Legal
-        </p>
-      </div>
-
-      <Card className="card-soft border-transparent">
-        <CardContent className="flex items-center gap-3 pt-4">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal)]/10 text-[var(--brand-teal)]">
-            <Users className="size-5" />
-          </span>
-          <div>
-            <p className="text-sm font-medium">
-              {empresa.trabajadores.length} trabajador
-              {empresa.trabajadores.length === 1 ? "" : "es"} registrado
-              {empresa.trabajadores.length === 1 ? "" : "s"} con RS Tax &amp; Legal
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Activos o con contrato reciente. Los nuevos se suman solos al
-              solicitar su contrato.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <button
-        type="button"
-        onClick={() => setVista("solicitudes")}
-        className="block w-full text-left"
-      >
-        <Card className="card-soft border-transparent transition-shadow hover:shadow-md">
-          <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal)]/10 text-[var(--brand-teal)]">
-                  <ClipboardList className="size-5" />
-                </span>
-                <div>
-                  <CardTitle className="text-base">Panel de solicitudes</CardTitle>
-                  <CardDescription className="mt-1">
-                    Contratos nuevos, anexos, cartas de amonestación, finiquitos,
-                    papeletas de vacaciones y permisos. Llenas la solicitud y el
-                    equipo de RS Tax &amp; Legal la revisa y prepara el documento.
-                  </CardDescription>
+    <div className="space-y-4">
+      {accesos.map((a) => (
+        <button key={a.key} type="button" onClick={() => setVista(a.key)} className="block w-full text-left">
+          <Card className="card-soft border-transparent transition-shadow hover:shadow-md">
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal)]/10 text-[var(--brand-teal)]">
+                    {a.icon}
+                  </span>
+                  <div>
+                    <CardTitle className="text-base">{a.titulo}</CardTitle>
+                    <CardDescription className="mt-1">{a.desc}</CardDescription>
+                  </div>
                 </div>
+                <ArrowRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
               </div>
-              <ArrowRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
-            </div>
-          </CardHeader>
-        </Card>
-      </button>
-
-      <button
-        type="button"
-        onClick={() => setVista("remuneraciones")}
-        className="block w-full text-left"
-      >
-        <Card className="card-soft border-transparent transition-shadow hover:shadow-md">
-          <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal)]/10 text-[var(--brand-teal)]">
-                  <Table2 className="size-5" />
-                </span>
-                <div>
-                  <CardTitle className="text-base">Detalle remuneraciones</CardTitle>
-                  <CardDescription className="mt-1">
-                    Novedades del mes para las liquidaciones: horas extra, turnos
-                    en feriados y domingos (si aplica), anticipos y bonos.
-                    Lo que ya pediste por el panel de solicitudes (permisos,
-                    vacaciones, finiquitos) se carga solo — no lo repites acá.
-                  </CardDescription>
-                </div>
-              </div>
-              <ArrowRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
-            </div>
-          </CardHeader>
-        </Card>
-      </button>
-
-      <button
-        type="button"
-        onClick={() => setVista("gastos")}
-        className="block w-full text-left"
-      >
-        <Card className="card-soft border-transparent transition-shadow hover:shadow-md">
-          <CardHeader>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal)]/10 text-[var(--brand-teal)]">
-                  <Receipt className="size-5" />
-                </span>
-                <div>
-                  <CardTitle className="text-base">
-                    Gastos e ingresos menores
-                  </CardTitle>
-                  <CardDescription className="mt-1">
-                    Compras y ventas con boleta que no pasan por las facturas de
-                    la empresa. No van al SII mensual, pero se consideran en tu
-                    Operación Renta anual.
-                  </CardDescription>
-                </div>
-              </div>
-              <ArrowRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
-            </div>
-          </CardHeader>
-        </Card>
-      </button>
+            </CardHeader>
+          </Card>
+        </button>
+      ))}
     </div>
   );
 }
