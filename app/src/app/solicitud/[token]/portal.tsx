@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import {
   Building2, PieChart, Users, Receipt, Table2, ClipboardList,
@@ -21,6 +21,10 @@ type Tab =
   | "remuneraciones"
   | "solicitudes";
 
+const TABS_VALIDOS: Tab[] = [
+  "empresa", "contabilidad", "rrhh", "gastos", "remuneraciones", "solicitudes",
+];
+
 /**
  * Portal del cliente — menú de pestañas: Empresa (inicio) · Contabilidad ·
  * Recursos humanos · Ingreso gastos menores · Detalle remuneraciones ·
@@ -29,6 +33,25 @@ type Tab =
  */
 export function PortalCliente({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
   const [tab, setTab] = useState<Tab>("empresa");
+  const claveTab = `rstl_portal_tab_${token}`;
+
+  // Recordar la pestaña al refrescar (se lee tras montar para no romper la
+  // hidratación; el primer render siempre es "empresa").
+  useEffect(() => {
+    const guardado = localStorage.getItem(claveTab);
+    if (guardado && (TABS_VALIDOS as string[]).includes(guardado)) {
+      setTab(guardado as Tab);
+    }
+  }, [claveTab]);
+
+  function irTab(t: Tab) {
+    setTab(t);
+    try {
+      localStorage.setItem(claveTab, t);
+    } catch {
+      // almacenamiento no disponible (modo privado, etc.) — no es crítico
+    }
+  }
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: "empresa", label: "Empresa", icon: <Building2 className="size-4" /> },
@@ -73,7 +96,7 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
           <button
             key={t.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            onClick={() => irTab(t.key)}
             className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm transition-colors ${
               tab === t.key
                 ? "border-[var(--brand-teal)] font-semibold text-foreground"
