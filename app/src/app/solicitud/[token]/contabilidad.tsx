@@ -254,27 +254,7 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
             </CardContent>
           </Card>
 
-          {/* Top proveedores / clientes */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Card className="card-soft border-transparent">
-              <CardHeader>
-                <CardTitle className="text-base">Proveedores más comunes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BarrasHorizontales rows={vista.top_proveedores.map((p) => ({ nombre: p.nombre, monto: p.monto }))} color="#0b2545" />
-              </CardContent>
-            </Card>
-            <Card className="card-soft border-transparent">
-              <CardHeader>
-                <CardTitle className="text-base">Compradores más comunes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <BarrasHorizontales rows={vista.top_clientes.map((p) => ({ nombre: p.nombre, monto: p.monto }))} color="#17a2b8" />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Info relevante */}
+          {/* Info relevante (IVA y F29) — arriba de proveedores/clientes */}
           <Card className="card-soft border-transparent">
             <CardContent className="flex flex-wrap gap-x-8 gap-y-2 pt-4 text-sm">
               <div>
@@ -303,6 +283,26 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
               ) : null}
             </CardContent>
           </Card>
+
+          {/* Top proveedores / clientes */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card className="card-soft border-transparent">
+              <CardHeader>
+                <CardTitle className="text-base">Proveedores más comunes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <BarrasHorizontales rows={vista.top_proveedores.map((p) => ({ nombre: p.nombre, monto: p.monto }))} color="#0b2545" />
+              </CardContent>
+            </Card>
+            <Card className="card-soft border-transparent">
+              <CardHeader>
+                <CardTitle className="text-base">Compradores más comunes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <BarrasHorizontales rows={vista.top_clientes.map((p) => ({ nombre: p.nombre, monto: p.monto }))} color="#17a2b8" />
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Historial de facturas */}
           <Card className="card-soft border-transparent">
