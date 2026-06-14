@@ -3,19 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  Users, UserPlus, FileText, Stethoscope, Banknote,
+  Users, UserPlus, FileText, Stethoscope, Banknote, FileX,
 } from "lucide-react";
 import { cargarRrhh, type RrhhInfo } from "./portal-actions";
 import { BarrasDotacion } from "./mini-charts";
-import { DocumentosSolicitar, type TipoDoc } from "./documentos";
+import { DocumentosRrhh } from "./documentos-rrhh";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-const DOCS_RRHH: TipoDoc[] = [
-  { tipo: "Certificado de antigüedad", desc: "Para un trabajador que indiques." },
-  { tipo: "Libro de remuneraciones", desc: "Detalle mensual de la nómina." },
-  { tipo: "Liquidaciones del mes", desc: "Liquidaciones de sueldo del período." },
-];
 
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
@@ -97,13 +91,36 @@ export function RecursosHumanos({ token }: { token: string }) {
         <p className="py-10 text-center text-sm text-muted-foreground">Cargando…</p>
       ) : info ? (
         <>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
             <Kpi feat icon={<Users className="size-3.5" />} label="Nómina activa" valor={String(info.nomina_activa)} />
             <Kpi icon={<UserPlus className="size-3.5" />} label="Contratos nuevos" valor={String(info.contratos_nuevos)} />
             <Kpi icon={<FileText className="size-3.5" />} label="Anexos nuevos" valor={String(info.anexos_nuevos)} />
             <Kpi icon={<Stethoscope className="size-3.5" />} label="Licencias vig." valor={String(info.licencias_vigentes)} alerta={info.licencias_vigentes > 0} />
+            <Kpi icon={<FileX className="size-3.5" />} label="Finiquitos activos" valor={String(info.finiquitos_activos)} alerta={info.finiquitos_activos > 0} />
             <Kpi feat icon={<Banknote className="size-3.5" />} label="Costo remun." valor={info.costo_remuneraciones > 0 ? formatMonto(info.costo_remuneraciones) : "—"} />
           </div>
+
+          {info.finiquitos && info.finiquitos.length > 0 ? (
+            <Card className="card-soft border-transparent">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <FileX className="size-4 text-red-600" /> Finiquitos en curso
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-1.5 text-sm">
+                  {info.finiquitos.map((f, i) => (
+                    <li key={i} className="flex items-baseline justify-between gap-2">
+                      <span className="font-medium">{f.trabajador}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {f.rut ? `${f.rut} · ` : ""}en proceso con RS Tax &amp; Legal
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null}
 
           {info.plazo_fijo_por_vencer > 0 ? (
             <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
@@ -218,7 +235,11 @@ export function RecursosHumanos({ token }: { token: string }) {
             </Card>
           ) : null}
 
-          <DocumentosSolicitar token={token} area="rrhh" titulo="Documentos de personal" docs={DOCS_RRHH} periodos={periodosDoc} />
+          <DocumentosRrhh
+            token={token}
+            trabajadores={(info.trabajadores ?? []).map((t) => ({ nombre: t.nombre, rut: t.rut }))}
+            periodos={periodosDoc}
+          />
         </>
       ) : null}
 

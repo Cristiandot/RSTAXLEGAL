@@ -234,12 +234,15 @@ export async function cargarContabilidadMes(
 export type DotacionRow = { area: string; n: number };
 export type TrabajadorRrhh = {
   nombre: string;
+  rut: string | null;
   cargo: string | null;
   tipo_contrato: string | null;
   fecha_ingreso: string | null;
   fecha_termino: string | null;
   nuevo: boolean;
 };
+
+export type FiniquitoActivo = { trabajador: string; rut: string | null; estado: string };
 export type LicenciaRrhh = {
   trabajador: string | null;
   fecha_inicio: string | null;
@@ -262,6 +265,8 @@ export type RrhhInfo = {
   anexos_nuevos: number;
   licencias_vigentes: number;
   costo_remuneraciones: number;
+  finiquitos_activos: number;
+  finiquitos: FiniquitoActivo[];
   dotacion: DotacionRow[];
   trabajadores: TrabajadorRrhh[];
   licencias: LicenciaRrhh[];
