@@ -56,14 +56,14 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
 
       <FranjaIndicadores token={token} />
 
-      {/* Pestañas */}
-      <div className="flex flex-wrap justify-center gap-1 border-b">
+      {/* Pestañas — una sola línea (scroll horizontal si no cabe) */}
+      <div className="flex flex-nowrap justify-center gap-0.5 overflow-x-auto border-b">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-sm transition-colors ${
+            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm transition-colors ${
               tab === t.key
                 ? "border-[var(--brand-teal)] font-semibold text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
