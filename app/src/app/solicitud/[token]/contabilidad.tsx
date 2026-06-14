@@ -33,6 +33,16 @@ function mesCorto(p: string): string {
   return `${MESES[m - 1] ?? "?"}`;
 }
 
+const MESES_LARGO = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+function nombreMes(p: string): string {
+  const [y, m] = p.split("-").map(Number);
+  return `${MESES_LARGO[m - 1] ?? "?"} ${y}`;
+}
+
 function Kpi({
   icon, label, valor, sub, feat = false,
 }: { icon: React.ReactNode; label: string; valor: string; sub?: string; feat?: boolean }) {
@@ -54,6 +64,7 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
   const [info, setInfo] = useState<ContabilidadInfo | null>(null);
   const [cargando, setCargando] = useState(true);
   const [subvista, setSubvista] = useState<"panel" | "gastos">("panel");
+  const [mesSel, setMesSel] = useState("");
 
   const recargar = useCallback(async (a: number) => {
     setCargando(true);
@@ -79,6 +90,14 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
   const ultimoF29 = info?.f29 && info.f29.length > 0 ? info.f29[info.f29.length - 1] : null;
   const totales = info?.totales;
   const resultadoBruto = totales ? totales.ventas_neto - totales.compras_neto : 0;
+
+  // Detalle mensual: usa los datos por período que ya trae el RPC.
+  const mesesData = info?.meses ?? [];
+  const mesSelEff = mesesData.some((m) => m.periodo === mesSel)
+    ? mesSel
+    : (mesesData[mesesData.length - 1]?.periodo ?? "");
+  const mesData = mesesData.find((m) => m.periodo === mesSelEff) ?? null;
+  const f29Mes = info?.f29?.find((f) => f.periodo === mesSelEff) ?? null;
 
   if (subvista === "gastos") {
     return (
@@ -256,6 +275,70 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">Sin facturas en el período.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Detalle mensual (el general/acumulado queda arriba) */}
+          <Card className="card-soft border-transparent">
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="text-base">Detalle mensual</CardTitle>
+                {mesesData.length > 0 ? (
+                  <select
+                    className="h-9 rounded-md border border-input bg-card px-3 text-sm capitalize"
+                    value={mesSelEff}
+                    onChange={(e) => setMesSel(e.target.value)}
+                  >
+                    {mesesData.map((m) => (
+                      <option key={m.periodo} value={m.periodo} className="capitalize">
+                        {nombreMes(m.periodo)}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {mesData ? (
+                <>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                    <Kpi icon={<TrendingUp className="size-3.5" />} label="Ventas netas" valor={formatMonto(mesData.ventas_neto)} />
+                    <Kpi icon={<ShoppingCart className="size-3.5" />} label="Compras netas" valor={formatMonto(mesData.compras_neto)} />
+                    <Kpi icon={<Coins className="size-3.5" />} label="IVA a pagar" valor={formatMonto(mesData.iva_debito - mesData.iva_credito)} />
+                    <Kpi icon={<ReceiptText className="size-3.5" />} label="Resultado bruto" valor={formatMonto(mesData.ventas_neto - mesData.compras_neto)} />
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">IVA débito</p>
+                      <p className="font-semibold">{formatMonto(mesData.iva_debito)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">IVA crédito</p>
+                      <p className="font-semibold">{formatMonto(mesData.iva_credito)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total ventas (c/IVA)</p>
+                      <p className="font-semibold">{formatMonto(mesData.ventas_total)}</p>
+                    </div>
+                    {f29Mes ? (
+                      <div>
+                        <p className="text-xs text-muted-foreground">F29 {mesCorto(f29Mes.periodo)}</p>
+                        <p className="font-semibold">
+                          {f29Mes.fecha_f29_presentado ? (
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">
+                              Presentado {formatFecha(f29Mes.fecha_f29_presentado)}
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">En proceso</span>
+                          )}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Sin datos para el mes seleccionado.</p>
               )}
             </CardContent>
           </Card>
