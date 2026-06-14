@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Paperclip, Plus, Trash2 } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import {
   anularGastoMenor,
-  crearGastoMenor,
+  crearGastoMenorConArchivo,
   listarGastosMenores,
   type GastoMenorPortal,
 } from "./gastos-actions";
@@ -57,21 +57,25 @@ export function GastosMenores({
   const [fecha, setFecha] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [monto, setMonto] = useState("");
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [inputKey, setInputKey] = useState(0);
 
   function agregar() {
-    const montoNum = Number(monto.replace(/\./g, "").replace(",", "."));
     startAccion(async () => {
-      const res = await crearGastoMenor(token, {
-        tipo,
-        fecha,
-        descripcion,
-        monto: montoNum,
-      });
+      const fd = new FormData();
+      fd.set("tipo", tipo);
+      fd.set("fecha", fecha);
+      fd.set("descripcion", descripcion);
+      fd.set("monto", monto);
+      if (archivo) fd.set("archivo", archivo);
+      const res = await crearGastoMenorConArchivo(token, fd);
       if (res.ok) {
         toast.success("Movimiento registrado");
         setFecha("");
         setDescripcion("");
         setMonto("");
+        setArchivo(null);
+        setInputKey((k) => k + 1);
         await recargar(anio);
       } else {
         toast.error(res.error ?? "No se pudo registrar.");
@@ -155,6 +159,20 @@ export function GastosMenores({
                 onChange={(e) => setMonto(e.target.value)}
               />
             </div>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="gm-archivo">Boleta o comprobante (opcional)</Label>
+              <Input
+                key={inputKey}
+                id="gm-archivo"
+                type="file"
+                accept="image/*,application/pdf"
+                className="file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1 file:text-sm"
+                onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Si quieres, adjunta una foto o PDF de la boleta — imagen o PDF, hasta 5 MB.
+              </p>
+            </div>
           </div>
           <div className="flex justify-end">
             <Button type="button" onClick={agregar} disabled={ocupado}>
@@ -227,6 +245,12 @@ export function GastosMenores({
                     <span className="truncate" title={g.descripcion}>
                       {g.descripcion}
                     </span>
+                    {g.documento_path ? (
+                      <Paperclip
+                        className="size-3.5 shrink-0 text-[var(--brand-teal)]"
+                        aria-label="Con comprobante adjunto"
+                      />
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <span className="font-medium tabular-nums">

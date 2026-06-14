@@ -14,6 +14,7 @@ export type GastoMenorPortal = {
   fecha: string;
   descripcion: string;
   monto: number;
+  documento_path: string | null;
 };
 
 export async function listarGastosMenores(
@@ -52,6 +53,77 @@ export async function crearGastoMenor(
       fecha: g.fecha,
       descripcion: g.descripcion.trim(),
       monto: String(Math.round(g.monto)),
+    },
+  });
+  if (error) {
+    return {
+      ok: false,
+      error: error.message.includes("inválido")
+        ? "Este link no es válido. Contacta a RS Tax & Legal."
+        : `No se pudo registrar: ${error.message}`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Crea un gasto/ingreso menor con un archivo OPCIONAL (boleta) adjunto. El
+ * archivo se sube al bucket privado `gastos` (anon puede insertar; el equipo
+ * lo lee) y la fila guarda su ruta. Si no se adjunta archivo, funciona igual.
+ */
+export async function crearGastoMenorConArchivo(
+  token: string,
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string }> {
+  const tipo = String(formData.get("tipo") ?? "");
+  const fecha = String(formData.get("fecha") ?? "");
+  const descripcion = String(formData.get("descripcion") ?? "").trim();
+  const montoRaw = String(formData.get("monto") ?? "").replace(/\./g, "").replace(",", ".");
+  const monto = Number(montoRaw);
+
+  if (tipo !== "compra" && tipo !== "venta") {
+    return { ok: false, error: "Indica si es una compra (gasto) o una venta (ingreso)." };
+  }
+  if (!fecha) return { ok: false, error: "Indica la fecha del movimiento." };
+  if (!descripcion) return { ok: false, error: "Describe brevemente el movimiento." };
+  if (!Number.isFinite(monto) || monto <= 0) {
+    return { ok: false, error: "El monto debe ser mayor a cero." };
+  }
+
+  const supabase = await createClient();
+
+  // Valida el token antes de subir nada (evita archivos huérfanos).
+  const { data: valido, error: errTok } = await supabase.rpc("portal_token_valido", { p_token: token });
+  if (errTok || !valido) {
+    return { ok: false, error: "Este link no es válido. Contacta a RS Tax & Legal." };
+  }
+
+  let documentoPath: string | null = null;
+  const archivo = formData.get("archivo");
+  if (archivo instanceof File && archivo.size > 0) {
+    if (archivo.size > 5 * 1024 * 1024) {
+      return { ok: false, error: "El archivo supera los 5 MB. Sube una versión más liviana." };
+    }
+    const punto = archivo.name.lastIndexOf(".");
+    const ext = punto >= 0 ? archivo.name.slice(punto + 1).toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+    const path = `portal/${crypto.randomUUID()}${ext ? `.${ext}` : ""}`;
+    const { error: errUp } = await supabase.storage
+      .from("gastos")
+      .upload(path, archivo, { contentType: archivo.type || undefined, upsert: false });
+    if (errUp) {
+      return { ok: false, error: `No se pudo subir el archivo: ${errUp.message}` };
+    }
+    documentoPath = path;
+  }
+
+  const { error } = await supabase.rpc("crear_gasto_menor", {
+    p_token: token,
+    p: {
+      tipo,
+      fecha,
+      descripcion,
+      monto: String(Math.round(monto)),
+      documento_path: documentoPath,
     },
   });
   if (error) {
