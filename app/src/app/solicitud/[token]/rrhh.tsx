@@ -237,7 +237,12 @@ export function RecursosHumanos({ token }: { token: string }) {
 
           <DocumentosRrhh
             token={token}
-            trabajadores={(info.trabajadores ?? []).map((t) => ({ nombre: t.nombre, rut: t.rut }))}
+            trabajadores={(info.trabajadores ?? []).map((t) => ({
+              nombre: t.nombre,
+              rut: t.rut,
+              cargo: t.cargo,
+              fechaIngreso: t.fecha_ingreso,
+            }))}
             periodos={periodosDoc}
           />
         </>

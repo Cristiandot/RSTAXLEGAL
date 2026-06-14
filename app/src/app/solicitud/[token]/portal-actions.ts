@@ -1,6 +1,67 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { generarDocx, fechaLarga } from "@/lib/generar-docx";
+import { nombreArchivo } from "@/lib/format";
+
+/** Texto de antigüedad ("X años y Y meses") desde la fecha de ingreso a hoy. */
+function antiguedadTexto(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const hoy = new Date();
+  let meses = (hoy.getUTCFullYear() - y) * 12 + (hoy.getUTCMonth() - (m - 1));
+  if (hoy.getUTCDate() < d) meses--;
+  if (meses < 0) meses = 0;
+  const a = Math.floor(meses / 12);
+  const mm = meses % 12;
+  const partes = [
+    a > 0 ? `${a} año${a === 1 ? "" : "s"}` : "",
+    mm > 0 ? `${mm} mes${mm === 1 ? "" : "es"}` : "",
+  ].filter(Boolean);
+  return partes.join(" y ") || "menos de un mes";
+}
+
+/**
+ * Genera al instante el certificado de antigüedad de un trabajador (formato
+ * único, plantilla GENERICO). Devuelve el .docx en base64 para descarga directa.
+ */
+export async function generarCertificadoAntiguedad(
+  token: string,
+  worker: { nombre: string; rut: string | null; cargo: string | null; fechaIngreso: string | null },
+): Promise<{ ok: boolean; base64?: string; filename?: string; error?: string }> {
+  if (!worker.fechaIngreso) {
+    return { ok: false, error: "No tenemos registrada la fecha de ingreso de este trabajador. Pídelo al equipo." };
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_empresa", { p_token: token });
+  if (error || !data) return { ok: false, error: "Este link no es válido. Contacta a RS Tax & Legal." };
+  const emp = data as EmpresaDatos;
+
+  const hoy = new Date();
+  const hoyIso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+  const datos: Record<string, string> = {
+    CIUDAD: emp.ciudad ?? emp.comuna ?? "Santiago",
+    FECHA_HOY: fechaLarga(hoyIso),
+    RAZON_SOCIAL: emp.razon_social ?? "",
+    RUT_EMPRESA: emp.rut_empresa ?? "",
+    NOMBRE_REP_LEGAL: emp.representante_legal ?? "",
+    RUT_REP_LEGAL: emp.representante_legal_rut ?? "",
+    NOMBRE_EMPLEADO: worker.nombre,
+    RUT_EMPLEADO: worker.rut ?? "",
+    CARGO: worker.cargo ?? "",
+    FECHA_INGRESO: fechaLarga(worker.fechaIngreso),
+    ANTIGUEDAD: antiguedadTexto(worker.fechaIngreso),
+  };
+  try {
+    const buf = await generarDocx("app/plantillas/GENERICO/CERTIFICADO Antiguedad.docx", datos);
+    return {
+      ok: true,
+      base64: buf.toString("base64"),
+      filename: `${nombreArchivo("CERTIFICADO ANTIGUEDAD " + worker.nombre)}.docx`,
+    };
+  } catch {
+    return { ok: false, error: "No se pudo generar el certificado." };
+  }
+}
 
 /**
  * Lecturas del portal del cliente para los módulos Contabilidad y RRHH, más el

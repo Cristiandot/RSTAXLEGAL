@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { toast } from "sonner";
 import {
   Award, BookText, ReceiptText, Send, ClipboardCheck, CheckCircle2,
-  ShieldAlert, ShieldCheck, Upload,
+  ShieldAlert, ShieldCheck, Upload, Download,
 } from "lucide-react";
 import {
   listarSolicitudesDocumento,
   solicitarDocumento,
   cargarReglamento,
   subirReglamento,
+  generarCertificadoAntiguedad,
   type SolicitudDocRow,
   type Reglamento,
 } from "./portal-actions";
@@ -41,7 +42,12 @@ const ESTADO_LABEL: Record<SolicitudDocRow["estado"], { txt: string; cls: string
   rechazada: { txt: "Rechazada", cls: "bg-red-100 text-red-700" },
 };
 
-export type TrabSimple = { nombre: string; rut: string | null };
+export type TrabSimple = {
+  nombre: string;
+  rut: string | null;
+  cargo?: string | null;
+  fechaIngreso?: string | null;
+};
 
 /** Quita puntos/guiones para comparar RUT. */
 function soloDigitos(s: string): string {
@@ -157,6 +163,36 @@ export function DocumentosRrhh({
     });
   }
 
+  function descargarCertificado() {
+    const w = trabajadores.find((x) => (x.rut ? `${x.nombre} · ${x.rut}` : x.nombre) === certSel);
+    if (!w) return;
+    startEnviar(async () => {
+      const r = await generarCertificadoAntiguedad(token, {
+        nombre: w.nombre,
+        rut: w.rut,
+        cargo: w.cargo ?? null,
+        fechaIngreso: w.fechaIngreso ?? null,
+      });
+      if (r.ok && r.base64 && r.filename) {
+        const bin = atob(r.base64);
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        const blob = new Blob([arr], {
+          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = r.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success("Certificado descargado");
+      } else {
+        toast.error(r.error ?? "No se pudo generar el certificado.");
+      }
+    });
+  }
+
   function pedir(tipo: string, p: { periodo?: string; detalle?: string }) {
     startEnviar(async () => {
       const r = await solicitarDocumento(token, {
@@ -181,8 +217,8 @@ export function DocumentosRrhh({
         <h3 className="font-heading text-lg font-semibold">Documentos de personal</h3>
       </div>
       <p className="flex items-start gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">
-        Lo solicitas y el equipo de RS Tax &amp; Legal lo revisa y te lo envía por correo
-        <strong className="font-semibold"> durante el día — no es inmediato</strong>.
+        Lo que solicitas, el equipo de RS Tax &amp; Legal lo revisa y te lo envía por correo;{" "}
+        <strong className="font-semibold">el documento estará disponible entre 24 y 48 horas</strong>.
       </p>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -198,10 +234,13 @@ export function DocumentosRrhh({
             <SelectorTrabajador id="cert" trabajadores={trabajadores} valor={certSel} onChange={setCertSel} />
             <Button
               size="sm" className="w-full" disabled={enviando || !certSel}
-              onClick={() => pedir("Certificado de antigüedad", { detalle: certSel })}
+              onClick={descargarCertificado}
             >
-              <Send className="size-3.5" /> Solicitar
+              <Download className="size-3.5" /> Descargar certificado
             </Button>
+            <p className="text-[11px] text-muted-foreground">
+              Formato estándar — se descarga al instante con los datos del trabajador.
+            </p>
           </CardContent>
         </Card>
 
@@ -240,22 +279,38 @@ export function DocumentosRrhh({
           <CardContent className="space-y-3">
             <Label className="text-xs">Trabajador</Label>
             <SelectorTrabajador id="liq" trabajadores={trabajadores} valor={liqSel} onChange={setLiqSel} />
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">Período</Label>
-              <select className={selectCls} value={liqPeriodo} onChange={(e) => setLiqPeriodo(e.target.value)}>
-                {periodos.map((p) => (
-                  <option key={p.value} value={p.value}>{p.label}</option>
-                ))}
-              </select>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                size="sm" variant="outline" disabled={enviando || !liqSel}
+                onClick={() => pedir("Liquidaciones de sueldo (últimas 3)", { detalle: liqSel })}
+              >
+                Últimas 3
+              </Button>
+              <Button
+                size="sm" variant="outline" disabled={enviando || !liqSel}
+                onClick={() => pedir("Liquidaciones de sueldo (últimas 12)", { detalle: liqSel })}
+              >
+                Últimas 12
+              </Button>
             </div>
-            <Button
-              size="sm" className="w-full" disabled={enviando || !liqSel}
-              onClick={() => pedir("Liquidaciones de sueldo", { periodo: liqPeriodo, detalle: liqSel })}
-            >
-              <Send className="size-3.5" /> Solicitar
-            </Button>
+            <div className="flex items-end gap-2">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label className="text-xs">O un mes puntual</Label>
+                <select className={selectCls} value={liqPeriodo} onChange={(e) => setLiqPeriodo(e.target.value)}>
+                  {periodos.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                size="sm" disabled={enviando || !liqSel}
+                onClick={() => pedir("Liquidaciones de sueldo", { periodo: liqPeriodo, detalle: liqSel })}
+              >
+                <Send className="size-3.5" /> Solicitar
+              </Button>
+            </div>
             <p className="text-[11px] text-muted-foreground">
-              Las liquidaciones quedarán guardadas mes a mes para descargar (últimas 3 / 12) — disponible próximamente.
+              Las liquidaciones quedan guardadas mes a mes; pronto podrás descargarlas directo desde aquí.
             </p>
           </CardContent>
         </Card>
