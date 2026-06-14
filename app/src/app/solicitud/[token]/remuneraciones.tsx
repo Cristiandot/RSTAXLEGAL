@@ -313,6 +313,10 @@ export function DetalleRemuneraciones({
   const [hdFecha, setHdFecha] = useState("");
   const [hdHoras, setHdHoras] = useState<Record<string, string>>({});
 
+  // --- carga masiva de bonos del mes ---
+  const [bonoNombre, setBonoNombre] = useState("");
+  const [bonoMontos, setBonoMontos] = useState<Record<string, string>>({});
+
   const diasEspeciales = useMemo(() => {
     const [y, m] = periodo.split("-").map(Number);
     const fer = feriadosDelMes(periodo);
@@ -360,6 +364,39 @@ export function DetalleRemuneraciones({
         setHdHoras({});
         await recargar(periodo);
       } else toast.error(res.error ?? "No se pudo guardar.");
+    });
+  }
+
+  function agregarBonosMes() {
+    const nombre = bonoNombre.trim();
+    if (!nombre) { toast.error("Ponle nombre al bono."); return; }
+    const entradas = empresa.trabajadores
+      .map((t) => ({ id: t.id, monto: Number(bonoMontos[t.id]) }))
+      .filter((e) => Number.isFinite(e.monto) && e.monto > 0);
+    if (entradas.length === 0) { toast.error("Pon el monto a al menos un trabajador."); return; }
+    startAccion(async () => {
+      let ok = 0;
+      for (const e of entradas) {
+        const res = await guardarNovedad(token, {
+          trabajador_id: e.id,
+          periodo,
+          tipo: "bono",
+          fecha: "",
+          fecha_hasta: "",
+          cantidad: "",
+          monto: String(e.monto),
+          comentario: nombre,
+        });
+        if (res.ok) ok++;
+      }
+      if (ok > 0) {
+        toast.success(`Bono "${nombre}" agregado a ${ok} trabajador${ok === 1 ? "" : "es"}`);
+        setBonoNombre("");
+        setBonoMontos({});
+        await recargar(periodo);
+      } else {
+        toast.error("No se pudo guardar el bono.");
+      }
     });
   }
 
@@ -547,48 +584,48 @@ export function DetalleRemuneraciones({
           )}
           </div>
 
-          {/* Módulo: horas en domingo y feriado (carga masiva por día) */}
+          {/* Módulo: bonos del mes (carga masiva por trabajador) */}
           {!cerrado ? (
             <Card className="card-soft border-transparent">
               <CardHeader>
-                <CardTitle className="text-base">Horas en domingo y feriado</CardTitle>
+                <CardTitle className="text-base">Bonos del mes</CardTitle>
                 <CardDescription>
-                  Elige el día, marca a los trabajadores que trabajaron y pon las horas — se cargan a
-                  todos de una vez. (El recargo lo valida el equipo según el contrato de cada uno.)
+                  Ponle nombre al bono y el monto por trabajador — se cargan a todos de una vez. Cada
+                  bono queda como una novedad del mes (su nombre identifica la columna del período en
+                  las remuneraciones).
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex flex-col gap-1.5 sm:max-w-sm">
-                  <Label className="text-xs">Día (domingo o feriado del mes)</Label>
-                  <select className={selectCls} value={hdFecha} onChange={(e) => setHdFecha(e.target.value)}>
-                    <option value="">— Elige el día —</option>
-                    {diasEspeciales.map((d) => (
-                      <option key={d.fecha} value={d.fecha}>{d.label}</option>
-                    ))}
-                  </select>
+                  <Label className="text-xs">Nombre del bono</Label>
+                  <Input
+                    placeholder="ej. Bono producción, Bono fiestas patrias"
+                    value={bonoNombre}
+                    onChange={(e) => setBonoNombre(e.target.value)}
+                  />
                 </div>
 
                 {empresa.trabajadores.length > 0 ? (
                   <>
                     <p className="text-xs text-muted-foreground">
-                      Pon las horas trabajadas ese día a cada trabajador (deja en blanco a quien no trabajó).
+                      Pon el monto del bono a cada trabajador (deja en blanco a quien no lo recibe).
                     </p>
                     <div className="grid max-h-64 gap-1.5 overflow-y-auto sm:grid-cols-2">
                       {empresa.trabajadores.map((t) => (
                         <div key={t.id} className="flex items-center gap-2 rounded-md border border-input px-2.5 py-1.5">
                           <span className="min-w-0 flex-1 truncate text-sm">{t.apellidos} {t.nombres}</span>
                           <Input
-                            type="number" min={0} max={24} step={0.5} placeholder="hrs"
-                            className="h-8 w-20"
-                            value={hdHoras[t.id] ?? ""}
-                            onChange={(e) => setHdHoras((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                            type="number" min={0} step={1000} placeholder="$"
+                            className="h-8 w-28"
+                            value={bonoMontos[t.id] ?? ""}
+                            onChange={(e) => setBonoMontos((prev) => ({ ...prev, [t.id]: e.target.value }))}
                           />
                         </div>
                       ))}
                     </div>
                     <div className="flex justify-end">
-                      <Button onClick={agregarHorasDia} disabled={ocupado || !hdFecha}>
-                        <Plus className="size-4" /> Agregar horas
+                      <Button onClick={agregarBonosMes} disabled={ocupado || !bonoNombre.trim()}>
+                        <Plus className="size-4" /> Agregar bono
                       </Button>
                     </div>
                   </>
@@ -750,6 +787,58 @@ export function DetalleRemuneraciones({
               )}
             </CardContent>
           </Card>
+
+          {/* Módulo: horas en domingo y feriado (carga masiva por día) — al final */}
+          {!cerrado ? (
+            <Card className="card-soft border-transparent">
+              <CardHeader>
+                <CardTitle className="text-base">Horas en domingo y feriado</CardTitle>
+                <CardDescription>
+                  Elige el día, marca a los trabajadores que trabajaron y pon las horas — se cargan a
+                  todos de una vez. (El recargo lo valida el equipo según el contrato de cada uno.)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-col gap-1.5 sm:max-w-sm">
+                  <Label className="text-xs">Día (domingo o feriado del mes)</Label>
+                  <select className={selectCls} value={hdFecha} onChange={(e) => setHdFecha(e.target.value)}>
+                    <option value="">— Elige el día —</option>
+                    {diasEspeciales.map((d) => (
+                      <option key={d.fecha} value={d.fecha}>{d.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {empresa.trabajadores.length > 0 ? (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      Pon las horas trabajadas ese día a cada trabajador (deja en blanco a quien no trabajó).
+                    </p>
+                    <div className="grid max-h-64 gap-1.5 overflow-y-auto sm:grid-cols-2">
+                      {empresa.trabajadores.map((t) => (
+                        <div key={t.id} className="flex items-center gap-2 rounded-md border border-input px-2.5 py-1.5">
+                          <span className="min-w-0 flex-1 truncate text-sm">{t.apellidos} {t.nombres}</span>
+                          <Input
+                            type="number" min={0} max={24} step={0.5} placeholder="hrs"
+                            className="h-8 w-20"
+                            value={hdHoras[t.id] ?? ""}
+                            onChange={(e) => setHdHoras((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-end">
+                      <Button onClick={agregarHorasDia} disabled={ocupado || !hdFecha}>
+                        <Plus className="size-4" /> Agregar horas
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No hay trabajadores registrados para esta empresa.</p>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
 
           {!cerrado ? (
             <div className="flex justify-end">
