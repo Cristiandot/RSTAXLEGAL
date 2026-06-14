@@ -1,38 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import {
-  ArrowLeft, ArrowRight, PieChart, Users, ClipboardList,
-  ClipboardType, Table2, Receipt,
-} from "lucide-react";
-import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
-import { DetalleRemuneraciones } from "./remuneraciones";
-import { GastosMenores } from "./gastos-menores";
+import { Building2, PieChart, Users } from "lucide-react";
+import { type InfoEmpresa } from "./solicitud-form";
 import { FranjaIndicadores } from "./indicadores";
+import { Empresa } from "./empresa";
 import { Contabilidad } from "./contabilidad";
 import { RecursosHumanos } from "./rrhh";
-import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
-} from "@/components/ui/card";
 
-type Tab = "contabilidad" | "rrhh" | "solicitudes";
-type VistaSol = "inicio" | "solicitudes" | "remuneraciones" | "gastos";
+type Tab = "empresa" | "contabilidad" | "rrhh";
 
 /**
- * Portal del cliente — diseño de pestañas (Contabilidad · Recursos humanos ·
- * Solicitudes) sobre la marca RSTL, con la franja de indicadores Previred.
- * Contabilidad y RRHH leen datos reales por RPC de token; Solicitudes reúne las
- * gestiones existentes (formulario, novedades del mes y gastos menores).
+ * Portal del cliente — pestañas Empresa (inicio) · Contabilidad · Recursos
+ * humanos, sobre la marca RSTL y con la franja de indicadores Previred.
+ * Contabilidad reúne sus datos + gastos e ingresos menores; Recursos humanos
+ * reúne su panel + detalle de remuneraciones + solicitudes laborales. Empresa
+ * muestra los datos editables y un resumen del mes.
  */
 export function PortalCliente({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
-  const [tab, setTab] = useState<Tab>(
-    empresa.hace_contabilidad_completa ? "contabilidad" : "solicitudes",
-  );
+  const [tab, setTab] = useState<Tab>("empresa");
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: "empresa", label: "Empresa", icon: <Building2 className="size-4" /> },
     { key: "contabilidad", label: "Contabilidad", icon: <PieChart className="size-4" /> },
     { key: "rrhh", label: "Recursos humanos", icon: <Users className="size-4" /> },
-    { key: "solicitudes", label: "Solicitudes", icon: <ClipboardList className="size-4" /> },
   ];
 
   return (
@@ -72,87 +63,9 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
         ))}
       </div>
 
-      {tab === "contabilidad" ? <Contabilidad token={token} /> : null}
-      {tab === "rrhh" ? <RecursosHumanos token={token} /> : null}
-      {tab === "solicitudes" ? <SeccionSolicitudes token={token} empresa={empresa} /> : null}
-    </div>
-  );
-}
-
-/** Sub-sección Solicitudes: los 3 accesos existentes con navegación propia. */
-function SeccionSolicitudes({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
-  const [vista, setVista] = useState<VistaSol>("inicio");
-
-  if (vista !== "inicio") {
-    return (
-      <div className="space-y-4">
-        <button
-          type="button"
-          onClick={() => setVista("inicio")}
-          className="inline-flex items-center gap-1 text-sm text-[var(--brand-teal)]"
-        >
-          <ArrowLeft className="size-4" />
-          Volver a solicitudes
-        </button>
-        {vista === "solicitudes" ? (
-          <SolicitudForm token={token} empresa={empresa} />
-        ) : vista === "remuneraciones" ? (
-          <DetalleRemuneraciones token={token} empresa={empresa} />
-        ) : (
-          <GastosMenores token={token} empresa={empresa} />
-        )}
-      </div>
-    );
-  }
-
-  const accesos: {
-    key: VistaSol;
-    icon: React.ReactNode;
-    titulo: string;
-    desc: string;
-  }[] = [
-    {
-      key: "solicitudes",
-      icon: <ClipboardType className="size-5" />,
-      titulo: "Panel de solicitudes",
-      desc: "Contratos nuevos, anexos, cartas de amonestación, finiquitos, papeletas de vacaciones y permisos.",
-    },
-    {
-      key: "remuneraciones",
-      icon: <Table2 className="size-5" />,
-      titulo: "Detalle remuneraciones",
-      desc: "Novedades del mes para las liquidaciones: horas extra, turnos, anticipos y bonos. Cierre mensual.",
-    },
-    {
-      key: "gastos",
-      icon: <Receipt className="size-5" />,
-      titulo: "Gastos e ingresos menores",
-      desc: "Compras y ventas con boleta que no van al SII mensual, pero sí a tu Operación Renta.",
-    },
-  ];
-
-  return (
-    <div className="space-y-4">
-      {accesos.map((a) => (
-        <button key={a.key} type="button" onClick={() => setVista(a.key)} className="block w-full text-left">
-          <Card className="card-soft border-transparent transition-shadow hover:shadow-md">
-            <CardHeader>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal)]/10 text-[var(--brand-teal)]">
-                    {a.icon}
-                  </span>
-                  <div>
-                    <CardTitle className="text-base">{a.titulo}</CardTitle>
-                    <CardDescription className="mt-1">{a.desc}</CardDescription>
-                  </div>
-                </div>
-                <ArrowRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
-              </div>
-            </CardHeader>
-          </Card>
-        </button>
-      ))}
+      {tab === "empresa" ? <Empresa token={token} onIr={setTab} /> : null}
+      {tab === "contabilidad" ? <Contabilidad token={token} empresa={empresa} /> : null}
+      {tab === "rrhh" ? <RecursosHumanos token={token} empresa={empresa} /> : null}
     </div>
   );
 }

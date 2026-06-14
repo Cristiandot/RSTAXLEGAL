@@ -2,12 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Users, UserPlus, FileText, Stethoscope, Banknote } from "lucide-react";
+import {
+  Users, UserPlus, FileText, Stethoscope, Banknote,
+  ArrowLeft, ArrowRight, ClipboardType, Table2,
+} from "lucide-react";
 import { cargarRrhh, type RrhhInfo } from "./portal-actions";
 import { BarrasDotacion } from "./mini-charts";
 import { DocumentosSolicitar, type TipoDoc } from "./documentos";
+import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
+import { DetalleRemuneraciones } from "./remuneraciones";
 import { formatFecha, formatMonto } from "@/lib/format";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const DOCS_RRHH: TipoDoc[] = [
   { tipo: "Certificado de antigüedad", desc: "Para un trabajador que indiques." },
@@ -57,10 +62,11 @@ function Kpi({
   );
 }
 
-export function RecursosHumanos({ token }: { token: string }) {
+export function RecursosHumanos({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
   const [periodo, setPeriodo] = useState(periodoPorDefecto());
   const [info, setInfo] = useState<RrhhInfo | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [subvista, setSubvista] = useState<"panel" | "remuneraciones" | "solicitudes">("panel");
 
   const recargar = useCallback(async (p: string) => {
     setCargando(true);
@@ -76,6 +82,25 @@ export function RecursosHumanos({ token }: { token: string }) {
 
   const periodosDoc = useMemo(() => ultimosPeriodos(6), []);
 
+  if (subvista !== "panel") {
+    return (
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={() => setSubvista("panel")}
+          className="inline-flex items-center gap-1 text-sm text-[var(--brand-teal)]"
+        >
+          <ArrowLeft className="size-4" /> Volver a recursos humanos
+        </button>
+        {subvista === "remuneraciones" ? (
+          <DetalleRemuneraciones token={token} empresa={empresa} />
+        ) : (
+          <SolicitudForm token={token} empresa={empresa} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -89,6 +114,50 @@ export function RecursosHumanos({ token }: { token: string }) {
           ))}
         </select>
         <span className="text-xs text-muted-foreground">Movimientos del período · nómina al día de hoy</span>
+      </div>
+
+      {/* Accesos: novedades del mes y solicitudes laborales */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <button type="button" onClick={() => setSubvista("remuneraciones")} className="block w-full text-left">
+          <Card className="card-soft border-transparent transition-shadow hover:shadow-md">
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal)]/10 text-[var(--brand-teal)]">
+                    <Table2 className="size-5" />
+                  </span>
+                  <div>
+                    <CardTitle className="text-base">Detalle remuneraciones</CardTitle>
+                    <CardDescription className="mt-1">
+                      Novedades del mes para las liquidaciones: horas extra, turnos, anticipos y bonos.
+                    </CardDescription>
+                  </div>
+                </div>
+                <ArrowRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
+              </div>
+            </CardHeader>
+          </Card>
+        </button>
+        <button type="button" onClick={() => setSubvista("solicitudes")} className="block w-full text-left">
+          <Card className="card-soft border-transparent transition-shadow hover:shadow-md">
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-teal)]/10 text-[var(--brand-teal)]">
+                    <ClipboardType className="size-5" />
+                  </span>
+                  <div>
+                    <CardTitle className="text-base">Solicitudes laborales</CardTitle>
+                    <CardDescription className="mt-1">
+                      Contratos, anexos, amonestaciones, finiquitos, papeletas de vacaciones y permisos.
+                    </CardDescription>
+                  </div>
+                </div>
+                <ArrowRight className="mt-1 size-5 shrink-0 text-muted-foreground" />
+              </div>
+            </CardHeader>
+          </Card>
+        </button>
       </div>
 
       {cargando ? (

@@ -8,6 +8,57 @@ import { createClient } from "@/lib/supabase/server";
  * por `form_token` — el rol anónimo no toca tablas directamente.
  */
 
+// ===================== Datos de la empresa =====================
+
+export type EmpresaDatos = {
+  razon_social: string;
+  rut_empresa: string | null;
+  giro: string | null;
+  domicilio: string | null;
+  comuna: string | null;
+  ciudad: string | null;
+  telefono_empresa: string | null;
+  correo_empresa: string | null;
+  representante_legal: string | null;
+  representante_legal_rut: string | null;
+  hace_contabilidad_completa: boolean;
+};
+
+export async function cargarEmpresa(
+  token: string,
+): Promise<{ ok: boolean; empresa?: EmpresaDatos; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_empresa", { p_token: token });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, empresa: data as EmpresaDatos };
+}
+
+export async function guardarEmpresa(
+  token: string,
+  p: {
+    giro: string;
+    domicilio: string;
+    comuna: string;
+    ciudad: string;
+    telefono_empresa: string;
+    correo_empresa: string;
+    representante_legal: string;
+    representante_legal_rut: string;
+  },
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("portal_guardar_empresa", { p_token: token, p });
+  if (error) {
+    return {
+      ok: false,
+      error: error.message.includes("inválido")
+        ? "Este link no es válido. Contacta a RS Tax & Legal."
+        : `No se pudieron guardar los datos: ${error.message}`,
+    };
+  }
+  return { ok: true };
+}
+
 // ===================== Indicadores Previred =====================
 
 export type IndicadoresPortal = {
