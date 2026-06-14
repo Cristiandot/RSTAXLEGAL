@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Download,
   FileSpreadsheet,
+  Paperclip,
   Plus,
   Upload,
   X,
@@ -30,6 +31,7 @@ import {
   registrarCambioIva,
   subirDocumentoContable,
   urlDocumentoContable,
+  urlGastoMenor,
 } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +47,7 @@ export type GastoMenor = {
   monto: number;
   origen: string;
   created_at: string;
+  documento_path: string | null;
 };
 
 const selectCls =
@@ -597,9 +600,26 @@ export function ClienteContabilidadClient({
                         {g.descripcion}
                       </span>
                     </div>
-                    <span className="shrink-0 font-medium tabular-nums">
-                      {formatMonto(g.monto)}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {g.documento_path ? (
+                        <button
+                          type="button"
+                          title="Ver boleta adjunta"
+                          aria-label="Ver boleta adjunta"
+                          className="rounded p-1 text-[var(--brand-teal)] hover:bg-muted"
+                          onClick={async () => {
+                            const r = await urlGastoMenor(g.documento_path!);
+                            if (r.ok && r.url) window.open(r.url, "_blank", "noopener");
+                            else toast.error(r.error ?? "No se pudo abrir el archivo.");
+                          }}
+                        >
+                          <Paperclip className="size-3.5" />
+                        </button>
+                      ) : null}
+                      <span className="font-medium tabular-nums">
+                        {formatMonto(g.monto)}
+                      </span>
+                    </div>
                   </div>
                 ))
               )}

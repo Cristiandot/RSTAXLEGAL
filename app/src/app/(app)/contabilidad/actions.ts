@@ -222,6 +222,20 @@ export async function urlDocumentoContable(
   return { ok: true, url: data.signedUrl };
 }
 
+/** Link firmado para ver/descargar la boleta adjunta a un gasto menor (bucket `gastos`). */
+export async function urlGastoMenor(
+  archivoPath: string,
+): Promise<{ ok: boolean; url?: string; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage
+    .from("gastos")
+    .createSignedUrl(archivoPath, 3600);
+  if (error || !data?.signedUrl) {
+    return { ok: false, error: error?.message ?? "No se pudo generar el link." };
+  }
+  return { ok: true, url: data.signedUrl };
+}
+
 /**
  * Registra una ejecución de cambio IVA recuperable → no recuperable
  * (solo clientes profesionales de salud).

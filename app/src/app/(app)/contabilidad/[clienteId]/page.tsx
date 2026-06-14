@@ -53,7 +53,7 @@ export default async function ClienteContabilidadPage({
       .order("fecha_ejecutada", { ascending: false }),
     supabase
       .from("gastos_menores")
-      .select("id, tipo, fecha, descripcion, monto, origen, created_at")
+      .select("id, tipo, fecha, descripcion, monto, origen, created_at, documento_path")
       .eq("cliente_id", clienteId)
       .eq("activo", true)
       .gte("fecha", `${anio}-01-01`)
