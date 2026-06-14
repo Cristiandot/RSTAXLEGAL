@@ -172,6 +172,18 @@ export function RecursosHumanos({ token, empresa }: { token: string; empresa: In
             <Kpi feat icon={<Banknote className="size-3.5" />} label="Costo remun." valor={info.costo_remuneraciones > 0 ? formatMonto(info.costo_remuneraciones) : "—"} />
           </div>
 
+          {info.plazo_fijo_por_vencer > 0 ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <strong>{info.plazo_fijo_por_vencer}</strong> contrato{info.plazo_fijo_por_vencer === 1 ? "" : "s"} a plazo fijo
+              {info.plazo_fijo_por_vencer === 1 ? " vence" : " vencen"} en los próximos 30 días — revisa si corresponde
+              renovar (anexo) o no renovar.
+            </p>
+          ) : null}
+
+          <p className="text-xs text-muted-foreground">
+            Composición: {info.plazo_fijo} a plazo fijo · {info.indefinidos} indefinidos · {info.nomina_activa} en total.
+          </p>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Card className="card-soft border-transparent">
               <CardHeader>
@@ -234,6 +246,9 @@ export function RecursosHumanos({ token, empresa }: { token: string; empresa: In
                           <td className="py-2 pr-2">{t.cargo ?? "—"}</td>
                           <td className="py-2 pr-2">
                             {t.tipo_contrato === "plazo_fijo" ? "Plazo fijo" : t.tipo_contrato === "indefinido" ? "Indefinido" : (t.tipo_contrato ?? "—")}
+                            {t.tipo_contrato === "plazo_fijo" && t.fecha_termino ? (
+                              <span className="block text-xs text-muted-foreground">vence {formatFecha(t.fecha_termino)}</span>
+                            ) : null}
                           </td>
                           <td className="py-2 tabular-nums">{formatFecha(t.fecha_ingreso)}</td>
                         </tr>

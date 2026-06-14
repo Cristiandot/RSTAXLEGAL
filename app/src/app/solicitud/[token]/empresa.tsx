@@ -165,11 +165,18 @@ export function Empresa({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Mini label="Nómina activa" valor={String(rrhh?.nomina_activa ?? "—")} />
-              <Mini label="Contratos nuevos" valor={String(rrhh?.contratos_nuevos ?? "—")} />
-              <Mini label="Licencias vig." valor={String(rrhh?.licencias_vigentes ?? "—")} />
+              <Mini label="Contratos plazo fijo" valor={String(rrhh?.plazo_fijo ?? "—")} />
+              <Mini label="Indefinidos" valor={String(rrhh?.indefinidos ?? "—")} />
+              <Mini label="Licencias vigentes" valor={String(rrhh?.licencias_vigentes ?? "—")} />
             </div>
+            {rrhh && rrhh.plazo_fijo_por_vencer > 0 ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+                {rrhh.plazo_fijo_por_vencer} contrato{rrhh.plazo_fijo_por_vencer === 1 ? "" : "s"} a plazo fijo
+                {rrhh.plazo_fijo_por_vencer === 1 ? " vence" : " vencen"} en los próximos 30 días.
+              </p>
+            ) : null}
             <Button variant="outline" size="sm" className="w-full" onClick={() => onIr("rrhh")}>
               Ver recursos humanos <ArrowRight className="size-4" />
             </Button>

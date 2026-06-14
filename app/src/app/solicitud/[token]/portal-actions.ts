@@ -211,6 +211,7 @@ export type TrabajadorRrhh = {
   cargo: string | null;
   tipo_contrato: string | null;
   fecha_ingreso: string | null;
+  fecha_termino: string | null;
   nuevo: boolean;
 };
 export type LicenciaRrhh = {
@@ -228,6 +229,9 @@ export type MovimientoRrhh = {
 
 export type RrhhInfo = {
   nomina_activa: number;
+  plazo_fijo: number;
+  indefinidos: number;
+  plazo_fijo_por_vencer: number;
   contratos_nuevos: number;
   anexos_nuevos: number;
   licencias_vigentes: number;
