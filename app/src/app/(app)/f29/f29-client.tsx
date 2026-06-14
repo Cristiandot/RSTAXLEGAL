@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Search, CheckCircle2, AlertTriangle } from "lucide-react";
 import { formatFecha } from "@/lib/format";
-import { opcionesPeriodo } from "@/lib/periodos";
+import { SelectorPeriodo } from "@/components/selector-periodo";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
 import { RutCopiable } from "@/components/rut-copiable";
@@ -257,18 +257,10 @@ export function F29Client({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Período"
-          className={selectCls}
-          value={periodo}
-          onChange={(e) => router.push(`/f29?periodo=${e.target.value}`)}
-        >
-          {opcionesPeriodo().map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        <SelectorPeriodo
+          periodo={periodo}
+          onCambio={(p) => router.push(`/f29?periodo=${p}`)}
+        />
 
         <div className="relative">
           <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />

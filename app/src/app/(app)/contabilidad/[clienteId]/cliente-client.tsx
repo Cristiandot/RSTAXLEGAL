@@ -13,7 +13,8 @@ import {
   X,
 } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
-import { etiquetaPeriodo, opcionesPeriodo } from "@/lib/periodos";
+import { etiquetaPeriodo } from "@/lib/periodos";
+import { SelectorPeriodo } from "@/components/selector-periodo";
 import {
   claseEstado,
   type ConciliacionRow,
@@ -351,20 +352,12 @@ export function ClienteContabilidadClient({
             </span>
           </p>
         </div>
-        <select
-          aria-label="Período"
-          className={selectCls}
-          value={periodo}
-          onChange={(e) =>
-            router.push(`/contabilidad/${fila.cliente_id}?periodo=${e.target.value}`)
+        <SelectorPeriodo
+          periodo={periodo}
+          onCambio={(p) =>
+            router.push(`/contabilidad/${fila.cliente_id}?periodo=${p}`)
           }
-        >
-          {opcionesPeriodo().map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        />
       </div>
 
       {/* ── Contabilidad completa: acceso a los libros RCV ── */}

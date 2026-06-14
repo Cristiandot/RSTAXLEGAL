@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Trash2, Upload } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
-import { etiquetaPeriodo, opcionesPeriodo } from "@/lib/periodos";
+import { etiquetaPeriodo } from "@/lib/periodos";
+import { SelectorPeriodo } from "@/components/selector-periodo";
 import { nombreTipoDoc, periodoDesdeNombre, type LibroRcv } from "@/lib/contabilidad/rcv";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,8 +80,6 @@ export type F29Montos = {
   fecha_pago_f29: string | null;
 };
 
-const selectCls =
-  "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const thCls =
   "px-2 py-1.5 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap";
 const tdNum = "px-2 py-1 text-right tabular-nums whitespace-nowrap";
@@ -433,20 +432,12 @@ export function RcvClient({
             mensual.
           </p>
         </div>
-        <select
-          aria-label="Período"
-          className={selectCls}
-          value={periodo}
-          onChange={(e) =>
-            router.push(`/contabilidad/${clienteId}/rcv?periodo=${e.target.value}`)
+        <SelectorPeriodo
+          periodo={periodo}
+          onCambio={(p) =>
+            router.push(`/contabilidad/${clienteId}/rcv?periodo=${p}`)
           }
-        >
-          {opcionesPeriodo().map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        />
       </div>
 
       {/* ── Resumen del período ── */}

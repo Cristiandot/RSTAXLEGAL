@@ -61,3 +61,36 @@ export function opcionesPeriodo(): { value: string; label: string }[] {
 export function normalizarPeriodo(p: string | undefined): string {
   return p && /^\d{4}-\d{2}$/.test(p) ? p : periodoPorDefecto();
 }
+
+/** Separa "2026-05" en { anio: "2026", mes: "05" }. */
+export function partesPeriodo(periodo: string): { anio: string; mes: string } {
+  const [anio = "", mes = ""] = periodo.split("-");
+  return { anio, mes };
+}
+
+/** Arma "2026-05" desde año y mes (el mes se rellena a 2 dígitos). */
+export function componerPeriodo(anio: string | number, mes: string | number): string {
+  return `${anio}-${String(mes).padStart(2, "0")}`;
+}
+
+/** Opciones de mes: value "01".."12", label "Enero".."Diciembre". */
+export function opcionesMes(): { value: string; label: string }[] {
+  return MESES.map((label, i) => ({
+    value: String(i + 1).padStart(2, "0"),
+    label,
+  }));
+}
+
+/**
+ * Años seleccionables: desde 2024 hasta el año siguiente al actual. Se incluye
+ * siempre `incluir` (el año del período vigente) por si quedara fuera del rango.
+ */
+export function opcionesAnio(incluir?: string): { value: string; label: string }[] {
+  const hasta = new Date().getFullYear() + 1;
+  const anios = new Set<number>();
+  for (let y = 2024; y <= hasta; y++) anios.add(y);
+  if (incluir && /^\d{4}$/.test(incluir)) anios.add(Number(incluir));
+  return [...anios]
+    .sort((a, b) => a - b)
+    .map((y) => ({ value: String(y), label: String(y) }));
+}
