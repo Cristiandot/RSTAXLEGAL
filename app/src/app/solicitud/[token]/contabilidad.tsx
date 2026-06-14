@@ -9,7 +9,7 @@ import {
   cargarContabilidad, cargarContabilidadMes,
   type ContabilidadInfo, type MesDetalle,
 } from "./portal-actions";
-import { BarrasVentasCompras, BarrasHorizontales, LineasVentasCompras } from "./mini-charts";
+import { BarrasVentasCompras, BarrasHorizontales, ResultadoMensual } from "./mini-charts";
 import { DocumentosSolicitar, type TipoDoc } from "./documentos";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -206,16 +206,17 @@ export function Contabilidad({ token }: { token: string }) {
             </CardContent>
           </Card>
 
-          {/* Fluctuación — líneas con puntos (tendencia anual) */}
+          {/* Resultado mensual — margen ventas − compras (columnas +/-) */}
           <Card className="card-soft border-transparent">
             <CardHeader>
-              <CardTitle className="text-base">Fluctuación · ventas y compras</CardTitle>
+              <CardTitle className="text-base">Resultado mensual · ventas − compras</CardTitle>
               <CardDescription className="mt-1">
-                Tendencia mes a mes de las ventas y compras netas del año.
+                Lo que queda cada mes: ventas netas menos compras netas. Verde si es
+                positivo, rojo si es negativo.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <LineasVentasCompras meses={info.meses ?? []} />
+              <ResultadoMensual meses={info.meses ?? []} />
             </CardContent>
           </Card>
 

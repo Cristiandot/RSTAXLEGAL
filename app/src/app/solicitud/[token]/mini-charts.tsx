@@ -87,12 +87,22 @@ export function BarrasVentasCompras({
   );
 }
 
+const VERDE = "#059669";
+const ROJO = "#dc2626";
+
+/** Formatea un valor en $M con signo claro: "+$12M" / "−$4M". */
+function fmtMSigno(n: number): string {
+  if (n < 0) return `−${fmtM(-n)}`;
+  return `+${fmtM(n)}`;
+}
+
 /**
- * Líneas con puntos: evolución de ventas vs compras por mes (CLP). Muestra la
- * fluctuación a lo largo del año; complementa a las barras. SVG puro,
- * responsivo por viewBox. Cada punto tiene tooltip con el monto.
+ * Resultado mensual (margen) = ventas netas − compras netas, por mes.
+ * Columnas con base en cero, verde si el mes es positivo y rojo si es negativo,
+ * con eje Y en $M y grilla suave. SVG puro, responsivo por viewBox.
+ * Responde de un vistazo: ¿cuánto le quedó al cliente cada mes?
  */
-export function LineasVentasCompras({
+export function ResultadoMensual({
   meses,
 }: {
   meses: { periodo: string; ventas_neto: number; compras_neto: number }[];
@@ -100,52 +110,77 @@ export function LineasVentasCompras({
   if (meses.length === 0) {
     return <p className="py-6 text-center text-sm text-muted-foreground">Sin datos para el período.</p>;
   }
-  const W = 340;
-  const H = 180;
-  const padL = 6;
-  const padR = 6;
+  const datos = meses.map((m) => ({ periodo: m.periodo, valor: m.ventas_neto - m.compras_neto }));
+  const W = 360;
+  const H = 200;
+  const padL = 38;
+  const padR = 10;
   const padT = 12;
-  const padB = 22;
+  const padB = 24;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
-  const n = meses.length;
-  const max = Math.max(1, ...meses.flatMap((m) => [m.ventas_neto, m.compras_neto]));
-  const px = (i: number) => (n === 1 ? padL + plotW / 2 : padL + (i * plotW) / (n - 1));
-  const py = (v: number) => padT + plotH - (Math.max(0, v) / max) * plotH;
-  const puntos = (sel: (m: { ventas_neto: number; compras_neto: number }) => number) =>
-    meses.map((m, i) => `${px(i).toFixed(1)},${py(sel(m)).toFixed(1)}`).join(" ");
+  const n = datos.length;
+  const domainMax = Math.max(0, ...datos.map((d) => d.valor));
+  const domainMin = Math.min(0, ...datos.map((d) => d.valor));
+  const span = domainMax - domainMin || 1;
+  const yOf = (v: number) => padT + plotH - ((v - domainMin) / span) * plotH;
+  const zeroY = yOf(0);
+  const slot = plotW / n;
+  const bw = Math.min(36, slot * 0.55);
+  const ticks = 4;
+  const tickVals = Array.from({ length: ticks + 1 }, (_, k) => domainMin + (span * k) / ticks);
 
   return (
     <div className="w-full">
       <div className="mb-3 flex items-center gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-full" style={{ background: TEAL }} /> Ventas
+          <span className="size-2.5 rounded-sm" style={{ background: VERDE }} /> Mes positivo
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="size-2.5 rounded-full" style={{ background: NAVY }} /> Compras
+          <span className="size-2.5 rounded-sm" style={{ background: ROJO }} /> Mes negativo
         </span>
       </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full"
         role="img"
-        aria-label="Evolución de ventas y compras por mes"
+        aria-label="Resultado mensual: ventas netas menos compras netas"
       >
-        <polyline fill="none" stroke={NAVY} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" points={puntos((m) => m.compras_neto)} />
-        <polyline fill="none" stroke={TEAL} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" points={puntos((m) => m.ventas_neto)} />
-        {meses.map((m, i) => (
-          <g key={m.periodo}>
-            <circle cx={px(i)} cy={py(m.compras_neto)} r={2.6} fill={NAVY}>
-              <title>{`${mesBoton(m.periodo)} · Compras ${fmtM(m.compras_neto)}`}</title>
-            </circle>
-            <circle cx={px(i)} cy={py(m.ventas_neto)} r={2.6} fill={TEAL}>
-              <title>{`${mesBoton(m.periodo)} · Ventas ${fmtM(m.ventas_neto)}`}</title>
-            </circle>
-            <text x={px(i)} y={H - 6} textAnchor="middle" fontSize="8" fill="currentColor" className="text-muted-foreground">
-              {mesBoton(m.periodo)}
-            </text>
-          </g>
-        ))}
+        {tickVals.map((v, i) => {
+          const y = yOf(v);
+          const cero = Math.abs(v) < 1e-6;
+          return (
+            <g key={i} className="text-muted-foreground">
+              <line
+                x1={padL}
+                y1={y}
+                x2={W - padR}
+                y2={y}
+                stroke={cero ? "#94a3b8" : "#e5e7eb"}
+                strokeWidth={1}
+              />
+              <text x={padL - 5} y={y + 3} textAnchor="end" fontSize="8" fill="currentColor">
+                {fmtM(v)}
+              </text>
+            </g>
+          );
+        })}
+        {datos.map((d, i) => {
+          const cx = padL + slot * i + slot / 2;
+          const y = yOf(d.valor);
+          const top = d.valor >= 0 ? y : zeroY;
+          const h = Math.max(1, Math.abs(zeroY - y));
+          return (
+            <g key={d.periodo} className="text-muted-foreground">
+              <rect x={cx - bw / 2} y={top} width={bw} height={h} rx={2} fill={d.valor >= 0 ? VERDE : ROJO}>
+                <title>{`${mesBoton(d.periodo)} · ${fmtMSigno(d.valor)}`}</title>
+              </rect>
+              <text x={cx} y={H - 8} textAnchor="middle" fontSize="8" fill="currentColor">
+                {mesBoton(d.periodo)}
+              </text>
+            </g>
+          );
+        })}
       </svg>
     </div>
   );
