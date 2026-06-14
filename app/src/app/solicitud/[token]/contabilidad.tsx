@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   TrendingUp, ShoppingCart, Coins, ReceiptText, Download, FileSpreadsheet,
-  ArrowLeft, ArrowRight, Receipt,
+  ArrowLeft, ArrowRight, Receipt, ChevronDown, Truck, Store,
 } from "lucide-react";
 import {
   cargarContabilidad, cargarContabilidadMes,
@@ -67,6 +67,7 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
   const [subvista, setSubvista] = useState<"panel" | "gastos">("panel");
   const [mesSel, setMesSel] = useState("");
   const [mesInfo, setMesInfo] = useState<MesDetalle | null>(null);
+  const [verHistorial, setVerHistorial] = useState(false);
 
   const recargar = useCallback(async (a: number) => {
     setCargando(true);
@@ -284,33 +285,52 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
             </CardContent>
           </Card>
 
-          {/* Top proveedores / clientes */}
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* Top proveedores / clientes — sección protagonista */}
+          <div className="grid gap-4 lg:grid-cols-2">
             <Card className="card-soft border-transparent">
               <CardHeader>
-                <CardTitle className="text-base">Proveedores más comunes</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Truck className="size-5 text-[var(--brand-navy)]" />
+                  Proveedores más comunes
+                </CardTitle>
+                <CardDescription className="mt-1">Por monto de compras · {vista.titulo}</CardDescription>
               </CardHeader>
               <CardContent>
-                <BarrasHorizontales rows={vista.top_proveedores.map((p) => ({ nombre: p.nombre, monto: p.monto }))} color="#0b2545" />
+                <BarrasHorizontales grande rows={vista.top_proveedores.map((p) => ({ nombre: p.nombre, monto: p.monto }))} color="#0b2545" />
               </CardContent>
             </Card>
             <Card className="card-soft border-transparent">
               <CardHeader>
-                <CardTitle className="text-base">Compradores más comunes</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Store className="size-5 text-[var(--brand-teal)]" />
+                  Compradores más comunes
+                </CardTitle>
+                <CardDescription className="mt-1">Por monto de ventas · {vista.titulo}</CardDescription>
               </CardHeader>
               <CardContent>
-                <BarrasHorizontales rows={vista.top_clientes.map((p) => ({ nombre: p.nombre, monto: p.monto }))} color="#17a2b8" />
+                <BarrasHorizontales grande rows={vista.top_clientes.map((p) => ({ nombre: p.nombre, monto: p.monto }))} color="#17a2b8" />
               </CardContent>
             </Card>
           </div>
 
-          {/* Historial de facturas */}
+          {/* Historial de facturas — secundario, colapsable */}
           <Card className="card-soft border-transparent">
             <CardHeader>
-              <CardTitle className="text-base">
-                Historial de facturas{esMes ? <span className="font-normal text-muted-foreground"> · <span className="capitalize">{vista.titulo}</span></span> : " — últimos movimientos"}
-              </CardTitle>
+              <button
+                type="button"
+                onClick={() => setVerHistorial((v) => !v)}
+                className="flex w-full items-center justify-between gap-2 text-left"
+              >
+                <CardTitle className="text-base">
+                  Historial de facturas{esMes ? <span className="font-normal text-muted-foreground"> · <span className="capitalize">{vista.titulo}</span></span> : null}
+                </CardTitle>
+                <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                  {verHistorial ? "Ocultar" : "Ver detalle"}
+                  <ChevronDown className={`size-4 transition-transform ${verHistorial ? "rotate-180" : ""}`} />
+                </span>
+              </button>
             </CardHeader>
+            {verHistorial ? (
             <CardContent>
               {vista.ultimas_facturas && vista.ultimas_facturas.length > 0 ? (
                 <div className="overflow-x-auto">
@@ -345,6 +365,7 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
                 <p className="text-sm text-muted-foreground">Sin facturas en el período.</p>
               )}
             </CardContent>
+            ) : null}
           </Card>
 
           <DocumentosSolicitar token={token} area="contabilidad" titulo="Documentos contables" docs={DOCS_CONTAB} periodos={periodos} />

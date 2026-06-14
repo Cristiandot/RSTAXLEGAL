@@ -87,31 +87,40 @@ export function BarrasVentasCompras({
   );
 }
 
-/** Barras horizontales (top proveedores/clientes). */
+/** Barras horizontales (top proveedores/clientes). `grande` = más protagonismo. */
 export function BarrasHorizontales({
   rows,
   color = TEAL,
+  grande = false,
 }: {
   rows: { nombre: string; monto: number }[];
   color?: string;
+  grande?: boolean;
 }) {
   if (rows.length === 0) {
     return <p className="py-6 text-center text-sm text-muted-foreground">Sin datos para el período.</p>;
   }
   const max = Math.max(1, ...rows.map((r) => Math.abs(r.monto)));
   return (
-    <div className="space-y-2">
-      {rows.map((r) => {
+    <div className={grande ? "space-y-3.5" : "space-y-2"}>
+      {rows.map((r, i) => {
         const pct = Math.max(2, (Math.abs(r.monto) / max) * 100);
         return (
-          <div key={r.nombre} className="text-xs">
-            <div className="mb-0.5 flex items-baseline justify-between gap-2">
-              <span className="truncate text-foreground" title={r.nombre}>
-                {r.nombre}
+          <div key={r.nombre} className={grande ? "text-sm" : "text-xs"}>
+            <div className="mb-1 flex items-baseline justify-between gap-2">
+              <span className="flex min-w-0 items-baseline gap-1.5">
+                {grande ? (
+                  <span className="shrink-0 tabular-nums text-xs font-semibold text-muted-foreground">{i + 1}.</span>
+                ) : null}
+                <span className="truncate text-foreground" title={r.nombre}>
+                  {r.nombre}
+                </span>
               </span>
-              <span className="shrink-0 tabular-nums text-muted-foreground">{fmtM(r.monto)}</span>
+              <span className={`shrink-0 tabular-nums ${grande ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+                {fmtM(r.monto)}
+              </span>
             </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-muted">
+            <div className={`w-full overflow-hidden rounded-full bg-muted ${grande ? "h-4" : "h-2.5"}`}>
               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
             </div>
           </div>
