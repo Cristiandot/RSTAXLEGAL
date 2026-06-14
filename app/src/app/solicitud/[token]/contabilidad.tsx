@@ -9,7 +9,7 @@ import {
   cargarContabilidad, cargarContabilidadMes,
   type ContabilidadInfo, type MesDetalle,
 } from "./portal-actions";
-import { BarrasVentasCompras, BarrasHorizontales } from "./mini-charts";
+import { BarrasVentasCompras, BarrasHorizontales, LineasVentasCompras } from "./mini-charts";
 import { DocumentosSolicitar, type TipoDoc } from "./documentos";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -203,6 +203,19 @@ export function Contabilidad({ token }: { token: string }) {
                 seleccionado={mesSel || null}
                 onSeleccionar={(p) => setMesSel((prev) => (prev === p ? "" : p))}
               />
+            </CardContent>
+          </Card>
+
+          {/* Fluctuación — líneas con puntos (tendencia anual) */}
+          <Card className="card-soft border-transparent">
+            <CardHeader>
+              <CardTitle className="text-base">Fluctuación · ventas y compras</CardTitle>
+              <CardDescription className="mt-1">
+                Tendencia mes a mes de las ventas y compras netas del año.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <LineasVentasCompras meses={info.meses ?? []} />
             </CardContent>
           </Card>
 

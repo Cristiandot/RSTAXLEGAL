@@ -87,6 +87,70 @@ export function BarrasVentasCompras({
   );
 }
 
+/**
+ * Líneas con puntos: evolución de ventas vs compras por mes (CLP). Muestra la
+ * fluctuación a lo largo del año; complementa a las barras. SVG puro,
+ * responsivo por viewBox. Cada punto tiene tooltip con el monto.
+ */
+export function LineasVentasCompras({
+  meses,
+}: {
+  meses: { periodo: string; ventas_neto: number; compras_neto: number }[];
+}) {
+  if (meses.length === 0) {
+    return <p className="py-6 text-center text-sm text-muted-foreground">Sin datos para el período.</p>;
+  }
+  const W = 340;
+  const H = 180;
+  const padL = 6;
+  const padR = 6;
+  const padT = 12;
+  const padB = 22;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const n = meses.length;
+  const max = Math.max(1, ...meses.flatMap((m) => [m.ventas_neto, m.compras_neto]));
+  const px = (i: number) => (n === 1 ? padL + plotW / 2 : padL + (i * plotW) / (n - 1));
+  const py = (v: number) => padT + plotH - (Math.max(0, v) / max) * plotH;
+  const puntos = (sel: (m: { ventas_neto: number; compras_neto: number }) => number) =>
+    meses.map((m, i) => `${px(i).toFixed(1)},${py(sel(m)).toFixed(1)}`).join(" ");
+
+  return (
+    <div className="w-full">
+      <div className="mb-3 flex items-center gap-4 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span className="size-2.5 rounded-full" style={{ background: TEAL }} /> Ventas
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="size-2.5 rounded-full" style={{ background: NAVY }} /> Compras
+        </span>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="h-auto w-full"
+        role="img"
+        aria-label="Evolución de ventas y compras por mes"
+      >
+        <polyline fill="none" stroke={NAVY} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" points={puntos((m) => m.compras_neto)} />
+        <polyline fill="none" stroke={TEAL} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" points={puntos((m) => m.ventas_neto)} />
+        {meses.map((m, i) => (
+          <g key={m.periodo}>
+            <circle cx={px(i)} cy={py(m.compras_neto)} r={2.6} fill={NAVY}>
+              <title>{`${mesBoton(m.periodo)} · Compras ${fmtM(m.compras_neto)}`}</title>
+            </circle>
+            <circle cx={px(i)} cy={py(m.ventas_neto)} r={2.6} fill={TEAL}>
+              <title>{`${mesBoton(m.periodo)} · Ventas ${fmtM(m.ventas_neto)}`}</title>
+            </circle>
+            <text x={px(i)} y={H - 6} textAnchor="middle" fontSize="8" fill="currentColor" className="text-muted-foreground">
+              {mesBoton(m.periodo)}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 /** Barras horizontales (top proveedores/clientes). `grande` = más protagonismo. */
 export function BarrasHorizontales({
   rows,
