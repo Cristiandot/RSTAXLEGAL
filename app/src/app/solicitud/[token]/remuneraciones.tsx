@@ -18,7 +18,7 @@ import {
   type RemuneracionNomina,
   type TrabajadorNomina,
 } from "./portal-actions";
-import { TIPOS_NOVEDAD, TIPO_NOVEDAD_LABEL, resumenGestionMes } from "@/lib/novedades";
+import { TIPOS_NOVEDAD, resumenGestionMes } from "@/lib/novedades";
 import { feriadosDelMes } from "@/lib/feriados";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { calcularLiquidacionEjemplo, type LiquidacionEjemplo } from "@/lib/liquidacion-ejemplo";
@@ -190,16 +190,6 @@ export function DetalleRemuneraciones({
   function limpiarFormulario() {
     setEditando(null);
     setFecha(""); setFechaHasta(""); setCantidad(""); setMonto(""); setComentario("");
-  }
-
-  function editar(n: NovedadRow) {
-    setEditando(n);
-    setTipo(n.tipo);
-    setFecha(n.fecha ?? "");
-    setFechaHasta(n.fecha_hasta ?? "");
-    setCantidad(n.cantidad != null ? String(n.cantidad) : "");
-    setMonto(n.monto != null ? String(n.monto) : "");
-    setComentario(n.comentario ?? "");
   }
 
   function agregar() {
@@ -722,69 +712,6 @@ export function DetalleRemuneraciones({
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Aún no hay trabajadores activos cargados con RS Tax &amp; Legal para esta empresa.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Historial del mes (editable mientras el mes esté abierto) */}
-          <Card className="card-soft border-transparent">
-            <CardHeader>
-              <CardTitle className="text-base">
-                Historial de {nombrePeriodo(periodo)}
-              </CardTitle>
-              <CardDescription>
-                Todo lo informado este mes. Si te equivocaste, puedes corregir
-                (lápiz) o eliminar (basurero) mientras el mes siga abierto.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {info && info.novedades.length > 0 ? (
-                <ul className="divide-y">
-                  {info.novedades.map((n) => (
-                    <li key={n.id} className="flex items-center gap-2 py-2 text-sm">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium">{n.trabajador}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {TIPO_NOVEDAD_LABEL[n.tipo] ?? n.tipo}
-                          {n.fecha ? ` · ${formatFecha(n.fecha)}` : ""}
-                          {n.fecha_hasta ? ` al ${formatFecha(n.fecha_hasta)}` : ""}
-                          {n.cantidad != null ? ` · ${n.cantidad} hrs` : ""}
-                          {n.monto != null ? ` · ${formatMonto(n.monto)}` : ""}
-                          {n.comentario ? ` · ${n.comentario}` : ""}
-                        </p>
-                      </div>
-                      {!cerrado && n.origen === "cliente" ? (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            disabled={ocupado}
-                            onClick={() => editar(n)}
-                            aria-label="Corregir novedad"
-                            title="Corregir"
-                          >
-                            <Pencil className="size-4 text-muted-foreground" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            disabled={ocupado}
-                            onClick={() => borrar(n.id)}
-                            aria-label="Eliminar novedad"
-                            title="Eliminar"
-                          >
-                            <Trash2 className="size-4 text-muted-foreground" />
-                          </Button>
-                        </>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Aún no hay novedades cargadas este mes.
-                  {cerrado ? "" : " Si no hubo ninguna, puedes cerrar el mes directo."}
                 </p>
               )}
             </CardContent>
