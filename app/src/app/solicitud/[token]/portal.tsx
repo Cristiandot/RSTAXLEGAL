@@ -86,7 +86,7 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
         ))}
       </div>
 
-      {tab === "empresa" ? <Empresa token={token} onIr={setTab} /> : null}
+      {tab === "empresa" ? <Empresa token={token} /> : null}
       {tab === "contabilidad" ? <Contabilidad token={token} /> : null}
       {tab === "rrhh" ? <RecursosHumanos token={token} /> : null}
       {tab === "gastos" ? <GastosMenores token={token} empresa={empresa} /> : null}
