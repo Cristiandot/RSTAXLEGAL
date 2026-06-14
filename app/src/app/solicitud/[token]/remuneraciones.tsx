@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Eye, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Info, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   cargarRemuneraciones,
   guardarNovedad,
@@ -461,6 +461,36 @@ export function DetalleRemuneraciones({
         <p className="py-8 text-center text-sm text-muted-foreground">Cargando…</p>
       ) : (
         <>
+          {/* Recordatorio destacado: no duplicar inasistencias ya pedidas */}
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <div className="flex items-start gap-2">
+              <Info className="mt-0.5 size-4 shrink-0 text-amber-600" />
+              <div className="min-w-0">
+                <p className="font-semibold">No dupliques las inasistencias del mes</p>
+                <p className="text-amber-800">
+                  Permisos, vacaciones y finiquitos ya pedidos en{" "}
+                  <strong>Solicitudes laborales</strong> entran solos a la
+                  liquidación — no los cargues de nuevo aquí.
+                </p>
+                {info && info.gestiones.length > 0 ? (
+                  <ul className="mt-2 space-y-1">
+                    {info.gestiones.map((g) => (
+                      <li key={g.id} className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="font-medium">{g.trabajador}</span>
+                        <span className="text-amber-800">{resumenGestionMes(g.tipo, g.datos)}</span>
+                        <span className="text-xs text-amber-700">({g.estado})</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Este mes aún no hay ninguna registrada por el panel.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Calendario del mes + agregar/editar novedad, lado a lado */}
           <div className="grid items-start gap-5 lg:grid-cols-2">
             <CalendarioMes periodo={periodo} />
@@ -635,34 +665,6 @@ export function DetalleRemuneraciones({
               </CardContent>
             </Card>
           ) : null}
-
-          {/* Lo que ya entró por el panel de solicitudes */}
-          <Card className="card-soft border-transparent">
-            <CardHeader>
-              <CardTitle className="text-base">Ya informado por el panel de solicitudes</CardTitle>
-              <CardDescription>
-                Permisos, vacaciones y finiquitos del mes solicitados por el
-                panel — no los vuelvas a cargar acá.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {info && info.gestiones.length > 0 ? (
-                <ul className="space-y-1.5 text-sm">
-                  {info.gestiones.map((g) => (
-                    <li key={g.id} className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="font-medium">{g.trabajador}</span>
-                      <span className="text-muted-foreground">{resumenGestionMes(g.tipo, g.datos)}</span>
-                      <span className="text-xs text-muted-foreground">({g.estado})</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Sin gestiones del panel en este mes.
-                </p>
-              )}
-            </CardContent>
-          </Card>
 
           {/* Nómina activa: anticipos/bonos del mes + detalle de liquidación */}
           <Card className="card-soft border-transparent">
