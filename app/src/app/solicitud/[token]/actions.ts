@@ -295,31 +295,29 @@ export async function guardarNovedad(
 export async function guardarHorasDia(
   token: string,
   p: {
-    trabajadorIds: string[];
+    entradas: { trabajadorId: string; horas: number }[];
     periodo: string;
     tipo: "domingo" | "feriado";
     fecha: string;
-    horas: string;
   },
 ): Promise<{ ok: boolean; agregados?: number; error?: string }> {
-  if (!p.trabajadorIds.length) return { ok: false, error: "Selecciona al menos un trabajador." };
+  if (!p.entradas.length) return { ok: false, error: "Pon las horas a al menos un trabajador." };
   if (!p.fecha) return { ok: false, error: "Indica el día." };
-  const h = Number(p.horas);
-  if (!Number.isFinite(h) || h <= 0) return { ok: false, error: "Indica las horas (mayor a 0)." };
 
   const supabase = await createClient();
   let agregados = 0;
   let ultimoError: string | null = null;
-  for (const id of p.trabajadorIds) {
+  for (const e of p.entradas) {
+    if (!Number.isFinite(e.horas) || e.horas <= 0) continue;
     const { error } = await supabase.rpc("guardar_novedad_remuneracion", {
       p_token: token,
       p: {
-        trabajador_id: id,
+        trabajador_id: e.trabajadorId,
         periodo: p.periodo,
         tipo: p.tipo,
         fecha: p.fecha,
         fecha_hasta: null,
-        cantidad: String(h),
+        cantidad: String(e.horas),
         monto: null,
         comentario: null,
       },
@@ -327,7 +325,7 @@ export async function guardarHorasDia(
     if (error) ultimoError = error.message;
     else agregados++;
   }
-  if (agregados === 0) return { ok: false, error: ultimoError ?? "No se pudo guardar." };
+  if (agregados === 0) return { ok: false, error: ultimoError ?? "No se agregó ninguna hora." };
   return { ok: true, agregados };
 }
 

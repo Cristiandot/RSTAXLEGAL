@@ -181,6 +181,9 @@ export function DetalleRemuneraciones({
   // Licencia médica ya no se informa por el portal (la trae la empresa por
   // otros canales); el catálogo completo se mantiene para mostrar historial.
   const tiposPortal = TIPOS_NOVEDAD.filter((t) => t.enPortal !== false);
+  // En el formulario genérico ya no se ofrecen domingo/feriado: se cargan en su
+  // propio módulo. Siguen disponibles para EDITAR registros antiguos.
+  const tiposForm = tiposPortal.filter((t) => t.value !== "feriado" && t.value !== "domingo");
 
   const cerrado = info?.estado === "cerrado";
 
@@ -308,8 +311,7 @@ export function DetalleRemuneraciones({
 
   // --- carga masiva de horas en domingo/feriado ---
   const [hdFecha, setHdFecha] = useState("");
-  const [hdSel, setHdSel] = useState<Set<string>>(new Set());
-  const [hdHoras, setHdHoras] = useState("");
+  const [hdHoras, setHdHoras] = useState<Record<string, string>>({});
 
   const diasEspeciales = useMemo(() => {
     const [y, m] = periodo.split("-").map(Number);
@@ -340,37 +342,22 @@ export function DetalleRemuneraciones({
 
   const diaSel = diasEspeciales.find((d) => d.fecha === hdFecha) ?? null;
 
-  function toggleUno(id: string) {
-    setHdSel((prev) => {
-      const s = new Set(prev);
-      if (s.has(id)) s.delete(id);
-      else s.add(id);
-      return s;
-    });
-  }
-  function toggleTodos() {
-    setHdSel((prev) =>
-      prev.size === empresa.trabajadores.length
-        ? new Set()
-        : new Set(empresa.trabajadores.map((t) => t.id)),
-    );
-  }
-
   function agregarHorasDia() {
     if (!diaSel) { toast.error("Elige el día (domingo o feriado)."); return; }
-    if (hdSel.size === 0) { toast.error("Selecciona al menos un trabajador."); return; }
+    const entradas = empresa.trabajadores
+      .map((t) => ({ trabajadorId: t.id, horas: Number(hdHoras[t.id]) }))
+      .filter((e) => Number.isFinite(e.horas) && e.horas > 0);
+    if (entradas.length === 0) { toast.error("Pon las horas a al menos un trabajador."); return; }
     startAccion(async () => {
       const res = await guardarHorasDia(token, {
-        trabajadorIds: [...hdSel],
+        entradas,
         periodo,
         tipo: diaSel.tipo,
         fecha: diaSel.fecha,
-        horas: hdHoras,
       });
       if (res.ok) {
         toast.success(`Horas agregadas a ${res.agregados} trabajador${res.agregados === 1 ? "" : "es"}`);
-        setHdSel(new Set());
-        setHdHoras("");
+        setHdHoras({});
         await recargar(periodo);
       } else toast.error(res.error ?? "No se pudo guardar.");
     });
@@ -479,9 +466,9 @@ export function DetalleRemuneraciones({
                 <div className="flex flex-col gap-1.5">
                   <Label className="text-xs">Tipo de novedad</Label>
                   <select className={selectCls} value={tipo} onChange={(e) => setTipo(e.target.value)}>
-                    {(editando && !tiposPortal.some((t) => t.value === tipo)
+                    {(editando && !tiposForm.some((t) => t.value === tipo)
                       ? TIPOS_NOVEDAD
-                      : tiposPortal
+                      : tiposForm
                     ).map((t) => (
                       <option key={t.value} value={t.value}>{t.label}</option>
                     ))}
@@ -571,57 +558,40 @@ export function DetalleRemuneraciones({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs">Día (domingo o feriado del mes)</Label>
-                    <select className={selectCls} value={hdFecha} onChange={(e) => setHdFecha(e.target.value)}>
-                      <option value="">— Elige el día —</option>
-                      {diasEspeciales.map((d) => (
-                        <option key={d.fecha} value={d.fecha}>{d.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs">Horas trabajadas ese día</Label>
-                    <Input
-                      type="number" min={0.5} max={24} step={0.5} placeholder="ej. 8"
-                      value={hdHoras} onChange={(e) => setHdHoras(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <Button
-                      className="w-full"
-                      onClick={agregarHorasDia}
-                      disabled={ocupado || empresa.trabajadores.length === 0}
-                    >
-                      <Plus className="size-4" /> Agregar a seleccionados
-                    </Button>
-                  </div>
+                <div className="flex flex-col gap-1.5 sm:max-w-sm">
+                  <Label className="text-xs">Día (domingo o feriado del mes)</Label>
+                  <select className={selectCls} value={hdFecha} onChange={(e) => setHdFecha(e.target.value)}>
+                    <option value="">— Elige el día —</option>
+                    {diasEspeciales.map((d) => (
+                      <option key={d.fecha} value={d.fecha}>{d.label}</option>
+                    ))}
+                  </select>
                 </div>
 
                 {empresa.trabajadores.length > 0 ? (
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">{hdSel.size} seleccionado{hdSel.size === 1 ? "" : "s"}</span>
-                      <button type="button" className="text-xs font-medium text-[var(--brand-teal)]" onClick={toggleTodos}>
-                        {hdSel.size === empresa.trabajadores.length ? "Quitar todos" : "Seleccionar todos"}
-                      </button>
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      Pon las horas trabajadas ese día a cada trabajador (deja en blanco a quien no trabajó).
+                    </p>
+                    <div className="grid max-h-64 gap-1.5 overflow-y-auto sm:grid-cols-2">
+                      {empresa.trabajadores.map((t) => (
+                        <div key={t.id} className="flex items-center gap-2 rounded-md border border-input px-2.5 py-1.5">
+                          <span className="min-w-0 flex-1 truncate text-sm">{t.apellidos} {t.nombres}</span>
+                          <Input
+                            type="number" min={0} max={24} step={0.5} placeholder="hrs"
+                            className="h-8 w-20"
+                            value={hdHoras[t.id] ?? ""}
+                            onChange={(e) => setHdHoras((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                          />
+                        </div>
+                      ))}
                     </div>
-                    <div className="grid max-h-52 gap-1 overflow-y-auto sm:grid-cols-2">
-                      {empresa.trabajadores.map((t) => {
-                        const on = hdSel.has(t.id);
-                        return (
-                          <label
-                            key={t.id}
-                            className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm ${on ? "border-[var(--brand-teal)] bg-[var(--brand-teal)]/5" : "border-input"}`}
-                          >
-                            <input type="checkbox" checked={on} onChange={() => toggleUno(t.id)} />
-                            <span className="truncate">{t.apellidos} {t.nombres}</span>
-                          </label>
-                        );
-                      })}
+                    <div className="flex justify-end">
+                      <Button onClick={agregarHorasDia} disabled={ocupado || !hdFecha}>
+                        <Plus className="size-4" /> Agregar horas
+                      </Button>
                     </div>
-                  </div>
+                  </>
                 ) : (
                   <p className="text-sm text-muted-foreground">No hay trabajadores registrados para esta empresa.</p>
                 )}
