@@ -59,6 +59,64 @@ export async function guardarEmpresa(
   return { ok: true };
 }
 
+// ===================== Sucursales =====================
+
+export type Sucursal = {
+  id: string | null;
+  nombre: string;
+  direccion: string | null;
+  comuna: string | null;
+  ciudad: string | null;
+  telefono: string | null;
+};
+
+export async function cargarSucursales(
+  token: string,
+): Promise<{ ok: boolean; sucursales?: Sucursal[]; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_sucursales", { p_token: token });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, sucursales: (data ?? []) as Sucursal[] };
+}
+
+export async function guardarSucursal(
+  token: string,
+  s: Sucursal,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!s.nombre.trim()) return { ok: false, error: "La sucursal necesita un nombre." };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("portal_guardar_sucursal", {
+    p_token: token,
+    p: {
+      id: s.id,
+      nombre: s.nombre,
+      direccion: s.direccion ?? "",
+      comuna: s.comuna ?? "",
+      ciudad: s.ciudad ?? "",
+      telefono: s.telefono ?? "",
+    },
+  });
+  if (error) {
+    return {
+      ok: false,
+      error: error.message.includes("inválido")
+        ? "Este link no es válido. Contacta a RS Tax & Legal."
+        : `No se pudo guardar la sucursal: ${error.message}`,
+    };
+  }
+  return { ok: true };
+}
+
+export async function eliminarSucursal(
+  token: string,
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("portal_eliminar_sucursal", { p_token: token, p_id: id });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 // ===================== Indicadores Previred =====================
 
 export type IndicadoresPortal = {

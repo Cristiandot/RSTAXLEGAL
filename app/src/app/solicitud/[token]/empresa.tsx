@@ -9,6 +9,7 @@ import {
   cargarEmpresa, guardarEmpresa, cargarContabilidad, cargarRrhh,
   type EmpresaDatos, type ContabilidadInfo, type RrhhInfo,
 } from "./portal-actions";
+import { Sucursales } from "./sucursales";
 import { formatMonto } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -217,6 +218,8 @@ export function Empresa({
           </CardContent>
         </Card>
       </form>
+
+      <Sucursales token={token} />
     </div>
   );
 }
