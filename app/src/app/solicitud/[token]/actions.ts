@@ -287,6 +287,50 @@ export async function guardarNovedad(
   return { ok: true };
 }
 
+/**
+ * Carga masiva de horas en domingo/feriado: el mismo día y horas para varios
+ * trabajadores a la vez (un registro por trabajador). Reusa la RPC validada por
+ * token. Devuelve cuántos se agregaron.
+ */
+export async function guardarHorasDia(
+  token: string,
+  p: {
+    trabajadorIds: string[];
+    periodo: string;
+    tipo: "domingo" | "feriado";
+    fecha: string;
+    horas: string;
+  },
+): Promise<{ ok: boolean; agregados?: number; error?: string }> {
+  if (!p.trabajadorIds.length) return { ok: false, error: "Selecciona al menos un trabajador." };
+  if (!p.fecha) return { ok: false, error: "Indica el día." };
+  const h = Number(p.horas);
+  if (!Number.isFinite(h) || h <= 0) return { ok: false, error: "Indica las horas (mayor a 0)." };
+
+  const supabase = await createClient();
+  let agregados = 0;
+  let ultimoError: string | null = null;
+  for (const id of p.trabajadorIds) {
+    const { error } = await supabase.rpc("guardar_novedad_remuneracion", {
+      p_token: token,
+      p: {
+        trabajador_id: id,
+        periodo: p.periodo,
+        tipo: p.tipo,
+        fecha: p.fecha,
+        fecha_hasta: null,
+        cantidad: String(h),
+        monto: null,
+        comentario: null,
+      },
+    });
+    if (error) ultimoError = error.message;
+    else agregados++;
+  }
+  if (agregados === 0) return { ok: false, error: ultimoError ?? "No se pudo guardar." };
+  return { ok: true, agregados };
+}
+
 export async function eliminarNovedad(
   token: string,
   id: string,

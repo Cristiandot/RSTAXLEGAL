@@ -9,6 +9,7 @@ import {
   actualizarNovedad,
   eliminarNovedad,
   cerrarPeriodoRemuneraciones,
+  guardarHorasDia,
   type RemuneracionesInfo,
   type NovedadRow,
 } from "./actions";
@@ -305,6 +306,76 @@ export function DetalleRemuneraciones({
     });
   }
 
+  // --- carga masiva de horas en domingo/feriado ---
+  const [hdFecha, setHdFecha] = useState("");
+  const [hdSel, setHdSel] = useState<Set<string>>(new Set());
+  const [hdHoras, setHdHoras] = useState("");
+
+  const diasEspeciales = useMemo(() => {
+    const [y, m] = periodo.split("-").map(Number);
+    const fer = feriadosDelMes(periodo);
+    const ferDias = new Set(fer.map((f) => f.dia));
+    const out: { fecha: string; label: string; tipo: "domingo" | "feriado" }[] = [];
+    for (const f of fer) {
+      out.push({
+        fecha: f.fecha,
+        label: `Feriado ${String(f.dia).padStart(2, "0")} · ${f.nombre}`,
+        tipo: "feriado",
+      });
+    }
+    const dim = new Date(y, m, 0).getDate();
+    for (let d = 1; d <= dim; d++) {
+      const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+      if (dow === 0 && !ferDias.has(d)) {
+        out.push({
+          fecha: `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`,
+          label: `Domingo ${String(d).padStart(2, "0")}`,
+          tipo: "domingo",
+        });
+      }
+    }
+    out.sort((a, b) => a.fecha.localeCompare(b.fecha));
+    return out;
+  }, [periodo]);
+
+  const diaSel = diasEspeciales.find((d) => d.fecha === hdFecha) ?? null;
+
+  function toggleUno(id: string) {
+    setHdSel((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
+    });
+  }
+  function toggleTodos() {
+    setHdSel((prev) =>
+      prev.size === empresa.trabajadores.length
+        ? new Set()
+        : new Set(empresa.trabajadores.map((t) => t.id)),
+    );
+  }
+
+  function agregarHorasDia() {
+    if (!diaSel) { toast.error("Elige el día (domingo o feriado)."); return; }
+    if (hdSel.size === 0) { toast.error("Selecciona al menos un trabajador."); return; }
+    startAccion(async () => {
+      const res = await guardarHorasDia(token, {
+        trabajadorIds: [...hdSel],
+        periodo,
+        tipo: diaSel.tipo,
+        fecha: diaSel.fecha,
+        horas: hdHoras,
+      });
+      if (res.ok) {
+        toast.success(`Horas agregadas a ${res.agregados} trabajador${res.agregados === 1 ? "" : "es"}`);
+        setHdSel(new Set());
+        setHdHoras("");
+        await recargar(periodo);
+      } else toast.error(res.error ?? "No se pudo guardar.");
+    });
+  }
+
   function liquidacionDe(t: TrabajadorNomina): LiquidacionEjemplo | null {
     const ind = nomina?.indicadores;
     if (!ind) return null;
@@ -488,6 +559,75 @@ export function DetalleRemuneraciones({
             </div>
           )}
           </div>
+
+          {/* Módulo: horas en domingo y feriado (carga masiva por día) */}
+          {!cerrado ? (
+            <Card className="card-soft border-transparent">
+              <CardHeader>
+                <CardTitle className="text-base">Horas en domingo y feriado</CardTitle>
+                <CardDescription>
+                  Elige el día, marca a los trabajadores que trabajaron y pon las horas — se cargan a
+                  todos de una vez. (El recargo lo valida el equipo según el contrato de cada uno.)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs">Día (domingo o feriado del mes)</Label>
+                    <select className={selectCls} value={hdFecha} onChange={(e) => setHdFecha(e.target.value)}>
+                      <option value="">— Elige el día —</option>
+                      {diasEspeciales.map((d) => (
+                        <option key={d.fecha} value={d.fecha}>{d.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs">Horas trabajadas ese día</Label>
+                    <Input
+                      type="number" min={0.5} max={24} step={0.5} placeholder="ej. 8"
+                      value={hdHoras} onChange={(e) => setHdHoras(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      className="w-full"
+                      onClick={agregarHorasDia}
+                      disabled={ocupado || empresa.trabajadores.length === 0}
+                    >
+                      <Plus className="size-4" /> Agregar a seleccionados
+                    </Button>
+                  </div>
+                </div>
+
+                {empresa.trabajadores.length > 0 ? (
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">{hdSel.size} seleccionado{hdSel.size === 1 ? "" : "s"}</span>
+                      <button type="button" className="text-xs font-medium text-[var(--brand-teal)]" onClick={toggleTodos}>
+                        {hdSel.size === empresa.trabajadores.length ? "Quitar todos" : "Seleccionar todos"}
+                      </button>
+                    </div>
+                    <div className="grid max-h-52 gap-1 overflow-y-auto sm:grid-cols-2">
+                      {empresa.trabajadores.map((t) => {
+                        const on = hdSel.has(t.id);
+                        return (
+                          <label
+                            key={t.id}
+                            className={`flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm ${on ? "border-[var(--brand-teal)] bg-[var(--brand-teal)]/5" : "border-input"}`}
+                          >
+                            <input type="checkbox" checked={on} onChange={() => toggleUno(t.id)} />
+                            <span className="truncate">{t.apellidos} {t.nombres}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No hay trabajadores registrados para esta empresa.</p>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
 
           {/* Lo que ya entró por el panel de solicitudes */}
           <Card className="card-soft border-transparent">
