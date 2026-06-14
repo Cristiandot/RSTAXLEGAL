@@ -281,6 +281,50 @@ export async function cargarRrhh(
   return { ok: true, info: data as RrhhInfo };
 }
 
+// ===================== Nómina con remuneración (para Detalle remuneraciones) =====================
+
+export type TasaAfpRow = { nombre: string; tasa_trabajador: number };
+export type IndicadoresNomina = { periodo: string; imm: number; utm: number; tasas_afp: TasaAfpRow[] };
+export type RemuneracionJson = {
+  sueldo_base?: number;
+  colacion?: number;
+  movilizacion?: number;
+  perdida_caja?: number;
+  gratificacion?: string;
+  gratificacion_tipo?: string;
+  gratificacion_monto?: number | null;
+  liquido_pactado?: number;
+  modalidad?: string;
+  valor_dia?: number;
+  observaciones?: string;
+} | null;
+export type TrabajadorNomina = {
+  id: string;
+  nombre: string;
+  rut: string | null;
+  cargo: string | null;
+  tipo_contrato: string | null;
+  fecha_ingreso: string | null;
+  fecha_termino: string | null;
+  afp: string | null;
+  salud: string | null;
+  remuneracion: RemuneracionJson;
+  sueldo_base_t: number | null;
+};
+export type RemuneracionNomina = {
+  indicadores: IndicadoresNomina | null;
+  trabajadores: TrabajadorNomina[];
+};
+
+export async function cargarRemuneracionNomina(
+  token: string,
+): Promise<{ ok: boolean; data?: RemuneracionNomina; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_remuneracion_nomina", { p_token: token });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data: data as RemuneracionNomina };
+}
+
 // ===================== Solicitar documento =====================
 
 export type SolicitudDocRow = {

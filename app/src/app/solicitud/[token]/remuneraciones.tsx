@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   cargarRemuneraciones,
   guardarNovedad,
@@ -12,9 +12,15 @@ import {
   type RemuneracionesInfo,
   type NovedadRow,
 } from "./actions";
+import {
+  cargarRemuneracionNomina,
+  type RemuneracionNomina,
+  type TrabajadorNomina,
+} from "./portal-actions";
 import { TIPOS_NOVEDAD, TIPO_NOVEDAD_LABEL, resumenGestionMes } from "@/lib/novedades";
 import { feriadosDelMes } from "@/lib/feriados";
 import { formatFecha, formatMonto } from "@/lib/format";
+import { calcularLiquidacionEjemplo, type LiquidacionEjemplo } from "@/lib/liquidacion-ejemplo";
 import { type InfoEmpresa } from "./solicitud-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +32,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -238,6 +251,85 @@ export function DetalleRemuneraciones({
     });
   }
 
+  // --- nómina con remuneración (liquidación + anticipos/bonos por trabajador) ---
+  const [nomina, setNomina] = useState<RemuneracionNomina | null>(null);
+  useEffect(() => {
+    void cargarRemuneracionNomina(token).then((r) => {
+      if (r.ok && r.data) setNomina(r.data);
+    });
+  }, [token]);
+
+  const [detalleDe, setDetalleDe] = useState<TrabajadorNomina | null>(null);
+  const [dlgTipo, setDlgTipo] = useState<"anticipo" | "bono">("anticipo");
+  const [dlgMonto, setDlgMonto] = useState("");
+  const [dlgComentario, setDlgComentario] = useState("");
+
+  function abrirDetalle(t: TrabajadorNomina) {
+    setDlgTipo("anticipo");
+    setDlgMonto("");
+    setDlgComentario("");
+    setDetalleDe(t);
+  }
+
+  function sumaNovedad(trabajadorId: string, t: string): number {
+    return (info?.novedades ?? [])
+      .filter((n) => n.trabajador_id === trabajadorId && n.tipo === t && n.monto != null)
+      .reduce((a, n) => a + (n.monto ?? 0), 0);
+  }
+
+  function novedadesDe(trabajadorId: string): NovedadRow[] {
+    return (info?.novedades ?? []).filter(
+      (n) => n.trabajador_id === trabajadorId && (n.tipo === "anticipo" || n.tipo === "bono"),
+    );
+  }
+
+  function agregarMontoNovedad() {
+    if (!detalleDe) return;
+    startAccion(async () => {
+      const res = await guardarNovedad(token, {
+        trabajador_id: detalleDe.id,
+        periodo,
+        tipo: dlgTipo,
+        fecha: "",
+        fecha_hasta: "",
+        cantidad: "",
+        monto: dlgMonto,
+        comentario: dlgComentario,
+      });
+      if (res.ok) {
+        toast.success(dlgTipo === "anticipo" ? "Anticipo agregado" : "Bono agregado");
+        setDlgMonto("");
+        setDlgComentario("");
+        await recargar(periodo);
+      } else toast.error(res.error ?? "No se pudo guardar.");
+    });
+  }
+
+  function liquidacionDe(t: TrabajadorNomina): LiquidacionEjemplo | null {
+    const ind = nomina?.indicadores;
+    if (!ind) return null;
+    const r = t.remuneracion ?? {};
+    const sueldoBase =
+      Number(r.sueldo_base ?? 0) ||
+      Number(t.sueldo_base_t ?? 0) ||
+      (r.valor_dia ? Number(r.valor_dia) * 30 : 0);
+    if (!sueldoBase) return null;
+    const gtipo = r.gratificacion_tipo === "art50" ? "25" : (r.gratificacion_tipo ?? "25");
+    return calcularLiquidacionEjemplo({
+      sueldoBase,
+      gratificacionTipo: gtipo,
+      gratificacionMonto: Number(r.gratificacion_monto ?? 0),
+      colacion: Number(r.colacion ?? 0),
+      movilizacion: Number(r.movilizacion ?? 0),
+      afp: t.afp,
+      salud: t.salud,
+      tipoContrato: t.tipo_contrato ?? "indefinido",
+      imm: ind.imm,
+      utm: ind.utm,
+      tasasAfp: ind.tasas_afp.map((a) => ({ nombre: a.nombre, tasa_trabajador: a.tasa_trabajador })),
+    });
+  }
+
   return (
     <div className="space-y-5">
       <div className="text-center">
@@ -261,7 +353,6 @@ export function DetalleRemuneraciones({
           <ChevronRight className="size-4" />
         </Button>
       </div>
-      <CalendarioMes periodo={periodo} />
 
       {cerrado ? (
         <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
@@ -275,35 +366,9 @@ export function DetalleRemuneraciones({
         <p className="py-8 text-center text-sm text-muted-foreground">Cargando…</p>
       ) : (
         <>
-          {/* Lo que ya entró por el panel de solicitudes */}
-          <Card className="card-soft border-transparent">
-            <CardHeader>
-              <CardTitle className="text-base">Ya informado por el panel de solicitudes</CardTitle>
-              <CardDescription>
-                Permisos, vacaciones y finiquitos del mes solicitados por el
-                panel — no los vuelvas a cargar acá.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {info && info.gestiones.length > 0 ? (
-                <ul className="space-y-1.5 text-sm">
-                  {info.gestiones.map((g) => (
-                    <li key={g.id} className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="font-medium">{g.trabajador}</span>
-                      <span className="text-muted-foreground">{resumenGestionMes(g.tipo, g.datos)}</span>
-                      <span className="text-xs text-muted-foreground">({g.estado})</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Sin gestiones del panel en este mes.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Agregar / editar novedad */}
+          {/* Calendario del mes + agregar/editar novedad, lado a lado */}
+          <div className="grid items-start gap-5 lg:grid-cols-2">
+            <CalendarioMes periodo={periodo} />
           {!cerrado ? (
             <Card className={`card-soft border-transparent ${editando ? "ring-2 ring-amber-300" : ""}`}>
               <CardHeader>
@@ -417,7 +482,101 @@ export function DetalleRemuneraciones({
                 </div>
               </CardContent>
             </Card>
-          ) : null}
+          ) : (
+            <div className="card-soft flex items-center justify-center rounded-xl bg-card p-6 text-center text-sm text-muted-foreground">
+              Este mes ya fue cerrado — no se cargan novedades.
+            </div>
+          )}
+          </div>
+
+          {/* Lo que ya entró por el panel de solicitudes */}
+          <Card className="card-soft border-transparent">
+            <CardHeader>
+              <CardTitle className="text-base">Ya informado por el panel de solicitudes</CardTitle>
+              <CardDescription>
+                Permisos, vacaciones y finiquitos del mes solicitados por el
+                panel — no los vuelvas a cargar acá.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {info && info.gestiones.length > 0 ? (
+                <ul className="space-y-1.5 text-sm">
+                  {info.gestiones.map((g) => (
+                    <li key={g.id} className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-medium">{g.trabajador}</span>
+                      <span className="text-muted-foreground">{resumenGestionMes(g.tipo, g.datos)}</span>
+                      <span className="text-xs text-muted-foreground">({g.estado})</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Sin gestiones del panel en este mes.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Nómina activa: anticipos/bonos del mes + detalle de liquidación */}
+          <Card className="card-soft border-transparent">
+            <CardHeader>
+              <CardTitle className="text-base">Nómina activa</CardTitle>
+              <CardDescription>
+                Tus trabajadores activos. Abre el <strong>Detalle</strong> para ver la liquidación
+                (sueldo base, gratificación, colación, movilización y otras consideraciones) y para
+                agregar los anticipos y bonos del mes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {nomina && nomina.trabajadores.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-xs text-muted-foreground">
+                        <th className="py-2 pr-2 font-medium">Trabajador</th>
+                        <th className="py-2 pr-2 font-medium">Contrato</th>
+                        <th className="py-2 pr-2 text-right font-medium">Anticipos</th>
+                        <th className="py-2 pr-2 text-right font-medium">Bonos</th>
+                        <th className="py-2 font-medium" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {nomina.trabajadores.map((t) => {
+                        const ant = sumaNovedad(t.id, "anticipo");
+                        const bon = sumaNovedad(t.id, "bono");
+                        return (
+                          <tr key={t.id} className="border-b last:border-0">
+                            <td className="py-2 pr-2">{t.nombre}</td>
+                            <td className="py-2 pr-2">
+                              <span className={`rounded-full px-2 py-0.5 text-xs ${t.tipo_contrato === "plazo_fijo" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>
+                                {t.tipo_contrato === "plazo_fijo" ? "Plazo fijo" : t.tipo_contrato === "indefinido" ? "Indefinido" : "—"}
+                              </span>
+                              {t.tipo_contrato === "plazo_fijo" && t.fecha_termino ? (
+                                <span className="block text-[11px] text-muted-foreground">vence {formatFecha(t.fecha_termino)}</span>
+                              ) : (
+                                <span className="block text-[11px] text-muted-foreground">desde {formatFecha(t.fecha_ingreso)}</span>
+                              )}
+                            </td>
+                            <td className="py-2 pr-2 text-right tabular-nums">{ant > 0 ? formatMonto(ant) : "—"}</td>
+                            <td className="py-2 pr-2 text-right tabular-nums">{bon > 0 ? formatMonto(bon) : "—"}</td>
+                            <td className="py-2 text-right">
+                              <Button variant="outline" size="sm" onClick={() => abrirDetalle(t)}>
+                                <Eye className="size-3.5" /> Detalle
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Aún no hay trabajadores activos cargados con RS Tax &amp; Legal para esta empresa.
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Historial del mes (editable mientras el mes esté abierto) */}
           <Card className="card-soft border-transparent">
@@ -492,6 +651,89 @@ export function DetalleRemuneraciones({
           ) : null}
         </>
       )}
+
+      {/* Detalle por trabajador: liquidación referencial + anticipos/bonos */}
+      <Dialog open={detalleDe !== null} onOpenChange={(o) => { if (!o) setDetalleDe(null); }}>
+        {detalleDe ? (() => {
+          const t = detalleDe;
+          const liq = liquidacionDe(t);
+          const r = t.remuneracion ?? {};
+          const movs = novedadesDe(t.id);
+          return (
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="font-heading">Liquidación · {t.nombre}</DialogTitle>
+                <DialogDescription>
+                  Mes de referencia con los indicadores Previred de {nomina?.indicadores?.periodo ?? "—"}.
+                  Referencial — la liquidación real depende de las novedades del mes.
+                </DialogDescription>
+              </DialogHeader>
+
+              {liq ? (
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between"><span>Sueldo base</span><span className="tabular-nums">{formatMonto(liq.sueldoBase)}</span></div>
+                  <div className="flex justify-between"><span>Gratificación legal</span><span className="tabular-nums">{formatMonto(liq.gratificacion)}</span></div>
+                  <div className="flex justify-between border-t pt-1.5 font-medium"><span>Total imponible</span><span className="tabular-nums">{formatMonto(liq.totalImponible)}</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>AFP {liq.afpNombre ?? "—"}{liq.afpTasa !== null ? ` (${liq.afpTasa.toLocaleString("es-CL")}%)` : ""}</span><span className="tabular-nums">−{formatMonto(liq.afpMonto)}</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>Salud 7%</span><span className="tabular-nums">−{formatMonto(liq.saludMonto)}</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>Seguro cesantía AFC{liq.afcMonto > 0 ? " 0,6%" : ""}</span><span className="tabular-nums">−{formatMonto(liq.afcMonto)}</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>Impuesto único</span><span className="tabular-nums">−{formatMonto(liq.impuestoUnico)}</span></div>
+                  {liq.colacion > 0 ? <div className="flex justify-between"><span>Colación (no imponible)</span><span className="tabular-nums">+{formatMonto(liq.colacion)}</span></div> : null}
+                  {liq.movilizacion > 0 ? <div className="flex justify-between"><span>Movilización (no imponible)</span><span className="tabular-nums">+{formatMonto(liq.movilizacion)}</span></div> : null}
+                  <div className="flex justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-base font-semibold text-emerald-800"><span>LÍQUIDO REFERENCIAL</span><span className="tabular-nums">{formatMonto(liq.liquido)}</span></div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  No tenemos el sueldo de este trabajador cargado para estimar la liquidación.
+                </p>
+              )}
+
+              {(Number(r.perdida_caja ?? 0) > 0 || r.observaciones) ? (
+                <div className="rounded-lg border border-sky-200 bg-sky-50 p-2.5 text-xs text-sky-800">
+                  <strong>Otras consideraciones:</strong>
+                  {Number(r.perdida_caja ?? 0) > 0 ? <span> asignación de pérdida de caja {formatMonto(Number(r.perdida_caja))}.</span> : null}
+                  {r.observaciones ? <span> {r.observaciones}</span> : null}
+                </div>
+              ) : null}
+
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-sm font-medium">Anticipos y bonos de {nombrePeriodo(periodo)}</p>
+                {movs.length > 0 ? (
+                  <ul className="space-y-1 text-sm">
+                    {movs.map((n) => (
+                      <li key={n.id} className="flex items-center justify-between gap-2">
+                        <span>
+                          <span className={`rounded-full px-2 py-0.5 text-xs ${n.tipo === "anticipo" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>{n.tipo === "anticipo" ? "Anticipo" : "Bono"}</span>
+                          <span className="ml-2 tabular-nums">{formatMonto(n.monto)}</span>
+                          {n.comentario ? <span className="text-muted-foreground"> · {n.comentario}</span> : null}
+                        </span>
+                        {!cerrado && n.origen === "cliente" ? (
+                          <Button variant="ghost" size="icon-sm" disabled={ocupado} onClick={() => borrar(n.id)} aria-label="Eliminar">
+                            <Trash2 className="size-4 text-muted-foreground" />
+                          </Button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Sin anticipos ni bonos este mes.</p>
+                )}
+                {!cerrado ? (
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <select className={selectCls} value={dlgTipo} onChange={(e) => setDlgTipo(e.target.value as "anticipo" | "bono")}>
+                      <option value="anticipo">Anticipo</option>
+                      <option value="bono">Bono</option>
+                    </select>
+                    <Input type="number" min={1} placeholder="Monto $" value={dlgMonto} onChange={(e) => setDlgMonto(e.target.value)} />
+                    <Input placeholder="Comentario" value={dlgComentario} onChange={(e) => setDlgComentario(e.target.value)} />
+                    <Button onClick={agregarMontoNovedad} disabled={ocupado}><Plus className="size-4" /> Agregar</Button>
+                  </div>
+                ) : null}
+              </div>
+            </DialogContent>
+          );
+        })() : null}
+      </Dialog>
     </div>
   );
 }
