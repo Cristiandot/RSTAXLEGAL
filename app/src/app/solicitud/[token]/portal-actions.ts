@@ -117,6 +117,61 @@ export async function eliminarSucursal(
   return { ok: true };
 }
 
+// ===================== Reglamento interno (RIHS / RIOHS) =====================
+
+export type Reglamento = {
+  tiene: boolean;
+  tipo: "RIHS" | "RIOHS" | null;
+  actualizado: string | null;
+};
+
+export async function cargarReglamento(
+  token: string,
+): Promise<{ ok: boolean; reglamento?: Reglamento; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_reglamento", { p_token: token });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, reglamento: data as Reglamento };
+}
+
+export async function subirReglamento(
+  token: string,
+  formData: FormData,
+): Promise<{ ok: boolean; error?: string }> {
+  const tipo = String(formData.get("tipo") ?? "");
+  if (tipo !== "RIHS" && tipo !== "RIOHS") {
+    return { ok: false, error: "Indica si es RIHS o RIOHS." };
+  }
+  const archivo = formData.get("archivo");
+  if (!(archivo instanceof File) || archivo.size === 0) {
+    return { ok: false, error: "Adjunta el documento (PDF o imagen)." };
+  }
+  if (archivo.size > 10 * 1024 * 1024) {
+    return { ok: false, error: "El archivo supera los 10 MB." };
+  }
+
+  const supabase = await createClient();
+  const { data: valido, error: errTok } = await supabase.rpc("portal_token_valido", { p_token: token });
+  if (errTok || !valido) {
+    return { ok: false, error: "Este link no es válido. Contacta a RS Tax & Legal." };
+  }
+
+  const punto = archivo.name.lastIndexOf(".");
+  const ext = punto >= 0 ? archivo.name.slice(punto + 1).toLowerCase().replace(/[^a-z0-9]/g, "") : "";
+  const path = `portal/${crypto.randomUUID()}${ext ? `.${ext}` : ""}`;
+  const { error: errUp } = await supabase.storage
+    .from("reglamentos")
+    .upload(path, archivo, { contentType: archivo.type || undefined, upsert: false });
+  if (errUp) return { ok: false, error: `No se pudo subir el archivo: ${errUp.message}` };
+
+  const { error } = await supabase.rpc("portal_set_reglamento", {
+    p_token: token,
+    p: { path, tipo },
+  });
+  if (error) return { ok: false, error: `No se pudo registrar: ${error.message}` };
+  return { ok: true };
+}
+
 // ===================== Indicadores Previred =====================
 
 export type IndicadoresPortal = {

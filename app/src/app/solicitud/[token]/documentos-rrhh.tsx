@@ -4,11 +4,15 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { toast } from "sonner";
 import {
   Award, BookText, ReceiptText, Send, ClipboardCheck, CheckCircle2,
+  ShieldAlert, ShieldCheck, Upload,
 } from "lucide-react";
 import {
   listarSolicitudesDocumento,
   solicitarDocumento,
+  cargarReglamento,
+  subirReglamento,
   type SolicitudDocRow,
+  type Reglamento,
 } from "./portal-actions";
 import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -115,14 +119,43 @@ export function DocumentosRrhh({
   const [liqSel, setLiqSel] = useState("");
   const [liqPeriodo, setLiqPeriodo] = useState(periodos[0]?.value ?? "");
 
+  const [reglamento, setReglamento] = useState<Reglamento | null>(null);
+  const [regTipo, setRegTipo] = useState<"RIHS" | "RIOHS">("RIOHS");
+  const [archivo, setArchivo] = useState<File | null>(null);
+  const [inputKey, setInputKey] = useState(0);
+
   const recargar = useCallback(async () => {
     const r = await listarSolicitudesDocumento(token);
     if (r.ok && r.rows) setRows(r.rows.filter((x) => x.area === "rrhh"));
   }, [token]);
 
+  const recargarReglamento = useCallback(async () => {
+    const r = await cargarReglamento(token);
+    if (r.ok && r.reglamento) setReglamento(r.reglamento);
+  }, [token]);
+
   useEffect(() => {
     void recargar();
-  }, [recargar]);
+    void recargarReglamento();
+  }, [recargar, recargarReglamento]);
+
+  function subirReg() {
+    if (!archivo) return;
+    startEnviar(async () => {
+      const fd = new FormData();
+      fd.set("tipo", regTipo);
+      fd.set("archivo", archivo);
+      const r = await subirReglamento(token, fd);
+      if (r.ok) {
+        toast.success("Reglamento cargado");
+        setArchivo(null);
+        setInputKey((k) => k + 1);
+        await recargarReglamento();
+      } else {
+        toast.error(r.error ?? "No se pudo subir el reglamento.");
+      }
+    });
+  }
 
   function pedir(tipo: string, p: { periodo?: string; detalle?: string }) {
     startEnviar(async () => {
@@ -227,6 +260,60 @@ export function DocumentosRrhh({
           </CardContent>
         </Card>
       </div>
+
+      {/* Reglamento interno RIHS / RIOHS */}
+      <Card className="card-soft border-transparent">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldCheck className="size-4 text-[var(--brand-teal)]" /> Reglamento interno (RIHS / RIOHS)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {reglamento?.tiene ? (
+            <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+              <ShieldCheck className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Tienes cargado tu <strong>{reglamento.tipo}</strong>
+                {reglamento.actualizado ? ` · actualizado el ${formatFecha(reglamento.actualizado)}` : ""}. Si tienes una
+                versión nueva, puedes reemplazarlo.
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+              <span>
+                Aún no tienes cargado tu RIHS/RIOHS. Es importante <strong>coordinarlo con tu prevencionista de
+                riesgos</strong>, mantenerlo al día y entregar copia a cada trabajador. Cárgalo aquí para que el equipo
+                lo tenga.
+              </span>
+            </div>
+          )}
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs">Tipo</Label>
+              <select className={selectCls} value={regTipo} onChange={(e) => setRegTipo(e.target.value as "RIHS" | "RIOHS")}>
+                <option value="RIOHS">RIOHS (≥10 trabajadores)</option>
+                <option value="RIHS">RIHS</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label className="text-xs">Documento (PDF o imagen, hasta 10 MB)</Label>
+              <Input
+                key={inputKey}
+                type="file"
+                accept="application/pdf,image/*"
+                className="file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1 file:text-sm"
+                onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" disabled={enviando || !archivo} onClick={subirReg}>
+              <Upload className="size-3.5" /> {reglamento?.tiene ? "Reemplazar reglamento" : "Cargar reglamento"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="card-soft border-transparent">
         <CardHeader>
