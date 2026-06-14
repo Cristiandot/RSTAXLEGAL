@@ -170,7 +170,8 @@ export function DetalleRemuneraciones({
   const [tipo, setTipo] = useState("hora_extra");
   const [fecha, setFecha] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
-  const [cantidad, setCantidad] = useState("");
+  const [horas, setHoras] = useState("");
+  const [minutos, setMinutos] = useState("");
   const [monto, setMonto] = useState("");
   const [comentario, setComentario] = useState("");
   const [editando, setEditando] = useState<NovedadRow | null>(null);
@@ -189,10 +190,20 @@ export function DetalleRemuneraciones({
 
   function limpiarFormulario() {
     setEditando(null);
-    setFecha(""); setFechaHasta(""); setCantidad(""); setMonto(""); setComentario("");
+    setFecha(""); setFechaHasta(""); setHoras(""); setMinutos(""); setMonto(""); setComentario("");
   }
 
   function agregar() {
+    // Las novedades por horas se ingresan como horas + minutos y se guardan en
+    // horas decimales (ej. 2 h 30 min → 2.5), con 2 decimales.
+    const cantidad =
+      def.campos === "horas"
+        ? String(Math.round((Number(horas || 0) + Number(minutos || 0) / 60) * 100) / 100)
+        : "";
+    if (def.campos === "horas" && Number(cantidad) <= 0) {
+      toast.error("Indica las horas (y minutos si corresponde).");
+      return;
+    }
     startAccion(async () => {
       const res = editando
         ? await actualizarNovedad(token, editando.id, {
@@ -541,11 +552,23 @@ export function DetalleRemuneraciones({
                       <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs">Horas</Label>
-                      <Input
-                        type="number" min={0.5} max={24} step={0.5} placeholder="ej. 2"
-                        value={cantidad} onChange={(e) => setCantidad(e.target.value)}
-                      />
+                      <Label className="text-xs">Horas y minutos</Label>
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          type="number" min={0} max={24} step={1} placeholder="hrs"
+                          className="w-16"
+                          value={horas} onChange={(e) => setHoras(e.target.value)}
+                          aria-label="Horas"
+                        />
+                        <span className="text-sm text-muted-foreground">h</span>
+                        <Input
+                          type="number" min={0} max={59} step={5} placeholder="min"
+                          className="w-16"
+                          value={minutos} onChange={(e) => setMinutos(e.target.value)}
+                          aria-label="Minutos"
+                        />
+                        <span className="text-sm text-muted-foreground">min</span>
+                      </div>
                     </div>
                   </>
                 ) : null}
