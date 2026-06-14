@@ -13,27 +13,38 @@ function fmtM(n: number): string {
   return `$${m.toLocaleString("es-CL", { maximumFractionDigits: 1 })}M`;
 }
 
-/** Barras agrupadas ventas vs compras por mes (valores en CLP). */
+const MESES_MM = [
+  "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+];
+
+function mesBoton(periodo: string): string {
+  const m = Number(periodo.slice(5));
+  return MESES_MM[m - 1] ?? periodo.slice(5);
+}
+
+/**
+ * Barras agrupadas ventas vs compras por mes (CLP), con el nombre del mes como
+ * BOTÓN: al tocarlo se selecciona ese mes (drill-down); al tocarlo de nuevo se
+ * vuelve al año completo. La columna seleccionada se resalta.
+ */
 export function BarrasVentasCompras({
   meses,
+  seleccionado,
+  onSeleccionar,
 }: {
   meses: { periodo: string; ventas_neto: number; compras_neto: number }[];
+  seleccionado?: string | null;
+  onSeleccionar?: (periodo: string) => void;
 }) {
   if (meses.length === 0) {
     return <p className="py-6 text-center text-sm text-muted-foreground">Sin datos para el período.</p>;
   }
   const max = Math.max(1, ...meses.flatMap((m) => [m.ventas_neto, m.compras_neto]));
-  const W = 560;
-  const H = 200;
-  const padB = 24;
-  const padT = 8;
-  const chartH = H - padB - padT;
-  const grupoW = W / meses.length;
-  const barW = Math.min(26, grupoW / 3);
+  const H = 180;
 
   return (
     <div className="w-full">
-      <div className="mb-2 flex items-center gap-4 text-xs text-muted-foreground">
+      <div className="mb-3 flex items-center gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <span className="size-2.5 rounded-sm" style={{ background: TEAL }} /> Ventas
         </span>
@@ -41,24 +52,37 @@ export function BarrasVentasCompras({
           <span className="size-2.5 rounded-sm" style={{ background: NAVY }} /> Compras
         </span>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Ventas y compras netas por mes">
-        <line x1="0" y1={padT + chartH} x2={W} y2={padT + chartH} stroke="#e1e7eb" strokeWidth="1" />
-        {meses.map((m, i) => {
-          const cx = i * grupoW + grupoW / 2;
-          const hv = (m.ventas_neto / max) * chartH;
-          const hc = (m.compras_neto / max) * chartH;
-          const mes = m.periodo.slice(5);
+      <div className="flex items-end gap-1.5">
+        {meses.map((m) => {
+          const sel = m.periodo === seleccionado;
+          const atenuado = seleccionado != null && !sel;
+          const hv = Math.round((m.ventas_neto / max) * H);
+          const hc = Math.round((m.compras_neto / max) * H);
           return (
-            <g key={m.periodo}>
-              <rect x={cx - barW - 2} y={padT + chartH - hv} width={barW} height={hv} rx="2" fill={TEAL} />
-              <rect x={cx + 2} y={padT + chartH - hc} width={barW} height={hc} rx="2" fill={NAVY} />
-              <text x={cx} y={H - 8} textAnchor="middle" fontSize="11" fill="#5a6b7a">
-                {mes}
-              </text>
-            </g>
+            <div key={m.periodo} className="flex flex-1 flex-col items-center gap-2">
+              <div
+                className="flex items-end justify-center gap-1 transition-opacity"
+                style={{ height: H, opacity: atenuado ? 0.35 : 1 }}
+              >
+                <div className="w-4 rounded-t sm:w-5" style={{ height: hv, background: TEAL }} title="Ventas" />
+                <div className="w-4 rounded-t sm:w-5" style={{ height: hc, background: NAVY }} title="Compras" />
+              </div>
+              <button
+                type="button"
+                onClick={() => onSeleccionar?.(m.periodo)}
+                aria-pressed={sel}
+                className={`w-full rounded-md px-1 py-1 text-xs font-medium transition-colors ${
+                  sel
+                    ? "bg-[var(--brand-navy)] text-white"
+                    : "border border-input bg-card text-foreground hover:bg-muted"
+                }`}
+              >
+                {mesBoton(m.periodo)}
+              </button>
+            </div>
           );
         })}
-      </svg>
+      </div>
     </div>
   );
 }

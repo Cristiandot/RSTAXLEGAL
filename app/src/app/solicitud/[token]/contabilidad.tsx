@@ -7,7 +7,8 @@ import {
   ArrowLeft, ArrowRight, Receipt,
 } from "lucide-react";
 import {
-  cargarContabilidad, type ContabilidadInfo,
+  cargarContabilidad, cargarContabilidadMes,
+  type ContabilidadInfo, type MesDetalle,
 } from "./portal-actions";
 import { BarrasVentasCompras, BarrasHorizontales } from "./mini-charts";
 import { DocumentosSolicitar, type TipoDoc } from "./documentos";
@@ -65,6 +66,7 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
   const [cargando, setCargando] = useState(true);
   const [subvista, setSubvista] = useState<"panel" | "gastos">("panel");
   const [mesSel, setMesSel] = useState("");
+  const [mesInfo, setMesInfo] = useState<MesDetalle | null>(null);
 
   const recargar = useCallback(async (a: number) => {
     setCargando(true);
@@ -78,6 +80,26 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
     void recargar(anio);
   }, [anio, recargar]);
 
+  // Al cambiar de año, volver al general (año completo).
+  useEffect(() => {
+    setMesSel("");
+  }, [anio]);
+
+  // Detalle del mes seleccionado (proveedores/clientes/facturas del período).
+  useEffect(() => {
+    if (!mesSel) {
+      setMesInfo(null);
+      return;
+    }
+    let vivo = true;
+    void cargarContabilidadMes(token, mesSel).then((r) => {
+      if (vivo && r.ok && r.mes) setMesInfo(r.mes);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [token, mesSel]);
+
   const periodos = useMemo(() => {
     const base = [{ value: `${anio}`, label: `Acumulado ${anio}` }];
     const meses = (info?.meses ?? []).map((m) => ({
@@ -87,17 +109,40 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
     return [...base, ...meses.reverse()];
   }, [info, anio]);
 
-  const ultimoF29 = info?.f29 && info.f29.length > 0 ? info.f29[info.f29.length - 1] : null;
   const totales = info?.totales;
-  const resultadoBruto = totales ? totales.ventas_neto - totales.compras_neto : 0;
+  const esMes = mesSel !== "";
+  const mesData = (info?.meses ?? []).find((m) => m.periodo === mesSel) ?? null;
+  const f29Vista = esMes
+    ? (info?.f29?.find((f) => f.periodo === mesSel) ?? null)
+    : (info?.f29 && info.f29.length > 0 ? info.f29[info.f29.length - 1] : null);
 
-  // Detalle mensual: usa los datos por período que ya trae el RPC.
-  const mesesData = info?.meses ?? [];
-  const mesSelEff = mesesData.some((m) => m.periodo === mesSel)
-    ? mesSel
-    : (mesesData[mesesData.length - 1]?.periodo ?? "");
-  const mesData = mesesData.find((m) => m.periodo === mesSelEff) ?? null;
-  const f29Mes = info?.f29?.find((f) => f.periodo === mesSelEff) ?? null;
+  // Vista activa: año completo (general) o el mes seleccionado en el gráfico.
+  const vista = esMes
+    ? {
+        titulo: nombreMes(mesSel),
+        ventas_neto: mesInfo?.ventas_neto ?? mesData?.ventas_neto ?? 0,
+        compras_neto: mesInfo?.compras_neto ?? mesData?.compras_neto ?? 0,
+        iva_debito: mesInfo?.iva_debito ?? mesData?.iva_debito ?? 0,
+        iva_credito: mesInfo?.iva_credito ?? mesData?.iva_credito ?? 0,
+        iva_pagar:
+          (mesInfo?.iva_debito ?? mesData?.iva_debito ?? 0) -
+          (mesInfo?.iva_credito ?? mesData?.iva_credito ?? 0),
+        top_proveedores: mesInfo?.top_proveedores ?? [],
+        top_clientes: mesInfo?.top_clientes ?? [],
+        ultimas_facturas: mesInfo?.ultimas_facturas ?? [],
+      }
+    : {
+        titulo: `Acumulado ${anio}`,
+        ventas_neto: totales?.ventas_neto ?? 0,
+        compras_neto: totales?.compras_neto ?? 0,
+        iva_debito: totales?.iva_debito ?? 0,
+        iva_credito: totales?.iva_credito ?? 0,
+        iva_pagar: totales?.iva_pagar ?? 0,
+        top_proveedores: info?.top_proveedores ?? [],
+        top_clientes: info?.top_clientes ?? [],
+        ultimas_facturas: info?.ultimas_facturas ?? [],
+      };
+  const resultadoBruto = vista.ventas_neto - vista.compras_neto;
 
   if (subvista === "gastos") {
     return (
@@ -172,21 +217,40 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
         </>
       ) : (
         <>
+          {/* Vista activa: año completo (general) o mes seleccionado */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium capitalize">{vista.titulo}</p>
+            {esMes ? (
+              <Button variant="outline" size="sm" onClick={() => setMesSel("")}>
+                Ver año completo
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground">Toca un mes en el gráfico para ver su detalle.</span>
+            )}
+          </div>
+
           {/* Titulares (datos gruesos) */}
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-            <Kpi feat icon={<TrendingUp className="size-3.5" />} label="Ventas netas" valor={formatMonto(totales?.ventas_neto)} sub={`acum. ${anio}`} />
-            <Kpi icon={<ShoppingCart className="size-3.5" />} label="Compras netas" valor={formatMonto(totales?.compras_neto)} sub={`acum. ${anio}`} />
-            <Kpi icon={<Coins className="size-3.5" />} label="IVA a pagar" valor={formatMonto(totales?.iva_pagar)} sub="débito − crédito" />
+            <Kpi feat icon={<TrendingUp className="size-3.5" />} label="Ventas netas" valor={formatMonto(vista.ventas_neto)} sub={vista.titulo} />
+            <Kpi icon={<ShoppingCart className="size-3.5" />} label="Compras netas" valor={formatMonto(vista.compras_neto)} sub={vista.titulo} />
+            <Kpi icon={<Coins className="size-3.5" />} label="IVA a pagar" valor={formatMonto(vista.iva_pagar)} sub="débito − crédito" />
             <Kpi feat icon={<ReceiptText className="size-3.5" />} label="Resultado bruto" valor={formatMonto(resultadoBruto)} sub="ventas − compras" />
           </div>
 
-          {/* Evolución */}
+          {/* Evolución — cada mes es un botón para ver su detalle */}
           <Card className="card-soft border-transparent">
             <CardHeader>
               <CardTitle className="text-base">Evolución mensual · ventas y compras</CardTitle>
+              <CardDescription className="mt-1">
+                Toca un mes para ver su detalle; tócalo de nuevo (o &quot;Ver año completo&quot;) para volver al año.
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <BarrasVentasCompras meses={info.meses ?? []} />
+              <BarrasVentasCompras
+                meses={info.meses ?? []}
+                seleccionado={mesSel || null}
+                onSeleccionar={(p) => setMesSel((prev) => (prev === p ? "" : p))}
+              />
             </CardContent>
           </Card>
 
@@ -197,7 +261,7 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
                 <CardTitle className="text-base">Proveedores más comunes</CardTitle>
               </CardHeader>
               <CardContent>
-                <BarrasHorizontales rows={(info.top_proveedores ?? []).map((p) => ({ nombre: p.nombre, monto: p.monto }))} color="#0b2545" />
+                <BarrasHorizontales rows={vista.top_proveedores.map((p) => ({ nombre: p.nombre, monto: p.monto }))} color="#0b2545" />
               </CardContent>
             </Card>
             <Card className="card-soft border-transparent">
@@ -205,7 +269,7 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
                 <CardTitle className="text-base">Compradores más comunes</CardTitle>
               </CardHeader>
               <CardContent>
-                <BarrasHorizontales rows={(info.top_clientes ?? []).map((p) => ({ nombre: p.nombre, monto: p.monto }))} color="#17a2b8" />
+                <BarrasHorizontales rows={vista.top_clientes.map((p) => ({ nombre: p.nombre, monto: p.monto }))} color="#17a2b8" />
               </CardContent>
             </Card>
           </div>
@@ -214,20 +278,22 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
           <Card className="card-soft border-transparent">
             <CardContent className="flex flex-wrap gap-x-8 gap-y-2 pt-4 text-sm">
               <div>
-                <p className="text-xs text-muted-foreground">IVA débito (acum.)</p>
-                <p className="font-semibold">{formatMonto(totales?.iva_debito)}</p>
+                <p className="text-xs text-muted-foreground">IVA débito{esMes ? "" : " (acum.)"}</p>
+                <p className="font-semibold">{formatMonto(vista.iva_debito)}</p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">IVA crédito (acum.)</p>
-                <p className="font-semibold">{formatMonto(totales?.iva_credito)}</p>
+                <p className="text-xs text-muted-foreground">IVA crédito{esMes ? "" : " (acum.)"}</p>
+                <p className="font-semibold">{formatMonto(vista.iva_credito)}</p>
               </div>
-              {ultimoF29 ? (
+              {f29Vista ? (
                 <div>
-                  <p className="text-xs text-muted-foreground">Último F29 ({mesCorto(ultimoF29.periodo)} {anio})</p>
+                  <p className="text-xs text-muted-foreground">
+                    {esMes ? "F29" : "Último F29"} ({mesCorto(f29Vista.periodo)} {anio})
+                  </p>
                   <p className="font-semibold">
-                    {ultimoF29.fecha_f29_presentado ? (
+                    {f29Vista.fecha_f29_presentado ? (
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">
-                        Presentado {formatFecha(ultimoF29.fecha_f29_presentado)}
+                        Presentado {formatFecha(f29Vista.fecha_f29_presentado)}
                       </span>
                     ) : (
                       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">En proceso</span>
@@ -241,10 +307,12 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
           {/* Historial de facturas */}
           <Card className="card-soft border-transparent">
             <CardHeader>
-              <CardTitle className="text-base">Historial de facturas — últimos movimientos</CardTitle>
+              <CardTitle className="text-base">
+                Historial de facturas{esMes ? <span className="font-normal text-muted-foreground"> · <span className="capitalize">{vista.titulo}</span></span> : " — últimos movimientos"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              {info.ultimas_facturas && info.ultimas_facturas.length > 0 ? (
+              {vista.ultimas_facturas && vista.ultimas_facturas.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -257,7 +325,7 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
                       </tr>
                     </thead>
                     <tbody>
-                      {info.ultimas_facturas.map((f, i) => (
+                      {vista.ultimas_facturas.map((f, i) => (
                         <tr key={i} className="border-b last:border-0">
                           <td className="py-2 pr-2 tabular-nums">{formatFecha(f.fecha)}</td>
                           <td className="py-2 pr-2 tabular-nums">{f.folio}</td>
@@ -275,70 +343,6 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">Sin facturas en el período.</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Detalle mensual (el general/acumulado queda arriba) */}
-          <Card className="card-soft border-transparent">
-            <CardHeader>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="text-base">Detalle mensual</CardTitle>
-                {mesesData.length > 0 ? (
-                  <select
-                    className="h-9 rounded-md border border-input bg-card px-3 text-sm capitalize"
-                    value={mesSelEff}
-                    onChange={(e) => setMesSel(e.target.value)}
-                  >
-                    {mesesData.map((m) => (
-                      <option key={m.periodo} value={m.periodo} className="capitalize">
-                        {nombreMes(m.periodo)}
-                      </option>
-                    ))}
-                  </select>
-                ) : null}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {mesData ? (
-                <>
-                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                    <Kpi icon={<TrendingUp className="size-3.5" />} label="Ventas netas" valor={formatMonto(mesData.ventas_neto)} />
-                    <Kpi icon={<ShoppingCart className="size-3.5" />} label="Compras netas" valor={formatMonto(mesData.compras_neto)} />
-                    <Kpi icon={<Coins className="size-3.5" />} label="IVA a pagar" valor={formatMonto(mesData.iva_debito - mesData.iva_credito)} />
-                    <Kpi icon={<ReceiptText className="size-3.5" />} label="Resultado bruto" valor={formatMonto(mesData.ventas_neto - mesData.compras_neto)} />
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-x-8 gap-y-2 text-sm">
-                    <div>
-                      <p className="text-xs text-muted-foreground">IVA débito</p>
-                      <p className="font-semibold">{formatMonto(mesData.iva_debito)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">IVA crédito</p>
-                      <p className="font-semibold">{formatMonto(mesData.iva_credito)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Total ventas (c/IVA)</p>
-                      <p className="font-semibold">{formatMonto(mesData.ventas_total)}</p>
-                    </div>
-                    {f29Mes ? (
-                      <div>
-                        <p className="text-xs text-muted-foreground">F29 {mesCorto(f29Mes.periodo)}</p>
-                        <p className="font-semibold">
-                          {f29Mes.fecha_f29_presentado ? (
-                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">
-                              Presentado {formatFecha(f29Mes.fecha_f29_presentado)}
-                            </span>
-                          ) : (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">En proceso</span>
-                          )}
-                        </p>
-                      </div>
-                    ) : null}
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">Sin datos para el mes seleccionado.</p>
               )}
             </CardContent>
           </Card>

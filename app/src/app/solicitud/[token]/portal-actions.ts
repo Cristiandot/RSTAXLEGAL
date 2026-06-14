@@ -203,6 +203,32 @@ export async function cargarContabilidad(
   return { ok: true, info: data as ContabilidadInfo };
 }
 
+export type MesDetalle = {
+  habilitado: boolean;
+  periodo?: string;
+  ventas_neto?: number;
+  compras_neto?: number;
+  iva_debito?: number;
+  iva_credito?: number;
+  ventas_total?: number;
+  top_proveedores?: ContraparteContab[];
+  top_clientes?: ContraparteContab[];
+  ultimas_facturas?: FacturaContab[];
+};
+
+export async function cargarContabilidadMes(
+  token: string,
+  periodo: string,
+): Promise<{ ok: boolean; mes?: MesDetalle; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_contabilidad_mes", {
+    p_token: token,
+    p_periodo: periodo,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, mes: data as MesDetalle };
+}
+
 // ===================== Recursos humanos =====================
 
 export type DotacionRow = { area: string; n: number };
