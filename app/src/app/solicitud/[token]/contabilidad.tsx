@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  TrendingUp, ShoppingCart, Coins, ReceiptText, Download, FileSpreadsheet,
+  TrendingUp, ShoppingCart, Coins, ReceiptText,
   ArrowLeft, ArrowRight, Receipt, Truck, Store,
 } from "lucide-react";
 import {
@@ -161,7 +161,7 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
 
   return (
     <div className="space-y-5">
-      {/* Barra de período + descargas */}
+      {/* Barra de período */}
       <div className="flex flex-wrap items-center gap-2">
         <select
           className="h-9 rounded-md border border-input bg-card px-3 text-sm"
@@ -172,13 +172,6 @@ export function Contabilidad({ token, empresa }: { token: string; empresa: InfoE
             <option key={a} value={a}>Año {a}</option>
           ))}
         </select>
-        <div className="flex-1" />
-        <Button variant="outline" size="sm" onClick={() => toast.info("La descarga estará disponible pronto.")}>
-          <FileSpreadsheet className="size-4" /> Excel
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => toast.info("La descarga estará disponible pronto.")}>
-          <Download className="size-4" /> PDF
-        </Button>
       </div>
 
       {/* Acceso a gastos e ingresos menores */}
