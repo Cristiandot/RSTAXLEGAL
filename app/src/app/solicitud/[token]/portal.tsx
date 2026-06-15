@@ -90,6 +90,31 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
 
       <FranjaIndicadores token={token} />
 
+      {/* Correos de la oficina (contacto del equipo) */}
+      <div className="rounded-xl border border-border bg-card p-3">
+        <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          Correos de la oficina
+        </p>
+        <ul className="space-y-1.5 text-sm">
+          <li className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-amber-900">
+            <a href="mailto:admin@rstaxlegal.cl" className="font-semibold underline">admin@rstaxlegal.cl</a>
+            {" "}— <strong>el más importante:</strong> lo ve toda la oficina. Si necesitas algo, lo mejor es escribir directamente a este correo.
+          </li>
+          <li>
+            <a href="mailto:frodriguez@rstaxlegal.cl" className="font-medium text-[var(--brand-teal)]">frodriguez@rstaxlegal.cl</a>
+            <span className="text-muted-foreground"> — Felipe Rodríguez Samith</span>
+          </li>
+          <li>
+            <a href="mailto:dtapia@rstaxlegal.cl" className="font-medium text-[var(--brand-teal)]">dtapia@rstaxlegal.cl</a>
+            <span className="text-muted-foreground"> — Danilo Tapia Salinas</span>
+          </li>
+          <li>
+            <a href="mailto:squintana@rstaxlegal.cl" className="font-medium text-[var(--brand-teal)]">squintana@rstaxlegal.cl</a>
+            <span className="text-muted-foreground"> — Solange Quintana Pizarro</span>
+          </li>
+        </ul>
+      </div>
+
       {/* Pestañas — una sola línea (scroll horizontal si no cabe) */}
       <div className="flex flex-nowrap justify-center gap-0.5 overflow-x-auto border-b">
         {TABS.map((t) => (
