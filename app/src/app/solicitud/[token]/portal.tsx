@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import {
-  Building2, PieChart, Users, Receipt, Table2, ClipboardList,
+  Building2, PieChart, Users, Receipt, Table2, ClipboardList, MapPin, MessageCircle,
 } from "lucide-react";
 import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
 import { DetalleRemuneraciones } from "./remuneraciones";
@@ -90,47 +90,6 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
 
       <FranjaIndicadores token={token} />
 
-      {/* Correos de la oficina (contacto del equipo) */}
-      <div className="rounded-xl border border-border bg-card p-3">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Correos de la oficina
-        </p>
-        <div className="space-y-2">
-          <a
-            href="mailto:admin@rstaxlegal.cl"
-            className="block rounded-md border-2 border-amber-300 bg-amber-50 px-3 py-2 no-underline transition-colors hover:bg-amber-100"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-medium text-amber-900">admin@rstaxlegal.cl</span>
-              <span className="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-amber-800">
-                Principal
-              </span>
-            </div>
-            <p className="mt-0.5 text-xs text-amber-800">
-              Lo ve toda la oficina — si necesitas algo, escríbenos aquí.
-            </p>
-          </a>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <a href="mailto:frodriguez@rstaxlegal.cl" className="block rounded-md border border-border bg-card px-3 py-2 no-underline transition-colors hover:bg-muted/40">
-              <p className="text-sm font-medium text-foreground">Felipe Rodríguez Samith</p>
-              <span className="text-xs text-[var(--brand-teal)]">frodriguez@rstaxlegal.cl</span>
-            </a>
-            <a href="mailto:dtapia@rstaxlegal.cl" className="block rounded-md border border-border bg-card px-3 py-2 no-underline transition-colors hover:bg-muted/40">
-              <p className="text-sm font-medium text-foreground">Danilo Tapia Salinas</p>
-              <span className="text-xs text-[var(--brand-teal)]">dtapia@rstaxlegal.cl</span>
-            </a>
-            <a href="mailto:squintana@rstaxlegal.cl" className="block rounded-md border border-border bg-card px-3 py-2 no-underline transition-colors hover:bg-muted/40">
-              <p className="text-sm font-medium text-foreground">Solange Quintana Pizarro</p>
-              <span className="text-xs text-[var(--brand-teal)]">squintana@rstaxlegal.cl</span>
-            </a>
-            <a href="mailto:clopez@rstaxlegal.cl" className="block rounded-md border border-border bg-card px-3 py-2 no-underline transition-colors hover:bg-muted/40">
-              <p className="text-sm font-medium text-foreground">Cristian López Thienel</p>
-              <span className="text-xs text-[var(--brand-teal)]">clopez@rstaxlegal.cl</span>
-            </a>
-          </div>
-        </div>
-      </div>
-
       {/* Pestañas — una sola línea (scroll horizontal si no cabe) */}
       <div className="flex flex-nowrap justify-center gap-0.5 overflow-x-auto border-b">
         {TABS.map((t) => (
@@ -156,6 +115,77 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
       {tab === "gastos" ? <GastosMenores token={token} empresa={empresa} /> : null}
       {tab === "remuneraciones" ? <DetalleRemuneraciones token={token} empresa={empresa} /> : null}
       {tab === "solicitudes" ? <SolicitudForm token={token} empresa={empresa} /> : null}
+
+      {/* Pie de página: contacto de la oficina */}
+      <footer className="mt-8 space-y-4 border-t border-border pt-5">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Oficina
+            </p>
+            <p className="mt-1.5 flex items-start gap-2 text-sm text-foreground">
+              <MapPin className="mt-0.5 size-4 shrink-0 text-[var(--brand-teal)]" />
+              Avenida Borgoño N° 14.439, of. 309, Reñaca, Viña del Mar
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Teléfono
+            </p>
+            <a
+              href="https://wa.me/56352298272"
+              className="mt-1.5 inline-flex items-center gap-2 text-sm font-medium text-[var(--brand-teal)] no-underline"
+            >
+              <MessageCircle className="size-4 shrink-0" />
+              +56 35 229 8272
+            </a>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Solo atendemos por <strong>WhatsApp</strong> — mensajes o llamadas por
+              WhatsApp a este número.
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Correos de la oficina
+          </p>
+          <div className="space-y-2">
+            <a
+              href="mailto:admin@rstaxlegal.cl"
+              className="block rounded-md border-2 border-amber-300 bg-amber-50 px-3 py-2 no-underline transition-colors hover:bg-amber-100"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-amber-900">admin@rstaxlegal.cl</span>
+                <span className="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                  Principal
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-amber-800">
+                Lo ve toda la oficina — si necesitas algo, escríbenos aquí.
+              </p>
+            </a>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <a href="mailto:frodriguez@rstaxlegal.cl" className="block rounded-md border border-border bg-card px-3 py-2 no-underline transition-colors hover:bg-muted/40">
+                <p className="text-sm font-medium text-foreground">Felipe Rodríguez Samith</p>
+                <span className="text-xs text-[var(--brand-teal)]">frodriguez@rstaxlegal.cl</span>
+              </a>
+              <a href="mailto:dtapia@rstaxlegal.cl" className="block rounded-md border border-border bg-card px-3 py-2 no-underline transition-colors hover:bg-muted/40">
+                <p className="text-sm font-medium text-foreground">Danilo Tapia Salinas</p>
+                <span className="text-xs text-[var(--brand-teal)]">dtapia@rstaxlegal.cl</span>
+              </a>
+              <a href="mailto:squintana@rstaxlegal.cl" className="block rounded-md border border-border bg-card px-3 py-2 no-underline transition-colors hover:bg-muted/40">
+                <p className="text-sm font-medium text-foreground">Solange Quintana Pizarro</p>
+                <span className="text-xs text-[var(--brand-teal)]">squintana@rstaxlegal.cl</span>
+              </a>
+              <a href="mailto:clopez@rstaxlegal.cl" className="block rounded-md border border-border bg-card px-3 py-2 no-underline transition-colors hover:bg-muted/40">
+                <p className="text-sm font-medium text-foreground">Cristian López Thienel</p>
+                <span className="text-xs text-[var(--brand-teal)]">clopez@rstaxlegal.cl</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
