@@ -41,6 +41,16 @@ export function Empresa({ token }: { token: string }) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const s = (k: string) => String(fd.get(k) ?? "").trim();
+    // Confirmación de correo: si el correo cambió, debe coincidir con la
+    // segunda casilla (toda la comunicación va a este correo).
+    const correo = s("correo_empresa");
+    const correoConfirm = s("correo_empresa_confirmar");
+    const correoActual = (emp?.correo_empresa ?? "").trim();
+    const norm = (x: string) => x.toLowerCase();
+    if (correo && norm(correo) !== norm(correoActual) && norm(correo) !== norm(correoConfirm)) {
+      toast.error("Los correos no coinciden. Vuelve a confirmar el correo de la empresa.");
+      return;
+    }
     startGuardar(async () => {
       const r = await guardarEmpresa(token, {
         giro: s("giro"),
@@ -95,10 +105,18 @@ export function Empresa({ token }: { token: string }) {
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs">Correo de la empresa</Label>
                 <Input name="correo_empresa" type="email" defaultValue={emp.correo_empresa ?? ""} />
+                <Label className="mt-1 text-xs">Confirmar correo de la empresa</Label>
+                <Input
+                  name="correo_empresa_confirmar"
+                  type="email"
+                  defaultValue={emp.correo_empresa ?? ""}
+                  placeholder="Vuelve a escribir el correo"
+                />
                 <p className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
                   <strong>Muy importante:</strong> asegúrate de que este correo sea correcto y lo
-                  revises seguido. Todas las solicitudes y gestiones (contratos, finiquitos,
-                  permisos, vacaciones, etc.) usarán este correo como medio de contacto.
+                  revises seguido. Toda la comunicación, solicitudes y gestiones (contratos,
+                  finiquitos, permisos, vacaciones, etc.) se enviarán a este correo. Por eso te
+                  pedimos confirmarlo.
                 </p>
               </div>
               <Campo label="Dirección" name="domicilio" defaultValue={emp.domicilio ?? ""} />
