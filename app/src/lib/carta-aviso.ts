@@ -130,6 +130,19 @@ export async function generarYSubirCartaAviso(
       ? "La presente carta se entrega personalmente al trabajador, quien firma su recepción al pie."
       : "La presente carta se remite por correo certificado al domicilio del trabajador registrado en su contrato de trabajo, conforme al artículo 162 inciso primero del Código del Trabajo.";
 
+  // Fecha de inicio del CONTRATO ORIGINAL (antigüedad reconocida): la misma que
+  // usa el cálculo de indemnización. Criterio RSTL: las cartas de aviso (y los
+  // finiquitos) siempre se fundan en la fecha de inicio del contrato original,
+  // no en la de un anexo o renovación posterior.
+  const datosGestion = (g.datos ?? {}) as Record<string, unknown>;
+  const calc = datosGestion.calculo_finiquito as
+    | { entrada?: { fechaInicio?: string } }
+    | undefined;
+  const fechaInicioContrato =
+    calc?.entrada?.fechaInicio ||
+    (datosGestion.fecha_ingreso as string) ||
+    "";
+
   const variables: Record<string, string> = {
     CIUDAD_FIRMA:
       (cli.lugar_firma_contrato as string) ||
@@ -144,6 +157,7 @@ export async function generarYSubirCartaAviso(
     RUT_EMPRESA: (cli.rut_empresa as string) ?? "",
     NOMBRE_REP_LEGAL: repLegal,
     CAUSAL_TEXTO: causalTexto,
+    FECHA_INGRESO: fechaLarga(fechaInicioContrato),
     FECHA_TERMINO: fechaLarga(p.fechaTermino),
     HECHOS_TEXTO: p.hechos.trim(),
     AVISO_TEXTO: avisoTexto,
