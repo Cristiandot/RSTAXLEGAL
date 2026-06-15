@@ -130,7 +130,10 @@ export function F29Client({
     });
   }
 
-  function guardarPago(cicloId: string, patch: { pagoPor?: string | null; monto?: string | null }) {
+  function guardarPago(
+    cicloId: string,
+    patch: { pagoPor?: string | null; monto?: string | null; fechaPagoOficina?: string | null },
+  ) {
     startMarcar(async () => {
       const res = await actualizarPagoF29(cicloId, patch);
       if (res.ok) {
@@ -223,6 +226,7 @@ export function F29Client({
         monto: get("monto"),
         folio: get("folio"),
         pagoPor: get("pago_por"),
+        fechaPagoOficina: get("fecha_pago_oficina"),
         observaciones: get("observaciones"),
       });
       if (res.ok) {
@@ -414,19 +418,35 @@ export function F29Client({
                     </TableCell>
                   ))}
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    <select
-                      aria-label="Quién paga el F29"
-                      className="h-8 rounded-md border border-input bg-card px-2 text-xs shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={c.pago_por ?? ""}
-                      disabled={marcando}
-                      onChange={(e) =>
-                        guardarPago(c.ciclo_id, { pagoPor: e.target.value || null })
-                      }
-                    >
-                      <option value="">—</option>
-                      <option value="rs">Paga RS</option>
-                      <option value="cliente">Paga cliente</option>
-                    </select>
+                    <div className="flex flex-col gap-1">
+                      <select
+                        aria-label="Quién paga el F29"
+                        className="h-8 rounded-md border border-input bg-card px-2 text-xs shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={c.pago_por ?? ""}
+                        disabled={marcando}
+                        onChange={(e) =>
+                          guardarPago(c.ciclo_id, { pagoPor: e.target.value || null })
+                        }
+                      >
+                        <option value="">—</option>
+                        <option value="rs">Paga RS</option>
+                        <option value="cliente">Paga cliente</option>
+                      </select>
+                      {c.pago_por === "rs" ? (
+                        <Input
+                          key={`fpo-${c.ciclo_id}-${c.fecha_pago_oficina ?? ""}`}
+                          type="date"
+                          className="h-7 w-36 bg-card text-xs"
+                          defaultValue={c.fecha_pago_oficina ?? ""}
+                          disabled={marcando}
+                          onChange={(e) =>
+                            guardarPago(c.ciclo_id, { fechaPagoOficina: e.target.value || null })
+                          }
+                          aria-label="Fecha en que el cliente pagó a la oficina"
+                          title="Fecha en que el cliente pagó a la oficina (para acreditar el pago)"
+                        />
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <MontoInline
@@ -544,6 +564,18 @@ export function F29Client({
                   <option value="rs">Paga RS</option>
                   <option value="cliente">Paga el cliente</option>
                 </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="fecha_pago_oficina">Pago a la oficina</Label>
+                <Input
+                  id="fecha_pago_oficina"
+                  name="fecha_pago_oficina"
+                  type="date"
+                  defaultValue={editando.fecha_pago_oficina ?? ""}
+                />
+                <span className="text-xs text-muted-foreground">
+                  Si paga RS: fecha en que el cliente pagó a la oficina (para acreditar el pago).
+                </span>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="folio">Folio F29</Label>

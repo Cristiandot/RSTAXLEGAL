@@ -11,6 +11,7 @@ export type GuardarF29Input = {
   monto: string | null;
   folio: string | null;
   pagoPor: string | null;
+  fechaPagoOficina: string | null;
   observaciones: string | null;
 };
 
@@ -32,6 +33,7 @@ export async function guardarF29(
       monto_a_pagar: input.monto,
       folio_f29: input.folio,
       pago_por: input.pagoPor,
+      fecha_pago_oficina: input.fechaPagoOficina,
       observaciones: input.observaciones,
     })
     .eq("id", input.cicloId);
@@ -75,7 +77,7 @@ export async function marcarPasoF29(
  */
 export async function actualizarPagoF29(
   cicloId: string,
-  patch: { pagoPor?: string | null; monto?: string | null },
+  patch: { pagoPor?: string | null; monto?: string | null; fechaPagoOficina?: string | null },
 ): Promise<{ ok: boolean; error?: string }> {
   const cambios: Record<string, unknown> = {};
   if ("pagoPor" in patch) {
@@ -86,6 +88,10 @@ export async function actualizarPagoF29(
   }
   if ("monto" in patch) {
     cambios.monto_a_pagar = patch.monto === null || patch.monto === "" ? null : patch.monto;
+  }
+  if ("fechaPagoOficina" in patch) {
+    cambios.fecha_pago_oficina =
+      patch.fechaPagoOficina === null || patch.fechaPagoOficina === "" ? null : patch.fechaPagoOficina;
   }
   if (Object.keys(cambios).length === 0) return { ok: true };
 

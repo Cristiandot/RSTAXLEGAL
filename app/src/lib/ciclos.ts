@@ -77,6 +77,7 @@ export type F29Row = {
   monto_a_pagar: number | string | null;
   folio_f29: string | null;
   pago_por: string | null; // 'rs' | 'cliente' | null
+  fecha_pago_oficina: string | null; // cuando paga RS: fecha en que el cliente pagó a la oficina
   observaciones: string | null;
 };
 
