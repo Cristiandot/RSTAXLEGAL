@@ -83,6 +83,55 @@ function MontoInline({
   );
 }
 
+/**
+ * Celda "Paga": selector RS/cliente. Usa estado local para que, al elegir
+ * "Paga RS", aparezca de inmediato la casilla de fecha de pago a la oficina
+ * (sin esperar al refresh del servidor).
+ */
+function PagaCell({
+  pagoPor,
+  fechaPagoOficina,
+  disabled,
+  onGuardar,
+}: {
+  pagoPor: string | null;
+  fechaPagoOficina: string | null;
+  disabled: boolean;
+  onGuardar: (patch: { pagoPor?: string | null; fechaPagoOficina?: string | null }) => void;
+}) {
+  const [pago, setPago] = useState(pagoPor ?? "");
+  return (
+    <div className="flex flex-col gap-1">
+      <select
+        aria-label="Quién paga el F29"
+        className="h-8 rounded-md border border-input bg-card px-2 text-xs shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        value={pago}
+        disabled={disabled}
+        onChange={(e) => {
+          const v = e.target.value;
+          setPago(v);
+          onGuardar({ pagoPor: v || null });
+        }}
+      >
+        <option value="">—</option>
+        <option value="rs">Paga RS</option>
+        <option value="cliente">Paga cliente</option>
+      </select>
+      {pago === "rs" ? (
+        <Input
+          type="date"
+          className="h-7 w-36 bg-card text-xs"
+          defaultValue={fechaPagoOficina ?? ""}
+          disabled={disabled}
+          onChange={(e) => onGuardar({ fechaPagoOficina: e.target.value || null })}
+          aria-label="Fecha en que el cliente pagó a la oficina"
+          title="Fecha en que el cliente pagó a la oficina (para acreditar el pago)"
+        />
+      ) : null}
+    </div>
+  );
+}
+
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -418,35 +467,13 @@ export function F29Client({
                     </TableCell>
                   ))}
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    <div className="flex flex-col gap-1">
-                      <select
-                        aria-label="Quién paga el F29"
-                        className="h-8 rounded-md border border-input bg-card px-2 text-xs shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        value={c.pago_por ?? ""}
-                        disabled={marcando}
-                        onChange={(e) =>
-                          guardarPago(c.ciclo_id, { pagoPor: e.target.value || null })
-                        }
-                      >
-                        <option value="">—</option>
-                        <option value="rs">Paga RS</option>
-                        <option value="cliente">Paga cliente</option>
-                      </select>
-                      {c.pago_por === "rs" ? (
-                        <Input
-                          key={`fpo-${c.ciclo_id}-${c.fecha_pago_oficina ?? ""}`}
-                          type="date"
-                          className="h-7 w-36 bg-card text-xs"
-                          defaultValue={c.fecha_pago_oficina ?? ""}
-                          disabled={marcando}
-                          onChange={(e) =>
-                            guardarPago(c.ciclo_id, { fechaPagoOficina: e.target.value || null })
-                          }
-                          aria-label="Fecha en que el cliente pagó a la oficina"
-                          title="Fecha en que el cliente pagó a la oficina (para acreditar el pago)"
-                        />
-                      ) : null}
-                    </div>
+                    <PagaCell
+                      key={`paga-${c.ciclo_id}-${c.pago_por ?? ""}`}
+                      pagoPor={c.pago_por}
+                      fechaPagoOficina={c.fecha_pago_oficina}
+                      disabled={marcando}
+                      onGuardar={(patch) => guardarPago(c.ciclo_id, patch)}
+                    />
                   </TableCell>
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <MontoInline
