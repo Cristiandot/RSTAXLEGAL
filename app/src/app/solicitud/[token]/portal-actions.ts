@@ -4,22 +4,6 @@ import { createClient } from "@/lib/supabase/server";
 import { generarDocx, fechaLarga } from "@/lib/generar-docx";
 import { nombreArchivo } from "@/lib/format";
 
-/** Texto de antigüedad ("X años y Y meses") desde la fecha de ingreso a hoy. */
-function antiguedadTexto(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  const hoy = new Date();
-  let meses = (hoy.getUTCFullYear() - y) * 12 + (hoy.getUTCMonth() - (m - 1));
-  if (hoy.getUTCDate() < d) meses--;
-  if (meses < 0) meses = 0;
-  const a = Math.floor(meses / 12);
-  const mm = meses % 12;
-  const partes = [
-    a > 0 ? `${a} año${a === 1 ? "" : "s"}` : "",
-    mm > 0 ? `${mm} mes${mm === 1 ? "" : "es"}` : "",
-  ].filter(Boolean);
-  return partes.join(" y ") || "menos de un mes";
-}
-
 /**
  * Genera al instante el certificado de antigüedad de un trabajador (formato
  * único, plantilla GENERICO). Devuelve el .docx en base64 para descarga directa.
@@ -49,7 +33,6 @@ export async function generarCertificadoAntiguedad(
     RUT_EMPLEADO: worker.rut ?? "",
     CARGO: worker.cargo ?? "",
     FECHA_INGRESO: fechaLarga(worker.fechaIngreso),
-    ANTIGUEDAD: antiguedadTexto(worker.fechaIngreso),
   };
   try {
     const buf = await generarDocx("app/plantillas/GENERICO/CERTIFICADO Antiguedad.docx", datos);

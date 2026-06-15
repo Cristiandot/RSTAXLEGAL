@@ -4,7 +4,7 @@
  *
  * Placeholders: {CIUDAD} {FECHA_HOY} {RAZON_SOCIAL} {RUT_EMPRESA}
  * {NOMBRE_REP_LEGAL} {RUT_REP_LEGAL} {NOMBRE_EMPLEADO} {RUT_EMPLEADO}
- * {CARGO} {FECHA_INGRESO} {ANTIGUEDAD}
+ * {CARGO} {FECHA_INGRESO}
  *
  * Redacción estándar y factual (sin cláusulas) — venia de Felipe pendiente.
  * Uso: node scripts/crear-certificado-antiguedad.js
@@ -27,7 +27,7 @@ const cuerpo = [
   p("En {CIUDAD}, a {FECHA_HOY}.", { right: true }),
   p(""),
   p(
-    "{RAZON_SOCIAL}, RUT {RUT_EMPRESA}, representada legalmente por don(ña) {NOMBRE_REP_LEGAL}, RUT {RUT_REP_LEGAL}, certifica que don(ña) {NOMBRE_EMPLEADO}, cédula nacional de identidad N° {RUT_EMPLEADO}, presta servicios para esta empresa desde el {FECHA_INGRESO} ({ANTIGUEDAD}), desempeñándose actualmente en el cargo de {CARGO}.",
+    "{RAZON_SOCIAL}, RUT {RUT_EMPRESA}, representada legalmente por don(ña) {NOMBRE_REP_LEGAL}, RUT {RUT_REP_LEGAL}, certifica que don(ña) {NOMBRE_EMPLEADO}, cédula nacional de identidad N° {RUT_EMPLEADO}, presta servicios para esta empresa desde el {FECHA_INGRESO}, desempeñándose actualmente en el cargo de {CARGO}.",
   ),
   p(""),
   p(
