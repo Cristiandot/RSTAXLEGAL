@@ -92,27 +92,43 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
 
       {/* Correos de la oficina (contacto del equipo) */}
       <div className="rounded-xl border border-border bg-card p-3">
-        <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Correos de la oficina
         </p>
-        <ul className="space-y-1.5 text-sm">
-          <li className="rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-amber-900">
-            <a href="mailto:admin@rstaxlegal.cl" className="font-semibold underline">admin@rstaxlegal.cl</a>
-            {" "}— <strong>el más importante:</strong> lo ve toda la oficina. Si necesitas algo, lo mejor es escribir directamente a este correo.
-          </li>
-          <li>
-            <a href="mailto:frodriguez@rstaxlegal.cl" className="font-medium text-[var(--brand-teal)]">frodriguez@rstaxlegal.cl</a>
-            <span className="text-muted-foreground"> — Felipe Rodríguez Samith</span>
-          </li>
-          <li>
-            <a href="mailto:dtapia@rstaxlegal.cl" className="font-medium text-[var(--brand-teal)]">dtapia@rstaxlegal.cl</a>
-            <span className="text-muted-foreground"> — Danilo Tapia Salinas</span>
-          </li>
-          <li>
-            <a href="mailto:squintana@rstaxlegal.cl" className="font-medium text-[var(--brand-teal)]">squintana@rstaxlegal.cl</a>
-            <span className="text-muted-foreground"> — Solange Quintana Pizarro</span>
-          </li>
-        </ul>
+        <div className="space-y-2">
+          <a
+            href="mailto:admin@rstaxlegal.cl"
+            className="block rounded-md border-2 border-amber-300 bg-amber-50 px-3 py-2 no-underline transition-colors hover:bg-amber-100"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-amber-900">admin@rstaxlegal.cl</span>
+              <span className="rounded-md bg-white px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                Principal
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-amber-800">
+              Lo ve toda la oficina — si necesitas algo, escríbenos aquí.
+            </p>
+          </a>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <a href="mailto:frodriguez@rstaxlegal.cl" className="block rounded-md border border-border bg-card px-3 py-2 no-underline transition-colors hover:bg-muted/40">
+              <p className="text-sm font-medium text-foreground">Felipe Rodríguez Samith</p>
+              <span className="text-xs text-[var(--brand-teal)]">frodriguez@rstaxlegal.cl</span>
+            </a>
+            <a href="mailto:dtapia@rstaxlegal.cl" className="block rounded-md border border-border bg-card px-3 py-2 no-underline transition-colors hover:bg-muted/40">
+              <p className="text-sm font-medium text-foreground">Danilo Tapia Salinas</p>
+              <span className="text-xs text-[var(--brand-teal)]">dtapia@rstaxlegal.cl</span>
+            </a>
+            <a href="mailto:squintana@rstaxlegal.cl" className="block rounded-md border border-border bg-card px-3 py-2 no-underline transition-colors hover:bg-muted/40">
+              <p className="text-sm font-medium text-foreground">Solange Quintana Pizarro</p>
+              <span className="text-xs text-[var(--brand-teal)]">squintana@rstaxlegal.cl</span>
+            </a>
+            <a href="mailto:clopez@rstaxlegal.cl" className="block rounded-md border border-border bg-card px-3 py-2 no-underline transition-colors hover:bg-muted/40">
+              <p className="text-sm font-medium text-foreground">Cristian López Thienel</p>
+              <span className="text-xs text-[var(--brand-teal)]">clopez@rstaxlegal.cl</span>
+            </a>
+          </div>
+        </div>
       </div>
 
       {/* Pestañas — una sola línea (scroll horizontal si no cabe) */}
