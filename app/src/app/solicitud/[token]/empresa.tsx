@@ -92,7 +92,15 @@ export function Empresa({ token }: { token: string }) {
               </div>
               <Campo label="Giro" name="giro" defaultValue={emp.giro ?? ""} placeholder="Giro o actividad económica" />
               <Campo label="Teléfono" name="telefono_empresa" defaultValue={emp.telefono_empresa ?? ""} />
-              <Campo label="Correo de la empresa" name="correo_empresa" type="email" defaultValue={emp.correo_empresa ?? ""} />
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs">Correo de la empresa</Label>
+                <Input name="correo_empresa" type="email" defaultValue={emp.correo_empresa ?? ""} />
+                <p className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+                  <strong>Muy importante:</strong> asegúrate de que este correo sea correcto y lo
+                  revises seguido. Todas las solicitudes y gestiones (contratos, finiquitos,
+                  permisos, vacaciones, etc.) usarán este correo como medio de contacto.
+                </p>
+              </div>
               <Campo label="Dirección" name="domicilio" defaultValue={emp.domicilio ?? ""} />
               <Campo label="Comuna" name="comuna" defaultValue={emp.comuna ?? ""} />
               <Campo label="Ciudad" name="ciudad" defaultValue={emp.ciudad ?? ""} />
