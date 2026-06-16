@@ -194,6 +194,32 @@ export async function actualizarDocRcv(
   return { ok: true };
 }
 
+/** Edición inline de una boleta de honorarios: % pagado y/o cuenta de gasto. */
+export async function actualizarHonorario(
+  id: string,
+  cambios: { pagado_pct?: number; cuenta_id?: string | null },
+): Promise<{ ok: boolean; error?: string }> {
+  const payload: Record<string, unknown> = {};
+  if (cambios.pagado_pct !== undefined) {
+    if (
+      !Number.isFinite(cambios.pagado_pct) ||
+      cambios.pagado_pct < 0 ||
+      cambios.pagado_pct > 100
+    ) {
+      return { ok: false, error: "El % pagado debe estar entre 0 y 100." };
+    }
+    payload.pagado_pct = cambios.pagado_pct;
+  }
+  if (cambios.cuenta_id !== undefined) payload.cuenta_id = cambios.cuenta_id;
+  if (Object.keys(payload).length === 0) return { ok: true };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("honorarios_periodo").update(payload).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/contabilidad", "layout");
+  return { ok: true };
+}
+
 /** Borra TODOS los documentos del libro en el período (para reimportar limpio). */
 export async function eliminarRcvPeriodo(
   libro: LibroRcv,

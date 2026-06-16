@@ -8,6 +8,7 @@ import {
   type CuentaOpcion,
   type DocCompra,
   type DocVenta,
+  type DocHonorario,
   type F29Montos,
 } from "./rcv-client";
 
@@ -17,6 +18,8 @@ const COLS_COMPRA =
   "id, tipo_doc, tipo_compra, rut_proveedor, razon_social, folio, fecha_docto, monto_exento, monto_neto, iva_recuperable, iva_no_recuperable, monto_total, neto_activo_fijo, iva_activo_fijo, impto_sin_credito, otro_imp_valor, pagado_pct, cuenta_id, archivo_origen";
 const COLS_VENTA =
   "id, tipo_doc, tipo_venta, rut_cliente, razon_social, folio, fecha_docto, monto_exento, monto_neto, monto_iva, monto_total, pagado_pct, cuenta_id, archivo_origen";
+const COLS_HON =
+  "id, numero, fecha, estado, rut_emisor, nombre_emisor, soc_profesional, brutos, retencion, liquido, pagado_pct, cuenta_id";
 
 export default async function RcvPage({
   params,
@@ -30,7 +33,7 @@ export default async function RcvPage({
   const periodo = normalizarPeriodo(p);
   const supabase = await createClient();
 
-  const [clienteRes, comprasRes, ventasRes, cuentasRes, f29Res] =
+  const [clienteRes, comprasRes, ventasRes, honorariosRes, cuentasRes, f29Res] =
     await Promise.all([
       supabase
         .from("clientes")
@@ -52,6 +55,14 @@ export default async function RcvPage({
         .eq("periodo", periodo)
         .order("fecha_docto", { ascending: true })
         .order("folio", { ascending: true })
+        .limit(5000),
+      supabase
+        .from("honorarios_periodo")
+        .select(COLS_HON)
+        .eq("cliente_id", clienteId)
+        .eq("periodo", periodo)
+        .order("fecha", { ascending: true })
+        .order("numero", { ascending: true })
         .limit(5000),
       supabase
         .from("plan_cuentas")
@@ -110,6 +121,7 @@ export default async function RcvPage({
         periodo={periodo}
         compras={(comprasRes.data ?? []) as DocCompra[]}
         ventas={(ventasRes.data ?? []) as DocVenta[]}
+        honorarios={(honorariosRes.data ?? []) as DocHonorario[]}
         cuentas={(cuentasRes.data ?? []) as CuentaOpcion[]}
         f29={(f29Res.data as F29Montos | null) ?? null}
       />

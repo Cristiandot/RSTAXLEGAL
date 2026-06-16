@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   actualizarDocRcv,
+  actualizarHonorario,
   crearCuentaGasto,
   eliminarRcvPeriodo,
   guardarMontosF29,
@@ -66,6 +67,21 @@ export type DocVenta = {
   pagado_pct: number | string;
   cuenta_id: string | null;
   archivo_origen: string | null;
+};
+
+export type DocHonorario = {
+  id: string;
+  numero: string;
+  fecha: string | null;
+  estado: string | null;
+  rut_emisor: string | null;
+  nombre_emisor: string | null;
+  soc_profesional: boolean;
+  brutos: number;
+  retencion: number;
+  liquido: number;
+  pagado_pct: number | string;
+  cuenta_id: string | null;
 };
 
 export type F29Montos = {
@@ -265,6 +281,7 @@ export function RcvClient({
   periodo,
   compras,
   ventas,
+  honorarios,
   cuentas,
   f29,
 }: {
@@ -274,11 +291,12 @@ export function RcvClient({
   periodo: string;
   compras: DocCompra[];
   ventas: DocVenta[];
+  honorarios: DocHonorario[];
   cuentas: CuentaOpcion[];
   f29: F29Montos | null;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<LibroRcv>("compra");
+  const [tab, setTab] = useState<"compra" | "venta" | "honorario">("compra");
   const [importando, startImportar] = useTransition();
   const [ocupado, startOcupado] = useTransition();
   const inputArchivo = useRef<HTMLInputElement>(null);
@@ -304,8 +322,22 @@ export function RcvClient({
       ventasIva: sum(ventas, (d) => d.monto_iva),
       ventasTotal: sum(ventas, (d) => d.monto_total),
       ventasExento: sum(ventas, (d) => d.monto_exento),
+      honBrutos: sum(honorarios, (h) => h.brutos),
+      honRetencion: sum(honorarios, (h) => h.retencion),
+      honLiquido: sum(honorarios, (h) => h.liquido),
     };
-  }, [compras, ventas]);
+  }, [compras, ventas, honorarios]);
+
+  function guardarHonorario(
+    id: string,
+    patch: { pagado_pct?: number; cuenta_id?: string | null },
+  ) {
+    startOcupado(async () => {
+      const res = await actualizarHonorario(id, patch);
+      if (res.ok) router.refresh();
+      else toast.error(res.error ?? "Error al guardar");
+    });
+  }
 
   function onArchivoElegido(archivo: File) {
     const detectado = periodoDesdeNombre(archivo.name);
@@ -343,6 +375,7 @@ export function RcvClient({
   }
 
   function onEliminarPeriodo() {
+    if (tab === "honorario") return;
     const cuantos = tab === "compra" ? compras.length : ventas.length;
     if (cuantos === 0) return;
     if (
@@ -407,7 +440,7 @@ export function RcvClient({
     });
   }
 
-  const docs = tab === "compra" ? compras : ventas;
+  const docs = tab === "compra" ? compras : tab === "venta" ? ventas : honorarios;
 
   return (
     <div className="space-y-5">
@@ -538,6 +571,7 @@ export function RcvClient({
               [
                 { v: "compra", label: `Compras (${compras.length})` },
                 { v: "venta", label: `Ventas (${ventas.length})` },
+                { v: "honorario", label: `Honorarios (${honorarios.length})` },
               ] as const
             ).map((t) => (
               <button
@@ -555,7 +589,7 @@ export function RcvClient({
             ))}
           </div>
           <div className="flex items-center gap-2 pb-2">
-            {docs.length > 0 ? (
+            {tab !== "honorario" && docs.length > 0 ? (
               <Button
                 type="button"
                 size="sm"
@@ -627,7 +661,102 @@ export function RcvClient({
           </div>
         ) : null}
 
-        {docs.length === 0 ? (
+        {tab === "honorario" ? (
+          honorarios.length === 0 ? (
+            <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+              Sin boletas de honorarios en {etiquetaPeriodo(periodo)}.
+            </div>
+          ) : (
+            <div className="max-h-[60vh] overflow-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead className="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_var(--border)]">
+                  <tr>
+                    <th className={thCls}>N° Boleta</th>
+                    <th className={thCls}>Fecha</th>
+                    <th className={thCls}>RUT Emisor</th>
+                    <th className={thCls}>Nombre</th>
+                    <th className={thCls}>Soc. Prof.</th>
+                    <th className={`${thCls} text-right`}>Brutos</th>
+                    <th className={`${thCls} text-right`}>Retención</th>
+                    <th className={`${thCls} text-right`}>Líquido</th>
+                    <th className={`${thCls} text-right`}>% Pagado</th>
+                    <th className={thCls}>Cuenta gasto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {honorarios.map((h) => (
+                    <tr
+                      key={h.id}
+                      className={`border-t border-border/40 hover:bg-muted/30 ${
+                        h.estado && h.estado !== "VIGENTE" ? "text-red-700 line-through" : ""
+                      }`}
+                    >
+                      <td className="px-2 py-1 tabular-nums">{h.numero}</td>
+                      <td className="px-2 py-1 whitespace-nowrap">{formatFecha(h.fecha)}</td>
+                      <td className="px-2 py-1 whitespace-nowrap tabular-nums">{h.rut_emisor}</td>
+                      <td className="max-w-72 truncate px-2 py-1" title={h.nombre_emisor ?? ""}>
+                        {h.nombre_emisor}
+                      </td>
+                      <td className="px-2 py-1">{h.soc_profesional ? "Sí" : "No"}</td>
+                      <td className={tdNum}>{formatMonto(h.brutos)}</td>
+                      <td className={tdNum}>{formatMonto(h.retencion)}</td>
+                      <td className={`${tdNum} font-medium`}>{formatMonto(h.liquido)}</td>
+                      <td className="px-2 py-1 text-right">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          defaultValue={String(Number(h.pagado_pct))}
+                          disabled={ocupado}
+                          onBlur={(e) => {
+                            const n = Number(e.target.value);
+                            if (n !== Number(h.pagado_pct)) guardarHonorario(h.id, { pagado_pct: n });
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                          }}
+                          className={`h-7 w-16 rounded-md border bg-card px-1.5 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                            Number(h.pagado_pct) < 100 ? "border-amber-300 bg-amber-50" : "border-input"
+                          }`}
+                          aria-label="% pagado"
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <select
+                          className={`h-7 max-w-52 rounded-md border bg-card px-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                            h.cuenta_id ? "border-input" : "border-dashed border-muted-foreground/40 text-muted-foreground"
+                          }`}
+                          value={h.cuenta_id ?? ""}
+                          disabled={ocupado}
+                          onChange={(e) => guardarHonorario(h.id, { cuenta_id: e.target.value || null })}
+                          aria-label="Cuenta de gasto"
+                        >
+                          <option value="">Gastos sin asignar</option>
+                          {cuentasGasto.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.codigo} {c.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="sticky bottom-0 bg-card shadow-[0_-1px_0_0_var(--border)]">
+                  <tr className="border-t border-border font-semibold">
+                    <td className="px-2 py-1.5" colSpan={5}>
+                      Totales ({honorarios.length} boletas)
+                    </td>
+                    <td className={tdNum}>{formatMonto(tot.honBrutos)}</td>
+                    <td className={tdNum}>{formatMonto(tot.honRetencion)}</td>
+                    <td className={tdNum}>{formatMonto(tot.honLiquido)}</td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )
+        ) : docs.length === 0 ? (
           <div className="px-4 py-10 text-center text-sm text-muted-foreground">
             Sin documentos de {tab === "compra" ? "compras" : "ventas"} en{" "}
             {etiquetaPeriodo(periodo)}. Descarga el detalle del RCV en sii.cl y
