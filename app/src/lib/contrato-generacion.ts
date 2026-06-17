@@ -240,6 +240,7 @@ const PLANTILLA_ANEXO: Record<string, string> = {
   renovacion_fijo_a_fijo: "plantillas/GENERICO/ANEXO Renovacion Plazo Fijo a Fijo.docx",
   renovacion_indefinido: "plantillas/GENERICO/ANEXO Renovacion a Indefinido.docx",
   ajuste_ingreso_minimo: "plantillas/GENERICO/ANEXO Ajuste Ingreso Minimo.docx",
+  cambio_jornada: "plantillas/GENERICO/ANEXO Cambio de Jornada.docx",
 };
 
 /**
@@ -283,6 +284,7 @@ export async function generarYSubirAnexo(
 
   const rem = (con.remuneracion ?? {}) as { sueldo_base?: number };
   const sueldo = Number(rem.sueldo_base ?? 0);
+  const jor = (con.jornada ?? {}) as { horas_semanales?: number; horas_anteriores?: number };
   const nacionalidad = ((t.nacionalidad as string) ?? "Chilena").trim();
   const rutEmpleado = t.rut_provisorio
     ? (t.rut ? `${t.rut} (provisorio)` : "(RUT en trámite)")
@@ -318,6 +320,9 @@ export async function generarYSubirAnexo(
     AAAA_CONTRATO: aaaa,
     FECHA_INICIO_CONTRATO: fechaLarga(con.fecha_inicio),
     FECHA_TERMINO_CONTRATO: fechaLarga(con.fecha_vencimiento),
+    FECHA_VIGENCIA: fechaLarga(con.anexo_fecha),
+    HORAS_NUEVAS: jor.horas_semanales != null ? String(jor.horas_semanales).replace(".", ",") : "",
+    HORAS_ANTERIORES: jor.horas_anteriores != null ? String(jor.horas_anteriores).replace(".", ",") : "",
     SUELDO_BASE: montoCLP(sueldo),
     SUELDO_BASE_PALABRA: sueldo > 0 ? montoEnPalabras(sueldo) : "",
   };
