@@ -13,6 +13,7 @@ import {
 } from "@/lib/liquidacion-ejemplo";
 import {
   actualizarClausulas,
+  actualizarAnexoFecha,
   cambiarEstadoContrato,
   eliminarContrato,
   enviarContratoAlCliente,
@@ -47,6 +48,7 @@ export type ContratoRow = {
   tipoDocumento: string;
   anexoTipo: string | null;
   anexoDetalle: string | null;
+  anexoFecha: string | null;
   jornadaHoras: number | null;
   clausulasAdicionales: string | null;
   tipoContrato: string;
@@ -150,6 +152,16 @@ export function ContratosClient({
         toast.success("Documento generado");
         router.refresh();
       } else toast.error(res.error ?? "Error al generar");
+    });
+  }
+
+  function guardarAnexoFecha(id: string, fecha: string) {
+    startAccion(async () => {
+      const res = await actualizarAnexoFecha(id, fecha || null);
+      if (res.ok) {
+        toast.success("Fecha del anexo guardada");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al guardar la fecha");
     });
   }
 
@@ -375,6 +387,18 @@ export function ContratosClient({
                         >
                           <Pencil className="size-4" />
                         </Button>
+                      ) : null}
+                      {f.tipoDocumento === "anexo" &&
+                      ["solicitado", "generado"].includes(f.estado) ? (
+                        <Input
+                          type="date"
+                          aria-label="Fecha del anexo"
+                          title="Fecha del anexo (preámbulo del documento). Si la cambias, regenera para aplicarla."
+                          className="h-8 w-36"
+                          defaultValue={f.anexoFecha ?? ""}
+                          disabled={ocupado}
+                          onChange={(e) => guardarAnexoFecha(f.id, e.target.value)}
+                        />
                       ) : null}
                       {f.estado === "solicitado" ? (
                         <Button size="sm" variant="outline" disabled={ocupado} onClick={() => generar(f.id)}>

@@ -14,7 +14,7 @@ export default async function AnexosPage() {
   const { data, error } = await supabase
     .from("contratos")
     .select(
-      "id, estado, tipo_contrato, tipo_documento, anexo_tipo, anexo_detalle, cargo, jornada, fecha_inicio, fecha_vencimiento, documento_path, clausulas_adicionales, created_at, clientes(razon_social), trabajadores(nombres, apellidos, rut, rut_provisorio), usuarios(nombre)",
+      "id, estado, tipo_contrato, tipo_documento, anexo_tipo, anexo_detalle, anexo_fecha, cargo, jornada, fecha_inicio, fecha_vencimiento, documento_path, clausulas_adicionales, created_at, clientes(razon_social), trabajadores(nombres, apellidos, rut, rut_provisorio), usuarios(nombre)",
     )
     .eq("tipo_documento", "anexo")
     .order("created_at", { ascending: false })
@@ -36,6 +36,7 @@ export default async function AnexosPage() {
       tipoDocumento: c.tipo_documento ?? "anexo",
       anexoTipo: c.anexo_tipo,
       anexoDetalle: c.anexo_detalle,
+      anexoFecha: c.anexo_fecha,
       jornadaHoras:
         j?.horas_semanales != null ? Number(j.horas_semanales) : null,
       clausulasAdicionales: c.clausulas_adicionales,

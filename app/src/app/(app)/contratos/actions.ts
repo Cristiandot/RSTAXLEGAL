@@ -91,6 +91,22 @@ export async function generarContrato(
   return { ok: true };
 }
 
+/** Fecha del anexo (preámbulo del documento). Regenerar para aplicarla. */
+export async function actualizarAnexoFecha(
+  contratoId: string,
+  fecha: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("contratos")
+    .update({ anexo_fecha: fecha || null })
+    .eq("id", contratoId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/contratos");
+  revalidatePath("/anexos");
+  return { ok: true };
+}
+
 /**
  * Envía el contrato APROBADO al correo asignado de la empresa, con el .docx
  * adjunto, y lo marca como enviado (con trazabilidad de destino y fecha).

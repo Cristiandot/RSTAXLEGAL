@@ -12,7 +12,7 @@ export default async function ContratosPage() {
     supabase
       .from("contratos")
       .select(
-        "id, estado, tipo_contrato, tipo_documento, anexo_tipo, anexo_detalle, cargo, jornada, remuneracion, fecha_inicio, fecha_vencimiento, documento_path, clausulas_adicionales, created_at, clientes(razon_social), trabajadores(nombres, apellidos, rut, rut_provisorio, afp, salud), usuarios(nombre)",
+        "id, estado, tipo_contrato, tipo_documento, anexo_tipo, anexo_detalle, anexo_fecha, cargo, jornada, remuneracion, fecha_inicio, fecha_vencimiento, documento_path, clausulas_adicionales, created_at, clientes(razon_social), trabajadores(nombres, apellidos, rut, rut_provisorio, afp, salud), usuarios(nombre)",
       )
       .order("created_at", { ascending: false })
       .limit(200),
@@ -42,6 +42,7 @@ export default async function ContratosPage() {
       tipoDocumento: c.tipo_documento ?? "contrato",
       anexoTipo: c.anexo_tipo,
       anexoDetalle: c.anexo_detalle,
+      anexoFecha: c.anexo_fecha,
       jornadaHoras:
         j?.horas_semanales != null ? Number(j.horas_semanales) : null,
       clausulasAdicionales: c.clausulas_adicionales,
