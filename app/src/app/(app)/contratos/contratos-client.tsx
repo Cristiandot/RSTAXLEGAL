@@ -376,13 +376,13 @@ export function ContratosClient({
                           <Pencil className="size-4" />
                         </Button>
                       ) : null}
-                      {f.estado === "solicitado" && f.tipoDocumento !== "anexo" ? (
+                      {f.estado === "solicitado" ? (
                         <Button size="sm" variant="outline" disabled={ocupado} onClick={() => generar(f.id)}>
                           Generar
                         </Button>
                       ) : null}
-                      {f.estado === "generado" && f.tipoDocumento !== "anexo" ? (
-                        <Button size="sm" variant="ghost" disabled={ocupado} onClick={() => generar(f.id)} title="Volver a generar el documento (aplica cláusulas editadas)">
+                      {f.estado === "generado" ? (
+                        <Button size="sm" variant="ghost" disabled={ocupado} onClick={() => generar(f.id)} title="Volver a generar el documento">
                           Regenerar
                         </Button>
                       ) : null}

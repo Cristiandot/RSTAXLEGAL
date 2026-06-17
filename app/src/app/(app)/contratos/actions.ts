@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getUsuarioActual } from "@/lib/auth";
 import { nombreArchivo } from "@/lib/format";
-import { generarYSubirContrato } from "@/lib/contrato-generacion";
+import { generarYSubirContrato, generarYSubirAnexo } from "@/lib/contrato-generacion";
 import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
 
 const TRANSICIONES: Record<string, string[]> = {
@@ -76,9 +76,18 @@ export async function generarContrato(
   contratoId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
-  const res = await generarYSubirContrato(supabase, contratoId);
+  const { data: doc } = await supabase
+    .from("contratos")
+    .select("tipo_documento")
+    .eq("id", contratoId)
+    .single();
+  const res =
+    doc?.tipo_documento === "anexo"
+      ? await generarYSubirAnexo(supabase, contratoId)
+      : await generarYSubirContrato(supabase, contratoId);
   if (!res.ok) return { ok: false, error: res.error };
   revalidatePath("/contratos");
+  revalidatePath("/anexos");
   return { ok: true };
 }
 

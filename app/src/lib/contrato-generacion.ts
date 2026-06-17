@@ -234,3 +234,115 @@ export async function generarYSubirContrato(
 
   return { ok: true, downloadUrl: firmado?.signedUrl, nombreArchivo: nombreDescarga };
 }
+
+/** Plantilla genérica por tipo de anexo (archivo en app/plantillas/). */
+const PLANTILLA_ANEXO: Record<string, string> = {
+  renovacion_fijo_a_fijo: "plantillas/GENERICO/ANEXO Renovacion Plazo Fijo a Fijo.docx",
+  renovacion_indefinido: "plantillas/GENERICO/ANEXO Renovacion a Indefinido.docx",
+  ajuste_ingreso_minimo: "plantillas/GENERICO/ANEXO Ajuste Ingreso Minimo.docx",
+};
+
+/**
+ * Genera el .docx de un ANEXO (renovación de plazo fijo a fijo, paso a
+ * indefinido o ajuste de ingreso mínimo), lo sube a Storage y marca 'generado'.
+ * La plantilla se elige por `anexo_tipo`. Los tipos sin plantilla genérica
+ * (cambio de jornada, otro) se preparan a mano y devuelven aviso.
+ */
+export async function generarYSubirAnexo(
+  supabase: SupabaseClient,
+  contratoId: string,
+): Promise<ResultadoGeneracion> {
+  const { data: con, error: errCon } = await supabase
+    .from("contratos")
+    .select("*, trabajadores(*), clientes(*)")
+    .eq("id", contratoId)
+    .single();
+  if (errCon || !con) return { ok: false, error: "Anexo no encontrado." };
+
+  const plantillaPath = PLANTILLA_ANEXO[(con.anexo_tipo as string) ?? ""];
+  if (!plantillaPath) {
+    return {
+      ok: false,
+      error:
+        "Este tipo de anexo no tiene plantilla genérica para generar automáticamente (cambio de jornada / otro). Prepáralo manualmente.",
+    };
+  }
+
+  const t = con.trabajadores as Record<string, unknown>;
+  const cli = con.clientes as Record<string, unknown>;
+  if (!t || !cli) return { ok: false, error: "Faltan datos del trabajador o la empresa." };
+
+  const repLegal = (cli.representante_legal as string) ?? "";
+  const domicilio = (cli.domicilio as string) ?? "";
+  if (!repLegal || !domicilio) {
+    return {
+      ok: false,
+      error: `Faltan datos del empleador de ${cli.razon_social} (representante legal y/o domicilio). Cárgalos antes de generar.`,
+    };
+  }
+
+  const rem = (con.remuneracion ?? {}) as { sueldo_base?: number };
+  const sueldo = Number(rem.sueldo_base ?? 0);
+  const nacionalidad = ((t.nacionalidad as string) ?? "Chilena").trim();
+  const rutEmpleado = t.rut_provisorio
+    ? (t.rut ? `${t.rut} (provisorio)` : "(RUT en trámite)")
+    : ((t.rut as string) ?? "");
+
+  // Fecha del anexo = fecha de generación (preámbulo "En …, a DD/MM/AAAA").
+  const hoy = new Date();
+  const dd = String(hoy.getDate()).padStart(2, "0");
+  const mm = String(hoy.getMonth() + 1).padStart(2, "0");
+
+  const variables: Record<string, string> = {
+    RAZON_SOCIAL: (cli.razon_social as string) ?? "",
+    RUT_EMPRESA: (cli.rut_empresa as string) ?? "",
+    NOMBRE_REP_LEGAL: repLegal,
+    RUT_REP_LEGAL: (cli.representante_legal_rut as string) ?? "",
+    EMAIL_EMPRESA: (cli.correo_empresa as string) ?? "",
+    DIRECCION_EMPRESA: domicilio,
+    NOMBRE_EMPLEADO: `${t.nombres} ${t.apellidos}`,
+    RUT_EMPLEADO: rutEmpleado,
+    NACIONALIDAD_EMPLEADO: nacionalidad,
+    DIRECCION_EMPLEADO: (t.direccion as string) ?? "",
+    EMAILPERSONAL_EMPLEADO: (t.correo as string) ?? "",
+    DA_CONTRATO: dd,
+    MA_CONTRATO: mm,
+    AAAA_CONTRATO: String(hoy.getFullYear()),
+    FECHA_INICIO_CONTRATO: fechaLarga(con.fecha_inicio),
+    FECHA_TERMINO_CONTRATO: fechaLarga(con.fecha_vencimiento),
+    SUELDO_BASE: montoCLP(sueldo),
+    SUELDO_BASE_PALABRA: sueldo > 0 ? montoEnPalabras(sueldo) : "",
+  };
+
+  let buffer: Buffer;
+  try {
+    buffer = await generarDocx(plantillaPath, variables);
+  } catch (e) {
+    return {
+      ok: false,
+      error: `Falló la generación del anexo: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+
+  const storagePath = `${contratoId}/anexo.docx`;
+  const { error: errUp } = await supabase.storage
+    .from("contratos")
+    .upload(storagePath, buffer, {
+      contentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      upsert: true,
+    });
+  if (errUp) return { ok: false, error: `Falló la subida a Storage: ${errUp.message}` };
+
+  await supabase
+    .from("contratos")
+    .update({ documento_path: storagePath, estado: "generado" })
+    .eq("id", contratoId);
+
+  const nombreDescarga = nombreArchivo(`Anexo - ${t.nombres} ${t.apellidos}`) + ".docx";
+  const { data: firmado } = await supabase.storage
+    .from("contratos")
+    .createSignedUrl(storagePath, 3600, { download: nombreDescarga });
+
+  return { ok: true, downloadUrl: firmado?.signedUrl, nombreArchivo: nombreDescarga };
+}
