@@ -161,6 +161,34 @@ export async function eliminarSucursal(
   return { ok: true };
 }
 
+// ===================== Facturas RS Tax & Legal → cliente =====================
+
+export type FacturaEmpresa = {
+  id: string;
+  folio: number;
+  tipo: string; // 'factura' | 'nota_credito'
+  folio_ref: number | null;
+  periodo: string; // 'YYYY-MM'
+  monto: number | null;
+  pagada: boolean;
+  fecha_pago: string | null;
+  observaciones: string | null;
+};
+
+/**
+ * Facturas (y notas de crédito) que RS Tax & Legal le ha emitido al cliente,
+ * con su estado de pago. Solo lectura desde el portal — el estado de pago lo
+ * administra RS internamente en /facturacion.
+ */
+export async function cargarFacturasEmpresa(
+  token: string,
+): Promise<{ ok: boolean; facturas?: FacturaEmpresa[]; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_facturas", { p_token: token });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, facturas: (data ?? []) as FacturaEmpresa[] };
+}
+
 // ===================== Reglamento interno (RIHS / RIOHS) =====================
 
 export type Reglamento = {

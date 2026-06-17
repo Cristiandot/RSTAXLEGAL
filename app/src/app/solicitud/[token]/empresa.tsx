@@ -8,6 +8,7 @@ import {
   type EmpresaDatos,
 } from "./portal-actions";
 import { Sucursales } from "./sucursales";
+import { FacturasEmpresa } from "./facturas-empresa";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -136,6 +137,8 @@ export function Empresa({ token }: { token: string }) {
       </form>
 
       <Sucursales token={token} />
+
+      <FacturasEmpresa token={token} />
     </div>
   );
 }
