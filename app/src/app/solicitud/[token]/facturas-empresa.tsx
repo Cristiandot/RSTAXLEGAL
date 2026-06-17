@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Receipt } from "lucide-react";
-import { cargarFacturasEmpresa, type FacturaEmpresa } from "./portal-actions";
+import { toast } from "sonner";
+import { Download, Loader2, Receipt } from "lucide-react";
+import {
+  cargarFacturasEmpresa, descargarFacturaPortal, type FacturaEmpresa,
+} from "./portal-actions";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatMonto } from "@/lib/format";
 import { etiquetaPeriodo } from "@/lib/periodos";
@@ -26,6 +30,7 @@ function tipoLabel(tipo: string): string {
 export function FacturasEmpresa({ token }: { token: string }) {
   const [rows, setRows] = useState<FacturaEmpresa[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [bajando, setBajando] = useState<string | null>(null);
 
   const recargar = useCallback(async () => {
     setCargando(true);
@@ -37,6 +42,17 @@ export function FacturasEmpresa({ token }: { token: string }) {
   useEffect(() => {
     void recargar();
   }, [recargar]);
+
+  async function descargar(id: string) {
+    setBajando(id);
+    const r = await descargarFacturaPortal(token, id);
+    setBajando(null);
+    if (r.ok && r.url) {
+      window.open(r.url, "_blank", "noopener,noreferrer");
+    } else {
+      toast.error(r.error ?? "No se pudo descargar el documento.");
+    }
+  }
 
   const pendientes = rows.filter((f) => !f.pagada && f.tipo !== "nota_credito");
   const totalPendiente = pendientes.reduce((acc, f) => acc + (Number(f.monto) || 0), 0);
@@ -81,7 +97,8 @@ export function FacturasEmpresa({ token }: { token: string }) {
                     <th className="py-2 pr-3 font-medium">Documento</th>
                     <th className="py-2 pr-3 font-medium">Período</th>
                     <th className="py-2 pr-3 text-right font-medium">Monto</th>
-                    <th className="py-2 pl-3 text-right font-medium">Estado</th>
+                    <th className="py-2 px-3 text-right font-medium">Estado</th>
+                    <th className="py-2 pl-3 text-right font-medium">Documento</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -101,7 +118,7 @@ export function FacturasEmpresa({ token }: { token: string }) {
                           {etiquetaPeriodo(f.periodo)}
                         </td>
                         <td className="py-2 pr-3 text-right tabular-nums">{formatMonto(f.monto)}</td>
-                        <td className="py-2 pl-3 text-right">
+                        <td className="py-2 px-3 text-right">
                           {esNc ? (
                             <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                               Nota de crédito
@@ -115,6 +132,23 @@ export function FacturasEmpresa({ token }: { token: string }) {
                               Pendiente
                             </span>
                           )}
+                        </td>
+                        <td className="py-2 pl-3 text-right">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={bajando === f.id}
+                            onClick={() => descargar(f.id)}
+                            title="Descargar PDF"
+                          >
+                            {bajando === f.id ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <Download className="size-3.5" />
+                            )}
+                            <span className="ml-1 hidden sm:inline">PDF</span>
+                          </Button>
                         </td>
                       </tr>
                     );

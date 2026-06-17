@@ -189,6 +189,26 @@ export async function cargarFacturasEmpresa(
   return { ok: true, facturas: (data ?? []) as FacturaEmpresa[] };
 }
 
+/**
+ * Genera un enlace de descarga (URL firmada, 2 min) del PDF de una factura.
+ * La autorización la hace la Edge Function `factura-descarga` con service role:
+ * solo entrega el enlace si la factura pertenece al cliente de ese token. El
+ * bucket `facturas` permanece privado (anon nunca accede directo).
+ */
+export async function descargarFacturaPortal(
+  token: string,
+  facturaId: string,
+): Promise<{ ok: boolean; url?: string; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.functions.invoke("factura-descarga", {
+    body: { token, factura_id: facturaId },
+  });
+  if (error) return { ok: false, error: "No se pudo preparar la descarga." };
+  const url = (data as { url?: string } | null)?.url;
+  if (!url) return { ok: false, error: "No se pudo preparar la descarga." };
+  return { ok: true, url };
+}
+
 // ===================== Reglamento interno (RIHS / RIOHS) =====================
 
 export type Reglamento = {
