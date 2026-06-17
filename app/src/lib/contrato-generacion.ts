@@ -288,10 +288,17 @@ export async function generarYSubirAnexo(
     ? (t.rut ? `${t.rut} (provisorio)` : "(RUT en trámite)")
     : ((t.rut as string) ?? "");
 
-  // Fecha del anexo = fecha de generación (preámbulo "En …, a DD/MM/AAAA").
-  const hoy = new Date();
-  const dd = String(hoy.getDate()).padStart(2, "0");
-  const mm = String(hoy.getMonth() + 1).padStart(2, "0");
+  // Fecha del anexo (preámbulo "En …, a DD/MM/AAAA"): la registrada en
+  // anexo_fecha, o la fecha de generación si no se cargó.
+  let dd: string, mm: string, aaaa: string;
+  if (con.anexo_fecha) {
+    [aaaa, mm, dd] = String(con.anexo_fecha).split("-");
+  } else {
+    const hoy = new Date();
+    dd = String(hoy.getDate()).padStart(2, "0");
+    mm = String(hoy.getMonth() + 1).padStart(2, "0");
+    aaaa = String(hoy.getFullYear());
+  }
 
   const variables: Record<string, string> = {
     RAZON_SOCIAL: (cli.razon_social as string) ?? "",
@@ -300,6 +307,7 @@ export async function generarYSubirAnexo(
     RUT_REP_LEGAL: (cli.representante_legal_rut as string) ?? "",
     EMAIL_EMPRESA: (cli.correo_empresa as string) ?? "",
     DIRECCION_EMPRESA: domicilio,
+    COMUNA_EMPRESA: (cli.comuna as string) || (cli.ciudad as string) || "",
     NOMBRE_EMPLEADO: `${t.nombres} ${t.apellidos}`,
     RUT_EMPLEADO: rutEmpleado,
     NACIONALIDAD_EMPLEADO: nacionalidad,
@@ -307,7 +315,7 @@ export async function generarYSubirAnexo(
     EMAILPERSONAL_EMPLEADO: (t.correo as string) ?? "",
     DA_CONTRATO: dd,
     MA_CONTRATO: mm,
-    AAAA_CONTRATO: String(hoy.getFullYear()),
+    AAAA_CONTRATO: aaaa,
     FECHA_INICIO_CONTRATO: fechaLarga(con.fecha_inicio),
     FECHA_TERMINO_CONTRATO: fechaLarga(con.fecha_vencimiento),
     SUELDO_BASE: montoCLP(sueldo),
