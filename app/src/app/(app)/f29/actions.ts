@@ -213,6 +213,12 @@ export async function enviarCorreoF29(
          </div>`
       : "";
 
+  // Si el pago lo hace el cliente, se incluye el acceso directo al portal del SII.
+  const linkPagoSii = !esPagaRs
+    ? `<p style="margin:0 0 8px;">Puede revisar y pagar su F29 directamente en el portal del SII:</p>
+       <p style="margin:0 0 16px;"><a href="https://www4.sii.cl/propuestaf29ui/index.html#/default" style="display:inline-block;background:#0b2545;color:#ffffff;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 20px;border-radius:8px;">Pagar el F29 en el SII</a></p>`
+    : "";
+
   const cuerpo = `
     <p style="margin:0 0 12px;">Estimados,</p>
     <p style="margin:0 0 16px;">Les informamos que hemos presentado el Formulario 29 correspondiente al período <strong>${etiqueta}</strong>. A continuación, el detalle de lo declarado:</p>
@@ -222,6 +228,7 @@ export async function enviarCorreoF29(
       <tr><td style="padding:9px 0;color:#445;">Fecha límite de pago</td><td style="padding:9px 0;text-align:right;"><strong>${row.plazo_f29 ? fechaLarga(row.plazo_f29) : "—"}</strong></td></tr>
     </table>
     <p style="margin:0 0 16px;font-size:12px;color:#64748b;">El vencimiento legal del F29 es el día 20; si cae sábado, domingo o feriado, el plazo se traslada al siguiente día hábil.</p>
+    ${linkPagoSii}
     ${cajaFondos}
     <p style="margin:0 0 4px;">Quedamos atentos a cualquier consulta.</p>`;
 
