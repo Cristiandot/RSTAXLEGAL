@@ -18,6 +18,7 @@ import {
   Receipt,
   Stethoscope,
   FileDown,
+  HandCoins,
   type LucideIcon,
 } from "lucide-react";
 
@@ -170,6 +171,15 @@ export const MODULOS: SeccionModulos[] = [
           "Documentos contables (balance, libro mayor, libro diario, estado de resultados) que piden los clientes desde su portal. También recibe las solicitudes de documentos de personal.",
         href: "/documentos",
         icon: FileDown,
+        estado: "activo",
+      },
+      {
+        key: "mutuo",
+        label: "Mutuo",
+        descripcion:
+          "Generador de contratos de mutuo de dinero desde plantilla, con datos y destino editables.",
+        href: "/mutuo",
+        icon: HandCoins,
         estado: "activo",
       },
     ],

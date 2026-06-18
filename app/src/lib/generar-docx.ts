@@ -25,23 +25,6 @@ export async function generarDocx(
   return doc.getZip().generate({ type: "nodebuffer" }) as Buffer;
 }
 
-const MESES = [
-  "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
-  "septiembre", "octubre", "noviembre", "diciembre",
-];
-
-/** ISO `2026-06-10` → "10 de junio de 2026" (formato de cláusulas). */
-export function fechaLarga(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) return iso;
-  return `${d} de ${MESES[m - 1]} de ${y}`;
-}
-
-/** Monto numérico → "529.000" (formato CLP sin símbolo, el $ está en la plantilla). */
-export function montoCLP(v: number | string | null | undefined): string {
-  if (v === null || v === undefined || v === "") return "";
-  const n = Number(v);
-  if (Number.isNaN(n)) return "";
-  return n.toLocaleString("es-CL");
-}
+// fechaLarga y montoCLP viven en lib/format (client-safe, sin node:fs); se
+// re-exportan acá para no romper a quienes ya los importaban desde generar-docx.
+export { fechaLarga, montoCLP } from "@/lib/format";

@@ -34,3 +34,24 @@ export function formatMonto(v: number | string | null | undefined): string {
   if (Number.isNaN(n)) return "—";
   return "$" + n.toLocaleString("es-CL");
 }
+
+const MESES_LARGO = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+  "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/** ISO `2026-06-10` → "10 de junio de 2026" (formato de cláusulas). */
+export function fechaLarga(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return `${d} de ${MESES_LARGO[m - 1]} de ${y}`;
+}
+
+/** Monto numérico → "529.000" (CLP sin símbolo; el $ va en la plantilla). */
+export function montoCLP(v: number | string | null | undefined): string {
+  if (v === null || v === undefined || v === "") return "";
+  const n = Number(v);
+  if (Number.isNaN(n)) return "";
+  return n.toLocaleString("es-CL");
+}
