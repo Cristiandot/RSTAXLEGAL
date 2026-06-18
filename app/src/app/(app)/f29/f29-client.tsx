@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Search, CheckCircle2, AlertTriangle, Send } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { SelectorPeriodo } from "@/components/selector-periodo";
 import { comparar, type Orden } from "@/lib/ordenar";
@@ -15,7 +15,12 @@ import {
   type F29Row,
   type UsuarioOpcion,
 } from "@/lib/ciclos";
-import { actualizarPagoF29, guardarF29, marcarPasoF29 } from "./actions";
+import {
+  actualizarPagoF29,
+  enviarCorreoF29,
+  guardarF29,
+  marcarPasoF29,
+} from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -163,11 +168,15 @@ export function F29Client({
   const [editando, setEditando] = useState<F29Row | null>(null);
   // Hito único F29 como checklist: tildar estampa la fecha de hoy al guardar.
   const [presentadoChk, setPresentadoChk] = useState(false);
+  // Correo del cliente (ficha) editable desde el modal.
+  const [correoCli, setCorreoCli] = useState("");
   const [guardando, startGuardar] = useTransition();
   const [marcando, startMarcar] = useTransition();
+  const [enviando, startEnviar] = useTransition();
 
   function abrirModal(c: F29Row) {
     setPresentadoChk(c.fecha_f29_presentado !== null);
+    setCorreoCli(c.correo_empresa ?? "");
     setEditando(c);
   }
 
@@ -181,7 +190,12 @@ export function F29Client({
 
   function guardarPago(
     cicloId: string,
-    patch: { pagoPor?: string | null; monto?: string | null; fechaPagoOficina?: string | null },
+    patch: {
+      pagoPor?: string | null;
+      monto?: string | null;
+      ppm?: string | null;
+      fechaPagoOficina?: string | null;
+    },
   ) {
     startMarcar(async () => {
       const res = await actualizarPagoF29(cicloId, patch);
@@ -219,6 +233,7 @@ export function F29Client({
         case "armado": return c.fecha_f29_armado;
         case "presentado": return c.fecha_f29_presentado;
         case "monto": return c.monto_a_pagar !== null ? Number(c.monto_a_pagar) : null;
+        case "ppm": return c.ppm !== null ? Number(c.ppm) : null;
         case "folio": return c.folio_f29;
         default: return null;
       }
@@ -266,6 +281,7 @@ export function F29Client({
     startGuardar(async () => {
       const res = await guardarF29({
         cicloId: ciclo.ciclo_id,
+        clienteId: ciclo.cliente_id,
         responsableId: get("responsable"),
         // fecha_f29_armado ya no se gestiona en la UI: se conserva tal cual.
         fechaArmado: ciclo.fecha_f29_armado,
@@ -273,9 +289,11 @@ export function F29Client({
           ? (ciclo.fecha_f29_presentado ?? hoy)
           : null,
         monto: get("monto"),
+        ppm: get("ppm"),
         folio: get("folio"),
         pagoPor: get("pago_por"),
         fechaPagoOficina: get("fecha_pago_oficina"),
+        correoCliente: correoCli.trim() || null,
         observaciones: get("observaciones"),
       });
       if (res.ok) {
@@ -284,6 +302,19 @@ export function F29Client({
         router.refresh();
       } else {
         toast.error(res.error ?? "Error al guardar");
+      }
+    });
+  }
+
+  function enviarAviso() {
+    if (!editando) return;
+    startEnviar(async () => {
+      const res = await enviarCorreoF29(editando.ciclo_id, correoCli.trim() || null);
+      if (res.ok) {
+        toast.success(`Aviso enviado a ${res.enviadoA}`);
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Error al enviar el correo");
       }
     });
   }
@@ -389,6 +420,7 @@ export function F29Client({
               <ThSort col="presentado" orden={orden} setOrden={setOrden} className="text-center">F29</ThSort>
               <TableHead>Paga</TableHead>
               <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Monto</ThSort>
+              <ThSort col="ppm" orden={orden} setOrden={setOrden} className="text-right">PPM</ThSort>
               <ThSort col="folio" orden={orden} setOrden={setOrden}>Folio</ThSort>
             </TableRow>
           </TableHeader>
@@ -396,7 +428,7 @@ export function F29Client({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={11}
+                  colSpan={12}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -481,6 +513,14 @@ export function F29Client({
                       valor={c.monto_a_pagar}
                       disabled={marcando}
                       onGuardar={(m) => guardarPago(c.ciclo_id, { monto: m })}
+                    />
+                  </TableCell>
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <MontoInline
+                      key={`ppm-${c.ciclo_id}-${c.ppm ?? ""}`}
+                      valor={c.ppm}
+                      disabled={marcando}
+                      onGuardar={(m) => guardarPago(c.ciclo_id, { ppm: m })}
                     />
                   </TableCell>
                   <TableCell>{c.folio_f29 ?? "—"}</TableCell>
@@ -580,6 +620,16 @@ export function F29Client({
                 />
               </div>
               <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ppm">PPM</Label>
+                <Input
+                  id="ppm"
+                  name="ppm"
+                  type="number"
+                  inputMode="numeric"
+                  defaultValue={editando.ppm ?? ""}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
                 <Label htmlFor="pago_por">¿Quién paga el F29?</Label>
                 <select
                   id="pago_por"
@@ -611,6 +661,35 @@ export function F29Client({
                   name="folio"
                   defaultValue={editando.folio_f29 ?? ""}
                 />
+              </div>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="correo_cliente">Correo del cliente</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="correo_cliente"
+                    type="email"
+                    placeholder="correo@cliente.cl"
+                    value={correoCli}
+                    onChange={(e) => setCorreoCli(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={enviarAviso}
+                    disabled={enviando || !correoCli.trim()}
+                  >
+                    <Send className="size-4" />
+                    {editando.fecha_correo_f29_enviado ? "Reenviar" : "Enviar"}
+                  </Button>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {enviando
+                    ? "Enviando aviso…"
+                    : editando.fecha_correo_f29_enviado
+                      ? `Último aviso enviado: ${formatFecha(editando.fecha_correo_f29_enviado.slice(0, 10))}`
+                      : "Envía al cliente el aviso de F29 (PPM, monto y plazo). El correo se guarda en su ficha."}
+                </span>
               </div>
               <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="observaciones">Observaciones</Label>

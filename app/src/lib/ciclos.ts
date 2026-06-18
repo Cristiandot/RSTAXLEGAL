@@ -64,20 +64,24 @@ export type IvaEjecucionRow = {
 /** Fila de `v_checklist_f29` (ciclo F29). */
 export type F29Row = {
   ciclo_id: string;
+  cliente_id: string;
   periodo: string;
   razon_social: string;
   rut_empresa: string | null;
   conciliacion_ok: boolean;
   estado: string;
   responsable: string | null;
-  plazo_f29: string | null;
+  plazo_f29: string | null; // ya corrido al próximo día hábil (sáb/dom/feriado)
   dias_restantes_f29: number | null;
   fecha_f29_armado: string | null;
   fecha_f29_presentado: string | null;
   monto_a_pagar: number | string | null;
+  ppm: number | string | null; // PPM pagado del período
   folio_f29: string | null;
   pago_por: string | null; // 'rs' | 'cliente' | null
   fecha_pago_oficina: string | null; // cuando paga RS: fecha en que el cliente pagó a la oficina
+  correo_empresa: string | null; // correo del cliente (ficha) para el aviso de F29
+  fecha_correo_f29_enviado: string | null; // último envío del aviso al cliente
   observaciones: string | null;
 };
 
