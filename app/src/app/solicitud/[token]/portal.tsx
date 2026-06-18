@@ -133,11 +133,11 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
               Teléfono
             </p>
             <a
-              href="https://wa.me/56352298272"
+              href="https://wa.me/56973928662"
               className="mt-1.5 inline-flex items-center gap-2 text-sm font-medium text-[var(--brand-teal)] no-underline"
             >
               <MessageCircle className="size-4 shrink-0" />
-              +56 35 229 8272
+              +56 9 7392 8662
             </a>
             <p className="mt-1 text-xs text-muted-foreground">
               Solo atendemos por <strong>WhatsApp</strong> — mensajes o llamadas por
