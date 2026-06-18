@@ -4,18 +4,34 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+/**
+ * Si `stickyHeader` es true, el área de la tabla tiene scroll vertical propio y
+ * los encabezados (TableHead) quedan fijos arriba al desplazar. Se propaga por
+ * contexto para que TableHead aplique las clases sticky sin tocar cada celda.
+ */
+const StickyHeaderContext = React.createContext(false)
+
+function Table({
+  className,
+  stickyHeader = false,
+  ...props
+}: React.ComponentProps<"table"> & { stickyHeader?: boolean }) {
   return (
-    <div
-      data-slot="table-container"
-      className="relative w-full overflow-x-auto"
-    >
-      <table
-        data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
-        {...props}
-      />
-    </div>
+    <StickyHeaderContext.Provider value={stickyHeader}>
+      <div
+        data-slot="table-container"
+        className={cn(
+          "relative w-full overflow-x-auto",
+          stickyHeader && "overflow-y-auto max-h-[calc(100vh-19rem)]",
+        )}
+      >
+        <table
+          data-slot="table"
+          className={cn("w-full caption-bottom text-sm", className)}
+          {...props}
+        />
+      </div>
+    </StickyHeaderContext.Provider>
   )
 }
 
@@ -66,11 +82,13 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
 }
 
 function TableHead({ className, ...props }: React.ComponentProps<"th">) {
+  const sticky = React.useContext(StickyHeaderContext)
   return (
     <th
       data-slot="table-head"
       className={cn(
         "h-10 px-2 text-left align-middle font-medium whitespace-nowrap text-foreground [&:has([role=checkbox])]:pr-0",
+        sticky && "sticky top-0 z-10 border-b bg-card",
         className
       )}
       {...props}

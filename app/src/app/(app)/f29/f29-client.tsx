@@ -406,8 +406,8 @@ export function F29Client({
         </div>
       ) : null}
 
-      <div className="card-soft overflow-x-auto rounded-xl bg-card">
-        <Table>
+      <div className="card-soft rounded-xl bg-card">
+        <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[220px]">Cliente</ThSort>
