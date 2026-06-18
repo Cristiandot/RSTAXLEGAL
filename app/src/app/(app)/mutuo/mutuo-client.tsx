@@ -69,11 +69,52 @@ function Campo({
   );
 }
 
-export function MutuoClient() {
+export type EmpresaOpcion = {
+  id: string;
+  razon_social: string;
+  rut_empresa: string | null;
+  representante_legal: string | null;
+  domicilio: string | null;
+  giro: string | null;
+  comuna: string | null;
+  ciudad: string | null;
+  lugar_firma_contrato: string | null;
+};
+
+export function MutuoClient({ empresas }: { empresas: EmpresaOpcion[] }) {
   const [f, setF] = useState<Campos>(INICIAL);
   const [generando, startGenerar] = useTransition();
+  const [buscarEmp, setBuscarEmp] = useState("");
   function set(k: keyof Campos, v: string | number) {
     setF((prev) => ({ ...prev, [k]: v }) as Campos);
+  }
+
+  const empresasFiltradas = useMemo(() => {
+    const q = buscarEmp.trim().toLowerCase();
+    const base = q
+      ? empresas.filter((e) =>
+          `${e.razon_social} ${e.rut_empresa ?? ""}`.toLowerCase().includes(q),
+        )
+      : empresas;
+    return base.slice(0, 30);
+  }, [empresas, buscarEmp]);
+
+  function fillEmpresa(id: string) {
+    const e = empresas.find((x) => x.id === id);
+    if (!e) return;
+    setF((prev) => ({
+      ...prev,
+      empRazon: e.razon_social ?? prev.empRazon,
+      empRut: e.rut_empresa ?? prev.empRut,
+      empRep: e.representante_legal ?? "",
+      empGiro: e.giro || "de su denominación",
+      empDomicilio:
+        [e.domicilio, e.comuna].filter(Boolean).join(", ") || prev.empDomicilio,
+      ciudad: e.lugar_firma_contrato || e.ciudad || e.comuna || prev.ciudad,
+      ciudadJurisdiccion:
+        e.lugar_firma_contrato || e.ciudad || e.comuna || prev.ciudadJurisdiccion,
+    }));
+    toast.success(`Datos de ${e.razon_social} cargados`);
   }
 
   const capitalPalabras = useMemo(() => montoEnPalabras(Number(f.montoCapital)), [f.montoCapital]);
@@ -176,6 +217,32 @@ export function MutuoClient() {
       </Seccion>
 
       <Seccion titulo="Mutuaria / Deudora (empresa)">
+        <Campo label="Buscar empresa de la cartera (activas) para autorrellenar" full>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              placeholder="Razón social o RUT…"
+              value={buscarEmp}
+              onChange={(e) => setBuscarEmp(e.target.value)}
+              className="sm:flex-1"
+            />
+            <select
+              className="h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-80"
+              value=""
+              onChange={(e) => {
+                if (e.target.value) fillEmpresa(e.target.value);
+              }}
+              aria-label="Empresa de la cartera"
+            >
+              <option value="">Elegir empresa…</option>
+              {empresasFiltradas.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.razon_social}
+                  {e.rut_empresa ? ` — ${e.rut_empresa}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        </Campo>
         <Campo label="Razón social" full>{txt("empRazon")}</Campo>
         <Campo label="RUT">{txt("empRut")}</Campo>
         <Campo label="Giro">{txt("empGiro")}</Campo>
