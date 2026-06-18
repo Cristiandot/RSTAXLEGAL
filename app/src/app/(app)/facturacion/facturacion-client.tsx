@@ -129,8 +129,8 @@ export function FacturacionClient({
   const resumen = [
     { label: "Documentos", valor: filas.length },
     { label: "Pagadas", valor: filas.filter((f) => f.pagada).length },
-    { label: "En suscripción", valor: filas.filter((f) => !f.pagada && f.suscrito).length },
-    { label: "Pendientes de pago", valor: filas.filter((f) => !f.pagada && !f.suscrito && f.tipo === "factura").length },
+    { label: "Pendientes de pago", valor: filas.filter((f) => !f.pagada && f.tipo === "factura").length },
+    { label: "Pend. de suscritos", valor: filas.filter((f) => !f.pagada && f.suscrito && f.tipo === "factura").length },
     { label: "Sin vincular a cliente", valor: filas.filter((f) => !f.clienteId).length },
   ];
 
@@ -425,33 +425,38 @@ export function FacturacionClient({
                   <TableCell>{etiquetaPeriodo(f.periodo)}</TableCell>
                   <TableCell className="text-right">{formatMonto(f.monto)}</TableCell>
                   <TableCell>
-                    <button
-                      type="button"
-                      disabled={ocupado}
-                      onClick={() => abrirPago(f)}
-                      title={
-                        f.pagada
-                          ? `Pagada el ${formatFecha(f.fechaPago)} — click para editar o quitar`
-                          : f.suscrito
-                            ? `Suscripción — pago automático${f.diaPago ? ` el día ${f.diaPago}` : " (día por confirmar)"}. Click para registrar la fecha de pago.`
-                            : "Click para marcar como pagada"
-                      }
-                    >
-                      {f.pagada ? (
-                        <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
-                          Pagada{f.fechaPago ? ` ${formatFecha(f.fechaPago)}` : ""}
-                        </Badge>
-                      ) : f.suscrito ? (
-                        <Badge variant="outline" className="border-emerald-300 bg-emerald-100 text-emerald-800">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        disabled={ocupado}
+                        onClick={() => abrirPago(f)}
+                        title={
+                          f.pagada
+                            ? `Pagada el ${formatFecha(f.fechaPago)} — click para editar o quitar`
+                            : "Click para registrar la fecha de pago"
+                        }
+                      >
+                        {f.pagada ? (
+                          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                            Pagada{f.fechaPago ? ` ${formatFecha(f.fechaPago)}` : ""}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                            Pendiente
+                          </Badge>
+                        )}
+                      </button>
+                      {f.suscrito ? (
+                        <Badge
+                          variant="outline"
+                          className="border-sky-200 bg-sky-50 text-sky-700"
+                          title={`Cliente suscrito (cargo automático${f.diaPago ? ` el día ${f.diaPago}` : ""}). Es independiente del pago de esta factura: si el cargo rebota, la factura sigue Pendiente hasta registrar el pago real.`}
+                        >
                           <RefreshCcw className="size-3" />
-                          Suscripción{f.diaPago ? ` · día ${f.diaPago}` : ""}
+                          Suscrito{f.diaPago ? ` · día ${f.diaPago}` : ""}
                         </Badge>
-                      ) : (
-                        <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-600">
-                          Pendiente
-                        </Badge>
-                      )}
-                    </button>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
@@ -636,8 +641,11 @@ export function FacturacionClient({
                   </div>
                 ) : null}
                 <p className="mt-2 text-xs text-muted-foreground">
-                  La suscripción es del cliente: esta factura y las de los meses
-                  siguientes aparecerán como &quot;Suscripción&quot; automáticamente.
+                  La suscripción es un atributo del cliente e <strong>independiente del
+                  pago</strong>: marca que tiene cargo automático, pero la factura sigue
+                  &quot;Pendiente&quot; hasta que registres el pago real (si el cargo
+                  rebota, no se paga). Se muestra como chip &quot;Suscrito&quot; aparte
+                  del estado de pago.
                 </p>
               </div>
             ) : (
