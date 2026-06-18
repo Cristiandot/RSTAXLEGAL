@@ -209,7 +209,16 @@ export async function enviarCorreoF29(
     esPagaRs && recepcion
       ? `<div style="border:1px solid #ef9f27;background:#faeeda;border-radius:8px;padding:14px 16px;margin:0 0 16px;">
            <p style="margin:0 0 6px;font-weight:bold;color:#854f0b;font-size:14px;">Importante — si el pago lo gestionamos nosotros</p>
-           <p style="margin:0;color:#633806;font-size:13px;line-height:1.55;">Para pagar su F29 a través de RS Tax &amp; Legal, debemos recibir los fondos a más tardar <strong>2 días hábiles antes</strong> del vencimiento, es decir el <strong>${fechaLarga(recepcion)}</strong>. Pasada esa fecha no podemos garantizar el pago dentro de plazo y el F29 podría quedar afecto a multas e intereses de cargo del contribuyente.</p>
+           <p style="margin:0 0 12px;color:#633806;font-size:13px;line-height:1.55;">Para pagar su F29 a través de RS Tax &amp; Legal, debemos recibir los fondos a más tardar <strong>2 días hábiles antes</strong> del vencimiento, es decir el <strong>${fechaLarga(recepcion)}</strong>. Pasada esa fecha no podemos garantizar el pago dentro de plazo y el F29 podría quedar afecto a multas e intereses de cargo del contribuyente.</p>
+           <p style="margin:0 0 6px;font-weight:bold;color:#854f0b;font-size:13px;">Datos para la transferencia:</p>
+           <div style="background:#ffffff;border:1px solid #f0d9a8;border-radius:6px;padding:10px 12px;font-size:13px;color:#3a2a10;line-height:1.7;">
+             <div><span style="color:#7a5a18;">Titular:</span> Rodríguez Samith Servicios Legales y Contables II Limitada</div>
+             <div><span style="color:#7a5a18;">RUT:</span> 78.073.973-8</div>
+             <div><span style="color:#7a5a18;">Banco:</span> Mercado Pago</div>
+             <div><span style="color:#7a5a18;">Tipo de cuenta:</span> Cuenta Vista</div>
+             <div><span style="color:#7a5a18;">N° de cuenta:</span> <strong>1093709982</strong></div>
+             <div><span style="color:#7a5a18;">Correo:</span> admin@rstaxlegal.cl</div>
+           </div>
          </div>`
       : "";
 
