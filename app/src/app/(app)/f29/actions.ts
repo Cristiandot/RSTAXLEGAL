@@ -219,6 +219,7 @@ export async function enviarCorreoF29(
              <div><span style="color:#7a5a18;">N° de cuenta:</span> <strong>1093709982</strong></div>
              <div><span style="color:#7a5a18;">Correo:</span> admin@rstaxlegal.cl</div>
            </div>
+           <p style="margin:12px 0 0;"><a href="https://rstaxlegal-panel.vercel.app/datos-transferencia" style="display:inline-block;background:#854f0b;color:#ffffff;text-decoration:none;font-weight:bold;font-size:13px;padding:9px 16px;border-radius:6px;">Copiar datos para transferir →</a></p>
          </div>`
       : "";
 
