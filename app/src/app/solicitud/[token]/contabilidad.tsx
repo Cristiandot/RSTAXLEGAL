@@ -242,7 +242,7 @@ export function Contabilidad({ token }: { token: string }) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Truck className="size-5 text-[var(--brand-navy)]" />
-                  Proveedores más comunes
+                  Proveedores
                 </CardTitle>
                 <CardDescription className="mt-1">Por monto de compras · {vista.titulo}</CardDescription>
               </CardHeader>
@@ -254,7 +254,7 @@ export function Contabilidad({ token }: { token: string }) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Store className="size-5 text-[var(--brand-teal)]" />
-                  Compradores más comunes
+                  Compradores
                 </CardTitle>
                 <CardDescription className="mt-1">Por monto de ventas · {vista.titulo}</CardDescription>
               </CardHeader>
