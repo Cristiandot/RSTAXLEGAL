@@ -39,6 +39,20 @@ function nombrePeriodo(p: string): string {
   return `${MESES[m - 1] ?? "?"} ${y}`;
 }
 
+/**
+ * Feriado legal devengado a la fecha desde el ingreso (15 días hábiles/año =
+ * 1,25 días hábiles por mes, Art. 67 CT). Estimación: NO descuenta los días ya
+ * tomados — ese control lo lleva la empresa.
+ */
+function vacDevengadas(fechaIngreso?: string | null): number | null {
+  if (!fechaIngreso) return null;
+  const ing = new Date(`${fechaIngreso}T00:00:00`);
+  if (Number.isNaN(ing.getTime())) return null;
+  const meses = (Date.now() - ing.getTime()) / (1000 * 60 * 60 * 24 * 30.4375);
+  if (meses <= 0) return 0;
+  return Math.round(meses * 1.25 * 10) / 10;
+}
+
 function Kpi({
   icon, label, valor, feat = false, alerta = false,
 }: { icon: React.ReactNode; label: string; valor: string; feat?: boolean; alerta?: boolean }) {
@@ -181,7 +195,8 @@ export function RecursosHumanos({ token }: { token: string }) {
                         <th className="py-2 pr-2 font-medium">Trabajador</th>
                         <th className="py-2 pr-2 font-medium">Cargo</th>
                         <th className="py-2 pr-2 font-medium">Contrato</th>
-                        <th className="py-2 font-medium">Desde</th>
+                        <th className="py-2 pr-2 font-medium">Desde</th>
+                        <th className="py-2 font-medium">Saldo vac. (aprox.)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -200,11 +215,22 @@ export function RecursosHumanos({ token }: { token: string }) {
                               <span className="block text-xs text-muted-foreground">vence {formatFecha(t.fecha_termino)}</span>
                             ) : null}
                           </td>
-                          <td className="py-2 tabular-nums">{formatFecha(t.fecha_ingreso)}</td>
+                          <td className="py-2 pr-2 tabular-nums">{formatFecha(t.fecha_ingreso)}</td>
+                          <td className="py-2 tabular-nums text-muted-foreground">
+                            {(() => {
+                              const v = vacDevengadas(t.fecha_ingreso);
+                              return v != null ? `≈ ${v.toLocaleString("es-CL")} días` : "—";
+                            })()}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Saldo de vacaciones <strong>aproximado</strong>: feriado legal devengado a la
+                    fecha (15 días hábiles por año, Art. 67 CT), <strong>sin descontar</strong> los
+                    días ya tomados — ese control lo lleva la empresa.
+                  </p>
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">

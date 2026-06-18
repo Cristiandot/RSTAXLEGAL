@@ -279,12 +279,18 @@ export function DocumentosRrhh({
           <CardContent className="space-y-3">
             <Label className="text-xs">Trabajador</Label>
             <SelectorTrabajador id="liq" trabajadores={trabajadores} valor={liqSel} onChange={setLiqSel} />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <Button
                 size="sm" variant="outline" disabled={enviando || !liqSel}
                 onClick={() => pedir("Liquidaciones de sueldo (últimas 3)", { detalle: liqSel })}
               >
                 Últimas 3
+              </Button>
+              <Button
+                size="sm" variant="outline" disabled={enviando || !liqSel}
+                onClick={() => pedir("Liquidaciones de sueldo (últimas 6)", { detalle: liqSel })}
+              >
+                Últimas 6
               </Button>
               <Button
                 size="sm" variant="outline" disabled={enviando || !liqSel}
@@ -362,7 +368,13 @@ export function DocumentosRrhh({
               />
             </div>
           </div>
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Button
+              size="sm" variant="outline" disabled={enviando}
+              onClick={() => pedir(`Formato de reglamento (${regTipo})`, { detalle: `El cliente no tiene ${regTipo} y solicita el formato/plantilla para confeccionarlo.` })}
+            >
+              <Send className="size-3.5" /> No lo tengo — solicitar formato
+            </Button>
             <Button size="sm" disabled={enviando || !archivo} onClick={subirReg}>
               <Upload className="size-3.5" /> {reglamento?.tiene ? "Reemplazar reglamento" : "Cargar reglamento"}
             </Button>
