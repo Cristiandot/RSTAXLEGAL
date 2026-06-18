@@ -55,8 +55,8 @@ function TablaEmpresas({
   onAsignar: (clienteId: string, grupoId: string | null) => void;
 }) {
   return (
-    <div className="card-soft overflow-x-auto rounded-xl bg-card">
-      <Table>
+    <div className="card-soft rounded-xl bg-card">
+      <Table stickyHeader>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead className="w-[300px]">Empresa</TableHead>

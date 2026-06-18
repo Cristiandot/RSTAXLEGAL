@@ -223,8 +223,8 @@ export function LicenciasClient({
         </div>
       ) : null}
 
-      <div className="card-soft overflow-x-auto rounded-xl bg-card">
-        <Table>
+      <div className="card-soft rounded-xl bg-card">
+        <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[200px]">

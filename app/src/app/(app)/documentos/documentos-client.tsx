@@ -107,10 +107,10 @@ export function DocumentosClient({
         </p>
       ) : null}
 
-      <div className="overflow-x-auto rounded-xl border">
+      <div className="max-h-[calc(100vh-19rem)] overflow-auto rounded-xl border">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+            <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card">
               <th className="px-3 py-2 font-medium">Empresa</th>
               <th className="px-3 py-2 font-medium">Área</th>
               <th className="px-3 py-2 font-medium">Documento</th>

@@ -368,8 +368,8 @@ export function FacturacionClient({
         </div>
       ) : null}
 
-      <div className="card-soft overflow-x-auto rounded-xl bg-card">
-        <Table>
+      <div className="card-soft rounded-xl bg-card">
+        <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <ThSort col="folio" orden={orden} setOrden={setOrden}>Folio</ThSort>
