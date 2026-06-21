@@ -16,11 +16,11 @@ import { BalanceClient } from "./balance-client";
 export const metadata = { title: "Balance 8 columnas — RS Tax & Legal" };
 
 const COLS_COMPRA =
-  "tipo_doc, rut_proveedor, razon_social, folio, monto_exento, monto_neto, iva_recuperable, iva_no_recuperable, impto_sin_credito, otro_imp_valor, monto_total, pagado_pct";
+  "tipo_doc, rut_proveedor, razon_social, folio, monto_exento, monto_neto, iva_recuperable, iva_no_recuperable, impto_sin_credito, otro_imp_valor, monto_total, pagado_pct, cuenta_id";
 const COLS_VENTA =
   "tipo_doc, rut_cliente, razon_social, folio, monto_exento, monto_neto, monto_iva, otro_imp_valor, monto_total, pagado_pct";
 const COLS_HON =
-  "numero, rut_emisor, nombre_emisor, brutos, retencion, liquido, pagado_pct";
+  "numero, rut_emisor, nombre_emisor, brutos, retencion, liquido, pagado_pct, cuenta_id";
 
 export default async function BalancePage({
   params,
@@ -61,7 +61,7 @@ export default async function BalancePage({
         .limit(5000),
       supabase
         .from("plan_cuentas")
-        .select("codigo, nombre, tipo")
+        .select("id, codigo, nombre, tipo")
         .or(`cliente_id.is.null,cliente_id.eq.${clienteId}`)
         .eq("activo", true)
         .order("codigo"),
@@ -105,9 +105,17 @@ export default async function BalancePage({
 
   const num = (v: unknown) => (v == null ? 0 : Number(v));
 
+  // Mapa cuenta_id -> código, para que la clasificación del contador (Cuenta
+  // Gasto asignada en los libros) llegue a los asientos y al balance.
+  const codigoPorCuentaId = new Map<string, string>(
+    (cuentasRes.data ?? []).map((c) => [c.id as string, c.codigo as string]),
+  );
+  const resolverCuenta = (cuentaId: unknown): string | null =>
+    typeof cuentaId === "string" ? (codigoPorCuentaId.get(cuentaId) ?? null) : null;
+
   const compras: CompraInput[] = (comprasRes.data ?? []).map((c) => ({
     tipo_doc: num(c.tipo_doc),
-    cuenta_codigo: null,
+    cuenta_codigo: resolverCuenta(c.cuenta_id),
     rut_proveedor: c.rut_proveedor as string,
     razon_social: (c.razon_social as string) ?? null,
     folio: String(c.folio),
@@ -138,7 +146,7 @@ export default async function BalancePage({
     numero: String(h.numero),
     rut_emisor: (h.rut_emisor as string) ?? null,
     nombre_emisor: (h.nombre_emisor as string) ?? null,
-    cuenta_codigo: null,
+    cuenta_codigo: resolverCuenta(h.cuenta_id),
     brutos: num(h.brutos),
     retencion: num(h.retencion),
     liquido: num(h.liquido),

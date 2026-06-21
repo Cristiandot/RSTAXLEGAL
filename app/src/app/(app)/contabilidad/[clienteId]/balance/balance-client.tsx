@@ -59,6 +59,7 @@ export function BalanceClient({
   const router = useRouter();
   const [tab, setTab] = useState<"balance" | "diario">("balance");
   const [filtroOrigen, setFiltroOrigen] = useState<OrigenAsiento | "todos">("todos");
+  const [filtroCuenta, setFiltroCuenta] = useState<string | null>(null);
 
   // Cierre de resultado (utilidad/pérdida del ejercicio) para cuadrar 8 columnas
   const cierre = useMemo(() => {
@@ -73,8 +74,13 @@ export function BalanceClient({
   }, [totales]);
 
   const lineasVis = useMemo(
-    () => (filtroOrigen === "todos" ? lineas : lineas.filter((l) => l.origen === filtroOrigen)),
-    [lineas, filtroOrigen],
+    () =>
+      lineas.filter(
+        (l) =>
+          (filtroOrigen === "todos" || l.origen === filtroOrigen) &&
+          (!filtroCuenta || l.cuenta === filtroCuenta),
+      ),
+    [lineas, filtroOrigen, filtroCuenta],
   );
 
   return (
@@ -218,7 +224,16 @@ export function BalanceClient({
               </thead>
               <tbody>
                 {filas.map((f) => (
-                  <tr key={f.codigo} className="border-t border-border/40 hover:bg-muted/30">
+                  <tr
+                    key={f.codigo}
+                    className="cursor-pointer border-t border-border/40 hover:bg-muted/30"
+                    onClick={() => {
+                      setFiltroCuenta(f.codigo);
+                      setFiltroOrigen("todos");
+                      setTab("diario");
+                    }}
+                    title="Ver los movimientos de esta cuenta en el libro diario"
+                  >
                     <td className="px-2 py-1 tabular-nums">{f.codigo}</td>
                     <td className="px-2 py-1">{f.nombre}</td>
                     <td className={tdNum}><Money v={f.debe} /></td>
@@ -285,6 +300,16 @@ export function BalanceClient({
                   {o === "todos" ? "Todos" : ORIGEN_LABEL[o as OrigenAsiento]}
                 </button>
               ))}
+              {filtroCuenta ? (
+                <button
+                  type="button"
+                  onClick={() => setFiltroCuenta(null)}
+                  className="ml-2 rounded-md border border-primary bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary"
+                  title="Quitar filtro de cuenta"
+                >
+                  Cuenta {filtroCuenta} ✕
+                </button>
+              ) : null}
             </div>
             <div className="max-h-[65vh] overflow-auto">
               <table className="w-full border-collapse text-sm">
@@ -325,9 +350,11 @@ export function BalanceClient({
           </>
         )}
         <p className="px-4 py-2 text-xs text-muted-foreground">
-          Centralización generada automáticamente desde el RCV (compras y ventas) según las reglas
-          del proceso. Las notas de crédito (61) restan. Sueldos, honorarios, otros gastos y pagos
-          F29/Previred se incorporarán cuando llegue su data — ver "Datos pendientes" arriba.
+          Flujo de trabajo: en los libros RCV clasifica cada compra con su{" "}
+          <strong>Cuenta de gasto</strong> y ajusta el <strong>% pagado</strong>; el libro diario y
+          el balance se recalculan solos con esa clasificación. Haz clic en una cuenta del balance
+          para ver sus movimientos en el diario. Las notas de crédito (61) restan. Sueldos, otros
+          gastos y pagos F29/Previred se incorporan cuando llegue su data (ver pendientes arriba).
         </p>
       </div>
     </div>
