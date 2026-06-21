@@ -119,6 +119,74 @@ function BadgeTipoDoc({ tipo }: { tipo: number }) {
   );
 }
 
+/** Resumen agrupado por tipo de documento: subtotales por cada tipo del período. */
+function ResumenPorTipo({
+  docs,
+  libro,
+}: {
+  docs: (DocCompra | DocVenta)[];
+  libro: "compra" | "venta";
+}) {
+  const filas = useMemo(() => {
+    const map = new Map<
+      number,
+      { n: number; exento: number; neto: number; iva: number; total: number }
+    >();
+    for (const d of docs) {
+      const cur =
+        map.get(d.tipo_doc) ?? { n: 0, exento: 0, neto: 0, iva: 0, total: 0 };
+      cur.n += 1;
+      cur.exento += d.monto_exento;
+      cur.neto += d.monto_neto;
+      cur.iva +=
+        libro === "compra"
+          ? (d as DocCompra).iva_recuperable
+          : (d as DocVenta).monto_iva;
+      cur.total += d.monto_total;
+      map.set(d.tipo_doc, cur);
+    }
+    return [...map.entries()]
+      .map(([tipo, v]) => ({ tipo, ...v }))
+      .sort((a, b) => a.tipo - b.tipo);
+  }, [docs, libro]);
+
+  if (filas.length === 0) return null;
+
+  return (
+    <div className="border-b border-border/60 px-4 py-3">
+      <h3 className="mb-2 text-xs font-semibold text-muted-foreground">
+        Resumen por tipo de documento
+      </h3>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {filas.map((f) => (
+          <div
+            key={f.tipo}
+            className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
+          >
+            <div className="flex items-center gap-2">
+              <BadgeTipoDoc tipo={f.tipo} />
+              <span className="text-xs font-medium">{nombreTipoDoc(f.tipo)}</span>
+              <span className="text-xs text-muted-foreground">· {f.n} docs</span>
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs tabular-nums">
+              <span className="text-muted-foreground">
+                Neto <strong className="text-foreground">{formatMonto(f.neto)}</strong>
+              </span>
+              <span className="text-muted-foreground">
+                {libro === "compra" ? "IVA Créd." : "IVA"}{" "}
+                <strong className="text-foreground">{formatMonto(f.iva)}</strong>
+              </span>
+              <span className="text-muted-foreground">
+                Total <strong className="text-foreground">{formatMonto(f.total)}</strong>
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Input inline de % pagado: guarda al salir del campo o con Enter. */
 function PagadoCell({
   libro,
@@ -659,6 +727,13 @@ export function RcvClient({
               Cancelar
             </Button>
           </div>
+        ) : null}
+
+        {tab !== "honorario" && docs.length > 0 ? (
+          <ResumenPorTipo
+            docs={tab === "compra" ? compras : ventas}
+            libro={tab}
+          />
         ) : null}
 
         {tab === "honorario" ? (
