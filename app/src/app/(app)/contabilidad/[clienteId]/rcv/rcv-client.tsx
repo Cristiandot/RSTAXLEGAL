@@ -123,9 +123,13 @@ function BadgeTipoDoc({ tipo }: { tipo: number }) {
 function ResumenPorTipo({
   docs,
   libro,
+  activo,
+  onSelect,
 }: {
   docs: (DocCompra | DocVenta)[];
   libro: "compra" | "venta";
+  activo: number | null;
+  onSelect: (tipo: number | null) => void;
 }) {
   const filas = useMemo(() => {
     const map = new Map<
@@ -154,14 +158,31 @@ function ResumenPorTipo({
 
   return (
     <div className="border-b border-border/60 px-4 py-3">
-      <h3 className="mb-2 text-xs font-semibold text-muted-foreground">
-        Resumen por tipo de documento
-      </h3>
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-muted-foreground">
+          Resumen por tipo de documento
+        </h3>
+        {activo !== null ? (
+          <button
+            type="button"
+            onClick={() => onSelect(null)}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            Ver todos
+          </button>
+        ) : null}
+      </div>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {filas.map((f) => (
-          <div
+          <button
             key={f.tipo}
-            className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
+            type="button"
+            onClick={() => onSelect(activo === f.tipo ? null : f.tipo)}
+            className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+              activo === f.tipo
+                ? "border-primary bg-primary/5 ring-1 ring-primary"
+                : "border-border/60 bg-muted/20 hover:bg-muted/40"
+            }`}
           >
             <div className="flex items-center gap-2">
               <BadgeTipoDoc tipo={f.tipo} />
@@ -180,7 +201,7 @@ function ResumenPorTipo({
                 Total <strong className="text-foreground">{formatMonto(f.total)}</strong>
               </span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -365,6 +386,7 @@ export function RcvClient({
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<"compra" | "venta" | "honorario">("compra");
+  const [filtroTipo, setFiltroTipo] = useState<number | null>(null);
   const [importando, startImportar] = useTransition();
   const [ocupado, startOcupado] = useTransition();
   const inputArchivo = useRef<HTMLInputElement>(null);
@@ -510,6 +532,28 @@ export function RcvClient({
 
   const docs = tab === "compra" ? compras : tab === "venta" ? ventas : honorarios;
 
+  // Filtrado por tipo de documento (al hacer clic en el resumen por tipo).
+  const comprasVis = filtroTipo
+    ? compras.filter((d) => d.tipo_doc === filtroTipo)
+    : compras;
+  const ventasVis = filtroTipo
+    ? ventas.filter((d) => d.tipo_doc === filtroTipo)
+    : ventas;
+  const visList = tab === "compra" ? comprasVis : ventasVis;
+  const visTot = {
+    exento: visList.reduce((a, d) => a + d.monto_exento, 0),
+    neto: visList.reduce((a, d) => a + d.monto_neto, 0),
+    iva: visList.reduce(
+      (a, d) =>
+        a +
+        (tab === "compra"
+          ? (d as DocCompra).iva_recuperable
+          : (d as DocVenta).monto_iva),
+      0,
+    ),
+    total: visList.reduce((a, d) => a + d.monto_total, 0),
+  };
+
   return (
     <div className="space-y-5">
       {/* ── Encabezado ── */}
@@ -645,7 +689,10 @@ export function RcvClient({
               <button
                 key={t.v}
                 type="button"
-                onClick={() => setTab(t.v)}
+                onClick={() => {
+                  setTab(t.v);
+                  setFiltroTipo(null);
+                }}
                 className={`rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                   tab === t.v
                     ? "border-primary text-primary"
@@ -733,6 +780,8 @@ export function RcvClient({
           <ResumenPorTipo
             docs={tab === "compra" ? compras : ventas}
             libro={tab}
+            activo={filtroTipo}
+            onSelect={setFiltroTipo}
           />
         ) : null}
 
@@ -859,7 +908,7 @@ export function RcvClient({
               </thead>
               <tbody>
                 {tab === "compra"
-                  ? compras.map((d) => (
+                  ? comprasVis.map((d) => (
                       <tr
                         key={d.id}
                         className={`border-t border-border/40 hover:bg-muted/30 ${
@@ -901,7 +950,7 @@ export function RcvClient({
                         </td>
                       </tr>
                     ))
-                  : ventas.map((d) => (
+                  : ventasVis.map((d) => (
                       <tr
                         key={d.id}
                         className={`border-t border-border/40 hover:bg-muted/30 ${
@@ -939,20 +988,13 @@ export function RcvClient({
               <tfoot className="sticky bottom-0 bg-card shadow-[0_-1px_0_0_var(--border)]">
                 <tr className="border-t border-border font-semibold">
                   <td className="px-2 py-1.5" colSpan={5}>
-                    Totales ({docs.length} documentos)
+                    Totales ({visList.length} documentos
+                    {filtroTipo ? ` · filtrado: ${nombreTipoDoc(filtroTipo)}` : ""})
                   </td>
-                  <td className={tdNum}>
-                    {formatMonto(tab === "compra" ? tot.comprasExento : tot.ventasExento)}
-                  </td>
-                  <td className={tdNum}>
-                    {formatMonto(tab === "compra" ? tot.comprasNeto : tot.ventasNeto)}
-                  </td>
-                  <td className={tdNum}>
-                    {formatMonto(tab === "compra" ? tot.comprasIva : tot.ventasIva)}
-                  </td>
-                  <td className={tdNum}>
-                    {formatMonto(tab === "compra" ? tot.comprasTotal : tot.ventasTotal)}
-                  </td>
+                  <td className={tdNum}>{formatMonto(visTot.exento)}</td>
+                  <td className={tdNum}>{formatMonto(visTot.neto)}</td>
+                  <td className={tdNum}>{formatMonto(visTot.iva)}</td>
+                  <td className={tdNum}>{formatMonto(visTot.total)}</td>
                   <td colSpan={tab === "compra" ? 2 : 1} />
                 </tr>
               </tfoot>
