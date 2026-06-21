@@ -7,7 +7,7 @@ import {
   type RcvResumenFila,
 } from "./contabilidad-client";
 
-export const metadata = { title: "Contabilidad mensual — RS Tax & Legal" };
+export const metadata = { title: "Contabilidad — RS Tax & Legal" };
 
 export default async function ContabilidadPage({
   searchParams,

@@ -67,7 +67,7 @@ export const MODULOS: SeccionModulos[] = [
       },
       {
         key: "contabilidad",
-        label: "Contabilidad mensual",
+        label: "Contabilidad",
         descripcion:
           "RCV del SII (compras, ventas, NC/ND) y documentos mensuales por empresa.",
         href: "/contabilidad",

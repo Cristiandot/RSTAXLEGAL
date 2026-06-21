@@ -195,7 +195,7 @@ export function ClienteContabilidadClient({
       <div className="space-y-4 pt-2">
         <Button variant="ghost" size="sm" render={<Link href={`/contabilidad?periodo=${periodo}`} />}>
           <ArrowLeft className="size-4" />
-          Volver a Contabilidad mensual
+          Volver a Contabilidad
         </Button>
         <div className="card-soft rounded-xl bg-card p-8 text-center text-sm text-muted-foreground">
           {errorCarga
@@ -320,7 +320,7 @@ export function ClienteContabilidadClient({
             render={<Link href={`/contabilidad?periodo=${periodo}`} />}
           >
             <ArrowLeft className="size-4" />
-            Volver a Contabilidad mensual
+            Volver a Contabilidad
           </Button>
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
             {fila.razon_social}

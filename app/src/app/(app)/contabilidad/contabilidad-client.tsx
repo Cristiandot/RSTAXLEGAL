@@ -381,7 +381,7 @@ export function ContabilidadClient({
     <div className="space-y-5">
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Contabilidad mensual
+          Contabilidad
         </h1>
         <p className="text-sm text-muted-foreground">
           Documentos contables del mes por empresa: facturas, boletas,

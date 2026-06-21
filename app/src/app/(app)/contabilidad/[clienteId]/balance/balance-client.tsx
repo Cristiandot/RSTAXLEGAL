@@ -92,7 +92,7 @@ export function BalanceClient({
             Volver a los libros RCV
           </Button>
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Contabilidad mensual — {razonSocial}
+            Contabilidad — {razonSocial}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {rutEmpresa ? `RUT ${rutEmpresa} · ` : ""}
