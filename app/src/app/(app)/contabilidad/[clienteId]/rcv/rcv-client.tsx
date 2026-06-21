@@ -9,6 +9,7 @@ import { formatFecha, formatMonto } from "@/lib/format";
 import { etiquetaPeriodo } from "@/lib/periodos";
 import { SelectorPeriodo } from "@/components/selector-periodo";
 import { nombreTipoDoc, periodoDesdeNombre, type LibroRcv } from "@/lib/contabilidad/rcv";
+import { ContabilidadTabs } from "../contabilidad-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -556,6 +557,7 @@ export function RcvClient({
 
   return (
     <div className="space-y-5">
+      <ContabilidadTabs clienteId={clienteId} periodo={periodo} active="rcv" />
       {/* ── Encabezado ── */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

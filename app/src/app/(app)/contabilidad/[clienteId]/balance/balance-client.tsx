@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { LineaDiario, OrigenAsiento } from "@/lib/contabilidad/centralizacion";
 import type { BalanceFila, BalanceTotales } from "@/lib/contabilidad/balance";
+import { ContabilidadTabs } from "../contabilidad-tabs";
 
 const thNum = "px-2 py-1.5 text-right text-xs font-semibold text-muted-foreground whitespace-nowrap";
 const thTxt = "px-2 py-1.5 text-left text-xs font-semibold text-muted-foreground whitespace-nowrap";
@@ -85,6 +86,7 @@ export function BalanceClient({
 
   return (
     <div className="space-y-5">
+      <ContabilidadTabs clienteId={clienteId} periodo={periodo} active="balance" />
       {/* ── Encabezado ── */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
