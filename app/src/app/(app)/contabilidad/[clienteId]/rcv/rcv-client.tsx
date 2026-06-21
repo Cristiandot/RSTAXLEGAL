@@ -577,12 +577,21 @@ export function RcvClient({
             mensual.
           </p>
         </div>
-        <SelectorPeriodo
-          periodo={periodo}
-          onCambio={(p) =>
-            router.push(`/contabilidad/${clienteId}/rcv?periodo=${p}`)
-          }
-        />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link href={`/contabilidad/${clienteId}/balance?periodo=${periodo}`} />}
+          >
+            Ver contabilidad y Balance
+          </Button>
+          <SelectorPeriodo
+            periodo={periodo}
+            onCambio={(p) =>
+              router.push(`/contabilidad/${clienteId}/rcv?periodo=${p}`)
+            }
+          />
+        </div>
       </div>
 
       {/* ── Resumen del período ── */}
