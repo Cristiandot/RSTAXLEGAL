@@ -206,8 +206,18 @@ export function generarLibroDiario(input: CentralizacionInput): {
   const baseVenta = (v: VentaInput) =>
     v.monto_neto + v.monto_exento + v.monto_iva + v.otro_imp_valor;
 
+  // Liquidación-factura (tipo 43): el contribuyente actúa como comisionista/
+  // mandatario; la venta bruta es del mandante, no suya. Se EXCLUYE de la
+  // centralización normal (inflaría ventas/IVA con montos que no le pertenecen)
+  // y se informa aparte para su tratamiento especial (solo la comisión es ingreso).
+  const TIPOS_ESPECIALES = new Set([43]);
+  const ventasCent = ventas.filter((v) => !TIPOS_ESPECIALES.has(v.tipo_doc));
+  const comprasCent = compras.filter((c) => !TIPOS_ESPECIALES.has(c.tipo_doc));
+  const liqVentas = ventas.filter((v) => TIPOS_ESPECIALES.has(v.tipo_doc));
+  const liqCompras = compras.filter((c) => TIPOS_ESPECIALES.has(c.tipo_doc));
+
   // ───────────────────────── COMPRAS ─────────────────────────
-  for (const c of compras) {
+  for (const c of comprasCent) {
     const cuentaGasto = c.cuenta_codigo ?? CTA.gastoDefault;
     const meta = {
       tipo_comprobante: "TRASPASO" as TipoComprobante,
@@ -247,7 +257,7 @@ export function generarLibroDiario(input: CentralizacionInput): {
       folio_doc: perTxt,
       origen: "compras",
     });
-    const pago = compras.reduce(
+    const pago = comprasCent.reduce(
       (a, c) => a + (baseCompra(c) * (c.pagado_pct ?? 100)) / 100,
       0,
     );
@@ -257,7 +267,7 @@ export function generarLibroDiario(input: CentralizacionInput): {
   }
 
   // ───────────────────────── VENTAS ─────────────────────────
-  for (const v of ventas) {
+  for (const v of ventasCent) {
     const meta = {
       tipo_comprobante: "TRASPASO" as TipoComprobante,
       fecha,
@@ -290,7 +300,7 @@ export function generarLibroDiario(input: CentralizacionInput): {
       folio_doc: perTxt,
       origen: "ventas",
     });
-    const cobro = ventas.reduce(
+    const cobro = ventasCent.reduce(
       (a, v) => a + (baseVenta(v) * (v.pagado_pct ?? 100)) / 100,
       0,
     );
@@ -341,8 +351,8 @@ export function generarLibroDiario(input: CentralizacionInput): {
 
   // ─────────────────────── F29 (mensual) ───────────────────────
   // IVA Débito = Σ IVA ventas ; IVA Crédito = Σ IVA recuperable compras (tope = débito; resto = remanente)
-  const ivaDF = ventas.reduce((a, v) => a + v.monto_iva, 0);
-  const ivaCFtotal = compras.reduce((a, c) => a + c.iva_recuperable, 0);
+  const ivaDF = ventasCent.reduce((a, v) => a + v.monto_iva, 0);
+  const ivaCFtotal = comprasCent.reduce((a, c) => a + c.iva_recuperable, 0);
   const ivaCFusado = ivaCFtotal > ivaDF ? ivaDF : ivaCFtotal;
   // IUT y 2da categoría se toman de los libros que crean la obligación (sueldos/honorarios),
   // para no dejar saldos descuadrados. Hoy: IUT pendiente (sin sueldos); 2da cat = Σ retención honorarios.
@@ -383,6 +393,16 @@ export function generarLibroDiario(input: CentralizacionInput): {
     advertencias.push(
       `IVA Crédito ($${ivaCFtotal.toLocaleString("es-CL")}) supera al Débito ($${ivaDF.toLocaleString("es-CL")}): hay remanente de crédito fiscal a favor.`,
     );
+
+  if (liqVentas.length > 0 || liqCompras.length > 0) {
+    const totLiq = [...liqVentas, ...liqCompras].reduce(
+      (a, d) => a + Math.abs(d.monto_total),
+      0,
+    );
+    advertencias.push(
+      `Liquidaciones-factura (tipo 43) EXCLUIDAS de la centralización: ${liqVentas.length + liqCompras.length} documento(s) por $${r(totLiq).toLocaleString("es-CL")}. Son operaciones de comisionista (la venta bruta pertenece al mandante) — requieren tratamiento especial; solo la comisión es ingreso propio.`,
+    );
+  }
 
   if (Math.abs(residualVentas) >= 1 || Math.abs(residualCompras) >= 1)
     advertencias.push(
