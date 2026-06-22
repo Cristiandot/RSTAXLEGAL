@@ -91,11 +91,13 @@ export type F29Row = {
 /** Clase de color para el badge de estado (Tailwind). */
 export function claseEstado(estado: string): string {
   switch (estado) {
-    case "Cerrado":
+    case "Pagado":
     case "Previred pagado":
     case "DNP declarado":
     case "Conciliado":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "Cerrado":
+      return "border-sky-200 bg-sky-50 text-sky-700";
     case "Sin iniciar":
       return "border-slate-200 bg-slate-100 text-slate-600";
     case "Descargando":
@@ -111,7 +113,7 @@ export function claseEstado(estado: string): string {
 
 /** Clase de color para la celda de días restantes. */
 export function claseDias(estado: string, dias: number | null): string {
-  if (estado === "Cerrado" || estado === "Previred pagado" || estado === "DNP declarado")
+  if (estado === "Pagado" || estado === "Previred pagado" || estado === "DNP declarado")
     return "text-muted-foreground";
   if (dias === null) return "text-muted-foreground";
   if (dias <= 5) return "font-semibold text-red-600";

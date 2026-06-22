@@ -45,11 +45,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const ESTADOS = ["Sin iniciar", "Pendiente presentación", "Cerrado"];
+const ESTADOS = ["Sin iniciar", "Pendiente presentación", "Cerrado", "Pagado"];
 
 /** Paso único del F29 marcable con checkbox inline: F29 enviado (cierra el ciclo). */
-const PASOS_F29: { columna: "fecha_f29_presentado"; label: string }[] = [
+const PASOS_F29: {
+  columna: "fecha_f29_presentado" | "fecha_pago_f29";
+  label: string;
+}[] = [
   { columna: "fecha_f29_presentado", label: "F29" },
+  { columna: "fecha_pago_f29", label: "Pagado" },
 ];
 
 /** Fecha de hoy en zona local del usuario (YYYY-MM-DD), para estampar hitos. */
@@ -261,10 +265,14 @@ export function F29Client({
       valor: filas.filter((c) => c.estado === "Cerrado").length,
     },
     {
+      label: "Pagados",
+      valor: filas.filter((c) => c.estado === "Pagado").length,
+    },
+    {
       label: "Plazo ≤ 5 días",
       valor: filas.filter(
         (c) =>
-          c.estado !== "Cerrado" &&
+          c.estado !== "Pagado" &&
           c.dias_restantes_f29 !== null &&
           c.dias_restantes_f29 <= 5,
       ).length,
@@ -441,6 +449,7 @@ export function F29Client({
               <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>
               <ThSort col="dias" orden={orden} setOrden={setOrden} className="text-center">Días</ThSort>
               <ThSort col="presentado" orden={orden} setOrden={setOrden} className="text-center">F29</ThSort>
+              <TableHead className="text-center">Pagado</TableHead>
               <TableHead>Paga</TableHead>
               <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Monto</ThSort>
               <ThSort col="ppm" orden={orden} setOrden={setOrden} className="text-right">PPM</ThSort>
@@ -451,7 +460,7 @@ export function F29Client({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={12}
+                  colSpan={13}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
