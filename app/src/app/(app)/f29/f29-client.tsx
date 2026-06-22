@@ -18,6 +18,7 @@ import {
 import {
   actualizarPagoF29,
   enviarCorreoF29,
+  enviarCorreoF29Pagado,
   guardarF29,
   marcarPasoF29,
 } from "./actions";
@@ -170,13 +171,17 @@ export function F29Client({
   const [presentadoChk, setPresentadoChk] = useState(false);
   // Correo del cliente (ficha) editable desde el modal.
   const [correoCli, setCorreoCli] = useState("");
+  // N° de operación del pago (cuando paga la oficina), editable desde el modal.
+  const [numOp, setNumOp] = useState("");
   const [guardando, startGuardar] = useTransition();
   const [marcando, startMarcar] = useTransition();
   const [enviando, startEnviar] = useTransition();
+  const [enviandoPago, startEnviarPago] = useTransition();
 
   function abrirModal(c: F29Row) {
     setPresentadoChk(c.fecha_f29_presentado !== null);
     setCorreoCli(c.correo_empresa ?? "");
+    setNumOp(c.numero_operacion ?? "");
     setEditando(c);
   }
 
@@ -293,6 +298,7 @@ export function F29Client({
         folio: get("folio"),
         pagoPor: get("pago_por"),
         fechaPagoOficina: get("fecha_pago_oficina"),
+        numeroOperacion: numOp.trim() || null,
         correoCliente: correoCli.trim() || null,
         observaciones: get("observaciones"),
       });
@@ -312,6 +318,23 @@ export function F29Client({
       const res = await enviarCorreoF29(editando.ciclo_id, correoCli.trim() || null);
       if (res.ok) {
         toast.success(`Aviso enviado a ${res.enviadoA}`);
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Error al enviar el correo");
+      }
+    });
+  }
+
+  function enviarAvisoPago() {
+    if (!editando) return;
+    startEnviarPago(async () => {
+      const res = await enviarCorreoF29Pagado(
+        editando.ciclo_id,
+        numOp.trim() || null,
+        correoCli.trim() || null,
+      );
+      if (res.ok) {
+        toast.success(`Aviso de pago enviado a ${res.enviadoA}`);
         router.refresh();
       } else {
         toast.error(res.error ?? "Error al enviar el correo");
@@ -691,6 +714,38 @@ export function F29Client({
                       : "Envía al cliente el aviso de F29 (PPM, monto y plazo). El correo se guarda en su ficha."}
                 </span>
               </div>
+              {editando.pago_por === "rs" ? (
+                <div className="col-span-2 flex flex-col gap-1.5 rounded-lg border border-border bg-muted/20 p-3">
+                  <Label htmlFor="numero_operacion">
+                    N° de operación del pago (paga RS)
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="numero_operacion"
+                      placeholder="Ej.: 104839271"
+                      value={numOp}
+                      onChange={(e) => setNumOp(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={enviarAvisoPago}
+                      disabled={enviandoPago || !numOp.trim() || !correoCli.trim()}
+                    >
+                      <Send className="size-4" />
+                      {editando.fecha_correo_pago_enviado ? "Reenviar pago" : "Avisar pago"}
+                    </Button>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {enviandoPago
+                      ? "Enviando aviso de pago…"
+                      : editando.fecha_correo_pago_enviado
+                        ? `Aviso de pago enviado: ${formatFecha(editando.fecha_correo_pago_enviado.slice(0, 10))}`
+                        : "Avisa al cliente que su F29 quedó pagado (monto, fecha y N° de operación). Usa el correo de arriba."}
+                  </span>
+                </div>
+              ) : null}
               <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="observaciones">Observaciones</Label>
                 <Textarea
