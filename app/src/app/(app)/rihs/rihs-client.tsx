@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { HardHat } from "lucide-react";
+import { HardHat, Download, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { generarRihs } from "./actions";
+import { generarRihs, urlReglamento } from "./actions";
 
 export type EmpresaOpcion = {
   id: string;
@@ -14,10 +15,30 @@ export type EmpresaOpcion = {
   rut_empresa: string | null;
 };
 
-export function RihsClient({ empresas }: { empresas: EmpresaOpcion[] }) {
+export type ReglamentoRow = {
+  id: string;
+  tipo: string;
+  razonSocial: string;
+  documentoPath: string;
+  nombreOriginal: string | null;
+  createdAt: string;
+  cliente: string | null;
+  autor: string | null;
+};
+
+export function RihsClient({
+  empresas,
+  documentos,
+}: {
+  empresas: EmpresaOpcion[];
+  documentos: ReglamentoRow[];
+}) {
+  const router = useRouter();
   const [razonSocial, setRazonSocial] = useState("");
+  const [clienteId, setClienteId] = useState<string | null>(null);
   const [buscarEmp, setBuscarEmp] = useState("");
   const [generando, startGenerar] = useTransition();
+  const [descargando, setDescargando] = useState<string | null>(null);
 
   const empresasFiltradas = useMemo(() => {
     const q = buscarEmp.trim().toLowerCase();
@@ -33,6 +54,7 @@ export function RihsClient({ empresas }: { empresas: EmpresaOpcion[] }) {
     const e = empresas.find((x) => x.id === id);
     if (!e) return;
     setRazonSocial(e.razon_social ?? "");
+    setClienteId(e.id);
     toast.success(`${e.razon_social} cargada`);
   }
 
@@ -58,14 +80,26 @@ export function RihsClient({ empresas }: { empresas: EmpresaOpcion[] }) {
       return;
     }
     startGenerar(async () => {
-      const res = await generarRihs({ RAZON_SOCIAL: razon });
+      const res = await generarRihs({ clienteId, razonSocial: razon });
       if (res.ok && res.base64 && res.filename) {
         descargar(res.base64, res.filename);
-        toast.success("RIHS generado");
+        toast.success("RIHS generado y guardado");
+        router.refresh();
       } else {
         toast.error(res.error ?? "Error al generar");
       }
     });
+  }
+
+  async function descargarDoc(d: ReglamentoRow) {
+    setDescargando(d.id);
+    const res = await urlReglamento(d.documentoPath, d.nombreOriginal ?? "RIHS.docx");
+    setDescargando(null);
+    if (res.ok && res.url) {
+      window.open(res.url, "_blank");
+    } else {
+      toast.error(res.error ?? "No se pudo descargar");
+    }
   }
 
   return (
@@ -77,7 +111,8 @@ export function RihsClient({ empresas }: { empresas: EmpresaOpcion[] }) {
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
           Genera el RIHS desde la plantilla tipo (D.S. N° 44, para entidades
           empleadoras con menos de 10 trabajadores). Elige la empresa de la cartera
-          o escribe la razón social, y descarga el .docx.
+          o escribe la razón social, y descarga el .docx. Cada documento queda
+          registrado en el listado de abajo.
         </p>
       </div>
 
@@ -115,18 +150,64 @@ export function RihsClient({ empresas }: { empresas: EmpresaOpcion[] }) {
             <Label>Razón social (como aparecerá en el documento)</Label>
             <Input
               value={razonSocial}
-              onChange={(e) => setRazonSocial(e.target.value)}
+              onChange={(e) => {
+                setRazonSocial(e.target.value);
+                setClienteId(null);
+              }}
               placeholder="Ej.: ARBORISMO SPA"
             />
           </div>
         </div>
+        <div className="mt-3 flex justify-end">
+          <Button onClick={generar} disabled={generando}>
+            <HardHat className="size-4" />
+            {generando ? "Generando…" : "Generar RIHS (.docx)"}
+          </Button>
+        </div>
       </div>
 
-      <div className="flex justify-end">
-        <Button onClick={generar} disabled={generando}>
-          <HardHat className="size-4" />
-          {generando ? "Generando…" : "Generar RIHS (.docx)"}
-        </Button>
+      <div className="card-soft rounded-xl bg-card p-4">
+        <h3 className="mb-3 font-heading text-sm font-semibold">
+          Documentos generados
+        </h3>
+        {documentos.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Aún no hay reglamentos generados.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {documentos.map((d) => (
+              <li
+                key={d.id}
+                className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-[var(--brand-teal)]">
+                    <FileText className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">
+                      {d.tipo} — {d.cliente ?? d.razonSocial}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(d.createdAt).toLocaleDateString("es-CL")}
+                      {d.autor ? ` · ${d.autor}` : ""}
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => descargarDoc(d)}
+                  disabled={descargando === d.id}
+                >
+                  <Download className="size-3.5" />
+                  {descargando === d.id ? "Generando link…" : "Descargar"}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
