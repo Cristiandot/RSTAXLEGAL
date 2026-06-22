@@ -233,8 +233,9 @@ export async function enviarCorreoF29(
 
   const cuerpo = `
     <p style="margin:0 0 12px;">Estimados,</p>
-    <p style="margin:0 0 16px;">Les informamos que hemos presentado el Formulario 29 correspondiente al período <strong>${etiqueta}</strong>. A continuación, el detalle de lo declarado:</p>
+    <p style="margin:0 0 16px;">Les informamos que hemos presentado el Formulario 29 de <strong>${row.razon_social}</strong> correspondiente al período <strong>${etiqueta}</strong>. A continuación, el detalle de lo declarado:</p>
     <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;">
+      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Empresa</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${row.razon_social}</td></tr>
       ${filaPpm}
       <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Monto total a pagar (F29)</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;font-weight:bold;">${formatMonto(row.monto_a_pagar)}</td></tr>
       <tr><td style="padding:9px 0;color:#445;">Fecha límite de pago</td><td style="padding:9px 0;text-align:right;"><strong>${row.plazo_f29 ? fechaLarga(row.plazo_f29) : "—"}</strong></td></tr>
@@ -327,8 +328,9 @@ export async function enviarCorreoF29Pagado(
       <p style="margin:6px 0 0;color:#0f6e56;font-size:13px;line-height:1.55;">El pago fue gestionado por RS Tax &amp; Legal dentro de plazo. No requiere ninguna acción de su parte.</p>
     </div>
     <p style="margin:0 0 12px;">Estimados,</p>
-    <p style="margin:0 0 16px;">Les confirmamos que hemos pagado, a través de nuestra oficina, el Formulario 29 correspondiente al período <strong>${etiqueta}</strong>. A continuación, el comprobante:</p>
+    <p style="margin:0 0 16px;">Les confirmamos que hemos pagado, a través de nuestra oficina, el Formulario 29 de <strong>${cli?.razon_social ?? ""}</strong> correspondiente al período <strong>${etiqueta}</strong>. A continuación, el comprobante:</p>
     <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;">
+      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Empresa</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${cli?.razon_social ?? ""}</td></tr>
       <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Período</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${etiqueta}</td></tr>
       <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Monto total pagado</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;font-weight:bold;">${formatMonto(row.monto_a_pagar)}</td></tr>
       <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Fecha de pago</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${fechaLarga(fechaPago)}</td></tr>
