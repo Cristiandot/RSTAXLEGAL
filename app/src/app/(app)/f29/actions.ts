@@ -64,7 +64,11 @@ export async function guardarF29(
 }
 
 /** Columnas-fecha permitidas para los pasos marcables con checkbox inline. */
-const COLUMNAS_PASO_F29 = new Set(["fecha_f29_armado", "fecha_f29_presentado"]);
+const COLUMNAS_PASO_F29 = new Set([
+  "fecha_f29_armado",
+  "fecha_f29_presentado",
+  "fecha_pago_f29",
+]);
 
 /**
  * Marca/desmarca un paso del F29 desde el checkbox de la tabla (mismo patrón
