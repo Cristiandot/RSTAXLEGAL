@@ -82,6 +82,9 @@ export type F29Row = {
   fecha_pago_oficina: string | null; // cuando paga RS: fecha en que el cliente pagó a la oficina
   correo_empresa: string | null; // correo del cliente (ficha) para el aviso de F29
   fecha_correo_f29_enviado: string | null; // último envío del aviso al cliente
+  numero_operacion: string | null; // N° de operación del pago (cuando paga RS)
+  fecha_pago_f29: string | null; // fecha en que se pagó el F29 (cuando paga RS)
+  fecha_correo_pago_enviado: string | null; // último envío del aviso de pago al cliente
   observaciones: string | null;
 };
 
