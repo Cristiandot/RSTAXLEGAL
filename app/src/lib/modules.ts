@@ -19,6 +19,8 @@ import {
   Stethoscope,
   FileDown,
   HandCoins,
+  HardHat,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -158,6 +160,29 @@ export const MODULOS: SeccionModulos[] = [
         href: "/finiquitos",
         icon: Calculator,
         estado: "activo",
+      },
+    ],
+  },
+  {
+    seccion: "Gestiones — Prevención (SST)",
+    modulos: [
+      {
+        key: "rihs",
+        label: "RIHS",
+        descripcion:
+          "Reglamento Interno de Higiene y Seguridad (D.S. N° 44) para entidades empleadoras con menos de 10 trabajadores: plantilla tipo y documento por empresa.",
+        href: "/rihs",
+        icon: HardHat,
+        estado: "activo",
+      },
+      {
+        key: "riohs",
+        label: "RIOHS",
+        descripcion:
+          "Reglamento Interno de Orden, Higiene y Seguridad (Art. 153 Código del Trabajo) para entidades empleadoras con 10 o más trabajadores. Pendiente.",
+        href: "/riohs",
+        icon: ScrollText,
+        estado: "proximamente",
       },
     ],
   },
