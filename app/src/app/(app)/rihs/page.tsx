@@ -8,22 +8,63 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { RihsClient, type EmpresaOpcion } from "./rihs-client";
+import {
+  RihsClient,
+  type EmpresaOpcion,
+  type ReglamentoRow,
+} from "./rihs-client";
 
 export const metadata = { title: "RIHS — RS Tax & Legal" };
+
+type ReglamentoRaw = {
+  id: string;
+  tipo: string;
+  razon_social: string;
+  documento_path: string;
+  nombre_original: string | null;
+  created_at: string;
+  clientes: { razon_social: string } | null;
+  usuarios: { nombre: string } | null;
+};
 
 export default async function RihsPage() {
   await getUsuarioActual(); // exige sesión (redirige a /login si no hay)
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("clientes")
-    .select("id, razon_social, rut_empresa")
-    .eq("activo", true)
-    .order("razon_social");
+
+  const [empresasRes, docsRes] = await Promise.all([
+    supabase
+      .from("clientes")
+      .select("id, razon_social, rut_empresa")
+      .eq("activo", true)
+      .order("razon_social"),
+    supabase
+      .from("reglamentos")
+      .select(
+        "id, tipo, razon_social, documento_path, nombre_original, created_at, clientes(razon_social), usuarios(nombre)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(200),
+  ]);
+
+  const documentos: ReglamentoRow[] = ((docsRes.data ?? []) as unknown as ReglamentoRaw[]).map(
+    (d) => ({
+      id: d.id,
+      tipo: d.tipo,
+      razonSocial: d.razon_social,
+      documentoPath: d.documento_path,
+      nombreOriginal: d.nombre_original,
+      createdAt: d.created_at,
+      cliente: d.clientes?.razon_social ?? null,
+      autor: d.usuarios?.nombre ?? null,
+    }),
+  );
 
   return (
     <main className="mx-auto max-w-[1100px] px-4 pb-10 sm:px-6">
-      <RihsClient empresas={(data ?? []) as EmpresaOpcion[]} />
+      <RihsClient
+        empresas={(empresasRes.data ?? []) as EmpresaOpcion[]}
+        documentos={documentos}
+      />
 
       <Card className="card-soft mt-5">
         <CardHeader>
@@ -59,8 +100,8 @@ export default async function RihsPage() {
             Sobre el .docx descargado falta ajustar por rubro: la matriz de riesgos
             (Título 14), los EPP mínimos por tarea (Título 15) y los campos
             resaltados en amarillo (recepción del trabajador y período/contenido de
-            inducción). Los RIHS por empresa se archivan en la carpeta del cliente
-            (OneDrive), en <code>01-RRHH</code>.
+            inducción). Los RIHS por empresa se archivan también en la carpeta del
+            cliente (OneDrive), en <code>01-RRHH</code>.
           </CardDescription>
         </CardHeader>
       </Card>
