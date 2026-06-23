@@ -101,13 +101,19 @@ function MontoInline({
 function PagaCell({
   pagoPor,
   fechaPagoOficina,
+  fechaPagoF29,
   disabled,
   onGuardar,
 }: {
   pagoPor: string | null;
   fechaPagoOficina: string | null;
+  fechaPagoF29: string | null;
   disabled: boolean;
-  onGuardar: (patch: { pagoPor?: string | null; fechaPagoOficina?: string | null }) => void;
+  onGuardar: (patch: {
+    pagoPor?: string | null;
+    fechaPagoOficina?: string | null;
+    fechaPagoF29?: string | null;
+  }) => void;
 }) {
   const [pago, setPago] = useState(pagoPor ?? "");
   return (
@@ -136,6 +142,17 @@ function PagaCell({
           onChange={(e) => onGuardar({ fechaPagoOficina: e.target.value || null })}
           aria-label="Fecha en que el cliente pagó a la oficina"
           title="Fecha en que el cliente pagó a la oficina (para acreditar el pago)"
+        />
+      ) : null}
+      {pago === "cliente" ? (
+        <Input
+          type="date"
+          className="h-7 w-36 bg-card text-xs"
+          defaultValue={fechaPagoF29 ?? ""}
+          disabled={disabled}
+          onChange={(e) => onGuardar({ fechaPagoF29: e.target.value || null })}
+          aria-label="Fecha en que el cliente pagó el F29"
+          title="Fecha de pago del F29 por el cliente — al ingresarla, el estado pasa a Pagado"
         />
       ) : null}
     </div>
@@ -204,6 +221,7 @@ export function F29Client({
       monto?: string | null;
       ppm?: string | null;
       fechaPagoOficina?: string | null;
+      fechaPagoF29?: string | null;
     },
   ) {
     startMarcar(async () => {
@@ -535,6 +553,7 @@ export function F29Client({
                       key={`paga-${c.ciclo_id}-${c.pago_por ?? ""}`}
                       pagoPor={c.pago_por}
                       fechaPagoOficina={c.fecha_pago_oficina}
+                      fechaPagoF29={c.fecha_pago_f29}
                       disabled={marcando}
                       onGuardar={(patch) => guardarPago(c.ciclo_id, patch)}
                     />

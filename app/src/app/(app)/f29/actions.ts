@@ -105,6 +105,7 @@ export async function actualizarPagoF29(
     monto?: string | null;
     ppm?: string | null;
     fechaPagoOficina?: string | null;
+    fechaPagoF29?: string | null;
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const cambios: Record<string, unknown> = {};
@@ -123,6 +124,12 @@ export async function actualizarPagoF29(
   if ("fechaPagoOficina" in patch) {
     cambios.fecha_pago_oficina =
       patch.fechaPagoOficina === null || patch.fechaPagoOficina === "" ? null : patch.fechaPagoOficina;
+  }
+  if ("fechaPagoF29" in patch) {
+    // Fecha de pago del F29 (cliente paga directo al SII): marca el F29 como
+    // pagado. La vista recalcula el estado a "Pagado" cuando esta fecha existe.
+    cambios.fecha_pago_f29 =
+      patch.fechaPagoF29 === null || patch.fechaPagoF29 === "" ? null : patch.fechaPagoF29;
   }
   if (Object.keys(cambios).length === 0) return { ok: true };
 
