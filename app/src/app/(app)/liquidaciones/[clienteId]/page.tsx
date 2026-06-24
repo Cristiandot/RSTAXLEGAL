@@ -39,6 +39,16 @@ export default async function ClienteLiquidacionPage({
     supabase.from("indicadores_previred").select("periodo").eq("periodo", periodo).maybeSingle(),
   ]);
 
+  const cpRes = await supabase
+    .from("concepto_periodo")
+    .select("concepto_id, considerado")
+    .eq("cliente_id", clienteId)
+    .eq("periodo", periodo);
+  // Considerado por defecto = true; una fila con considerado=false lo excluye.
+  const considerado: Record<string, boolean> = {};
+  for (const c of concRes.data ?? []) considerado[c.id as string] = true;
+  for (const r of cpRes.data ?? []) considerado[r.concepto_id as string] = r.considerado;
+
   const ids = (trabRes.data ?? []).map((t) => t.id as string);
 
   const [novRes, licRes, vacRes] = await Promise.all([
@@ -96,6 +106,7 @@ export default async function ClienteLiquidacionPage({
         cliente={cliente}
         trabajadores={trabRes.data ?? []}
         conceptos={concRes.data ?? []}
+        considerado={considerado}
         liquidaciones={liqRes.data ?? []}
         novedades={novRes.data ?? []}
         ausencias={ausencias}

@@ -70,6 +70,34 @@ export async function guardarConcepto(clienteId: string, c: ConceptoInput): Prom
   return { ok: true };
 }
 
+/** Marca si un concepto se considera (o no) en un período específico. */
+export async function marcarConceptoPeriodo(
+  clienteId: string,
+  conceptoId: string,
+  periodo: string,
+  considerado: boolean,
+): Promise<Resp> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("concepto_periodo")
+    .upsert(
+      { cliente_id: clienteId, concepto_id: conceptoId, periodo, considerado },
+      { onConflict: "concepto_id,periodo" },
+    );
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/liquidaciones/${clienteId}`);
+  return { ok: true };
+}
+
+/** Filtra los conceptos excluidos del período (concepto_periodo.considerado=false). */
+function filtrarConsiderados<T extends { id: string }>(
+  conceptos: T[],
+  cp: { concepto_id: string; considerado: boolean }[] | null,
+): T[] {
+  const excluido = new Set((cp ?? []).filter((r) => r.considerado === false).map((r) => r.concepto_id));
+  return conceptos.filter((c) => !excluido.has(c.id));
+}
+
 export async function eliminarConcepto(clienteId: string, id: string): Promise<Resp> {
   const supabase = await createClient();
   const { error } = await supabase.from("concepto_remuneracion").delete().eq("id", id);
@@ -170,7 +198,7 @@ export async function calcularYGuardarLiquidacion(
     usuarioId = data?.id ?? null;
   }
 
-  const [cliRes, indRes, trabRes, contRes, novRes, concRes] = await Promise.all([
+  const [cliRes, indRes, trabRes, contRes, novRes, concRes, cpRes] = await Promise.all([
     supabase.from("clientes").select("mutual_tasa, sabado_habil").eq("id", clienteId).maybeSingle(),
     supabase
       .from("indicadores_previred")
@@ -197,6 +225,7 @@ export async function calcularYGuardarLiquidacion(
       .from("concepto_remuneracion")
       .select("id, naturaleza, proporcional, tributable, nombre")
       .eq("cliente_id", clienteId),
+    supabase.from("concepto_periodo").select("concepto_id, considerado").eq("cliente_id", clienteId).eq("periodo", periodo),
   ]);
 
   if (!indRes.data) return { ok: false, error: `No hay indicadores Previred cargados para ${periodo}. Súbelos en /indicadores.` };
@@ -208,7 +237,7 @@ export async function calcularYGuardarLiquidacion(
     trabajador: trabRes.data as TrabajadorRow,
     contrato: (contRes.data ?? null) as ContratoRow | null,
     novedades: (novRes.data ?? []) as NovedadRow[],
-    conceptos: (concRes.data ?? []) as ConceptoRow[],
+    conceptos: filtrarConsiderados((concRes.data ?? []) as ConceptoRow[], cpRes.data),
     periodo,
     diasTrabajados: opts.diasTrabajados ?? 30,
     diasDescanso: opts.diasDescanso,
@@ -340,11 +369,12 @@ export async function descargarLiquidaciones(
 ): Promise<{ ok: boolean; base64?: string; filename?: string; error?: string }> {
   const supabase = await createClient();
 
-  const [cliRes, indRes, liqRes, concRes] = await Promise.all([
+  const [cliRes, indRes, liqRes, concRes, cpRes] = await Promise.all([
     supabase.from("clientes").select("razon_social, rut_empresa, domicilio").eq("id", clienteId).maybeSingle(),
     supabase.from("indicadores_previred").select(COLS_IND).eq("periodo", periodo).maybeSingle(),
     supabase.from("liquidacion").select("trabajador_id, dias_trabajados, dias_vacaciones, dias_licencia").eq("cliente_id", clienteId).eq("periodo", periodo),
     supabase.from("concepto_remuneracion").select("id, naturaleza, proporcional, tributable, nombre").eq("cliente_id", clienteId),
+    supabase.from("concepto_periodo").select("concepto_id, considerado").eq("cliente_id", clienteId).eq("periodo", periodo),
   ]);
 
   if (!indRes.data) return { ok: false, error: `No hay indicadores Previred para ${periodo}.` };
@@ -383,7 +413,7 @@ export async function descargarLiquidaciones(
         trabajador: t as TrabajadorRow,
         contrato: contMap.get(t.id) ?? null,
         novedades: novs,
-        conceptos: (concRes.data ?? []) as ConceptoRow[],
+        conceptos: filtrarConsiderados((concRes.data ?? []) as ConceptoRow[], cpRes.data),
         periodo,
         diasTrabajados: dias.trab,
       });

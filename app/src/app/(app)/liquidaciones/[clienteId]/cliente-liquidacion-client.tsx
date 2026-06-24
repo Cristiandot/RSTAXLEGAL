@@ -45,6 +45,7 @@ import {
   guardarFichaTrabajador,
   guardarLiquidacionDetalle,
   descargarLiquidaciones,
+  marcarConceptoPeriodo,
   type ConceptoInput,
   type FichaTrabajadorInput,
 } from "./actions";
@@ -135,6 +136,7 @@ export function ClienteLiquidacionClient({
   cliente,
   trabajadores,
   conceptos,
+  considerado,
   liquidaciones,
   novedades,
   ausencias,
@@ -144,11 +146,16 @@ export function ClienteLiquidacionClient({
   cliente: Cliente;
   trabajadores: Trabajador[];
   conceptos: Concepto[];
+  considerado: Record<string, boolean>;
   liquidaciones: Liquidacion[];
   novedades: Novedad[];
   ausencias: Record<string, { vac: number; lic: number }>;
   hayIndicadores: boolean;
 }) {
+  const conceptosActivos = useMemo(
+    () => conceptos.filter((c) => considerado[c.id] !== false),
+    [conceptos, considerado],
+  );
   const router = useRouter();
   const [guardando, startGuardar] = useTransition();
   const [fichaAbierta, setFichaAbierta] = useState<Trabajador | "nuevo" | null>(null);
@@ -259,6 +266,7 @@ export function ClienteLiquidacionClient({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="text-center">Este mes</TableHead>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Naturaleza</TableHead>
                 <TableHead>Columna LRE</TableHead>
@@ -270,6 +278,20 @@ export function ClienteLiquidacionClient({
             <TableBody>
               {conceptos.map((c) => (
                 <TableRow key={c.id} className="cursor-pointer" onClick={() => setConceptoAbierto(c)}>
+                  <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={considerado[c.id] !== false}
+                      disabled={guardando}
+                      onCheckedChange={(v) =>
+                        startGuardar(async () => {
+                          const res = await marcarConceptoPeriodo(cliente.id, c.id, periodo, v === true);
+                          if (res.ok) router.refresh();
+                          else toast.error(res.error ?? "Error");
+                        })
+                      }
+                      aria-label={`Considerar ${c.nombre} este mes`}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium">{c.nombre}</TableCell>
                   <TableCell>
                     <Badge variant="outline">
@@ -382,7 +404,7 @@ export function ClienteLiquidacionClient({
         <FichaDialog
           clienteId={cliente.id}
           trabajador={fichaAbierta === "nuevo" ? null : fichaAbierta}
-          conceptos={conceptos}
+          conceptos={conceptosActivos}
           onClose={() => setFichaAbierta(null)}
           onSaved={() => { setFichaAbierta(null); router.refresh(); }}
         />
@@ -393,7 +415,7 @@ export function ClienteLiquidacionClient({
           clienteId={cliente.id}
           periodo={periodo}
           trabajador={liqAbierta}
-          conceptos={conceptos}
+          conceptos={conceptosActivos}
           novedades={novedades.filter((n) => n.trabajador_id === liqAbierta.id)}
           liquidacion={liqPorTrab.get(liqAbierta.id) ?? null}
           ausencia={ausencias[liqAbierta.id] ?? { vac: 0, lic: 0 }}
