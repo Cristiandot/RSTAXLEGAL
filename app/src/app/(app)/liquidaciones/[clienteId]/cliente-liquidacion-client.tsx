@@ -431,9 +431,15 @@ function LiquidacionDialog({
     const n = novedades.find((x) => x.concepto_id === conceptoId);
     return n?.monto != null ? String(n.monto) : "";
   };
-  const [dias, setDias] = useState(String(liquidacion?.dias_trabajados ?? 30));
+  const licInicial = liquidacion?.dias_licencia ?? ausencia.lic ?? 0;
+  // Días pagados = 30 − licencia (la licencia la cubre el subsidio; las vacaciones se pagan).
+  const [dias, setDias] = useState(String(liquidacion?.dias_trabajados ?? Math.max(0, 30 - Number(licInicial))));
   const [diasVac, setDiasVac] = useState(String(liquidacion?.dias_vacaciones ?? ausencia.vac ?? 0));
-  const [diasLic, setDiasLic] = useState(String(liquidacion?.dias_licencia ?? ausencia.lic ?? 0));
+  const [diasLic, setDiasLic] = useState(String(licInicial));
+  const onLicencia = (v: string) => {
+    setDiasLic(v);
+    setDias(String(Math.max(0, 30 - (Number(v) || 0))));
+  };
   const [montos, setMontos] = useState<Record<string, string>>(
     Object.fromEntries(conceptos.map((c) => [c.id, prefill(c.id)])),
   );
@@ -500,9 +506,10 @@ function LiquidacionDialog({
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="diasLic">Días lic. médica</Label>
-                <Input id="diasLic" type="number" value={diasLic} onChange={(e) => setDiasLic(e.target.value)} className="w-24" />
+                <Input id="diasLic" type="number" value={diasLic} onChange={(e) => onLicencia(e.target.value)} className="w-24" />
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">Días pagados = 30 − licencia (la cubre el subsidio). Las vacaciones se pagan, no descuentan.</p>
 
             {grupos.map((g) =>
               porNaturaleza(g.nat).length > 0 ? (
