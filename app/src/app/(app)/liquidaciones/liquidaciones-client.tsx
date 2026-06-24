@@ -346,6 +346,13 @@ export function LiquidacionesClient({
                     >
                       {c.razon_social}
                     </span>
+                    <a
+                      href={`/liquidaciones/${c.cliente_id}?periodo=${c.periodo}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs text-sky-600 hover:underline"
+                    >
+                      Cargar liquidaciones →
+                    </a>
                   </TableCell>
                   <TableCell><RutCopiable rut={c.previred_rut} /></TableCell>
                   <TableCell>
