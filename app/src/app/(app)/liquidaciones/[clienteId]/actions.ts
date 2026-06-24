@@ -13,6 +13,8 @@ import {
   type NovedadRow,
   type ConceptoRow,
 } from "@/lib/armar-liquidacion";
+import { generarPdfLiquidaciones, type DatosLiquidacionPdf } from "@/lib/liquidacion-pdf";
+import { etiquetaPeriodo } from "@/lib/periodos";
 
 type Resp = { ok: boolean; error?: string };
 
@@ -301,4 +303,97 @@ export async function guardarLiquidacionDetalle(
     diasTrabajados: p.diasTrabajados,
     kameLiquido: p.kameLiquido,
   });
+}
+
+const COLS_IND =
+  "rmi_general, utm, uf_ultimo_dia, tope_uf_afp, tope_uf_ips, tope_uf_afc, tasa_sis, tasa_seguro_social, afp, asignacion_familiar";
+
+function fmtFecha(iso: string | null): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  return `${d}/${m}/${y}`;
+}
+function labelContrato(t: string | null): string {
+  return t === "plazo_fijo" ? "Plazo Fijo" : t === "casa_particular" ? "Casa Particular" : "Indefinido";
+}
+
+/**
+ * Genera el PDF de liquidaciones con el formato KAME. Si `trabajadorId` viene,
+ * descarga esa liquidación; si no, todas las del período en un solo archivo
+ * (una por página). Recalcula con los datos actuales para que el PDF esté completo.
+ */
+export async function descargarLiquidaciones(
+  clienteId: string,
+  periodo: string,
+  trabajadorId?: string | null,
+): Promise<{ ok: boolean; base64?: string; filename?: string; error?: string }> {
+  const supabase = await createClient();
+
+  const [cliRes, indRes, liqRes, concRes] = await Promise.all([
+    supabase.from("clientes").select("razon_social, rut_empresa, domicilio").eq("id", clienteId).maybeSingle(),
+    supabase.from("indicadores_previred").select(COLS_IND).eq("periodo", periodo).maybeSingle(),
+    supabase.from("liquidacion").select("trabajador_id, dias_trabajados").eq("cliente_id", clienteId).eq("periodo", periodo),
+    supabase.from("concepto_remuneracion").select("id, naturaleza, proporcional, tributable, nombre").eq("cliente_id", clienteId),
+  ]);
+
+  if (!indRes.data) return { ok: false, error: `No hay indicadores Previred para ${periodo}.` };
+  if (!cliRes.data) return { ok: false, error: "Empresa no encontrada." };
+
+  const diasMap = new Map((liqRes.data ?? []).map((l) => [l.trabajador_id, l.dias_trabajados as number | null]));
+  const ids = trabajadorId ? [trabajadorId] : (liqRes.data ?? []).map((l) => l.trabajador_id);
+  if (ids.length === 0) return { ok: false, error: "No hay liquidaciones calculadas en el período. Liquida primero." };
+
+  const [trabRes, novRes, contRes] = await Promise.all([
+    supabase.from("trabajadores").select("*").in("id", ids),
+    supabase.from("novedades_remuneraciones").select("trabajador_id, tipo, cantidad, monto, concepto_id").eq("periodo", periodo).in("trabajador_id", ids),
+    supabase.from("contratos").select("trabajador_id, remuneracion, jornada, estado, created_at").in("trabajador_id", ids).neq("estado", "anulado").order("created_at", { ascending: false }),
+  ]);
+
+  const contMap = new Map<string, ContratoRow>();
+  for (const c of contRes.data ?? []) if (!contMap.has(c.trabajador_id)) contMap.set(c.trabajador_id, c as ContratoRow);
+
+  const [mes, anio] = etiquetaPeriodo(periodo).split(" ");
+  const periodoLabel = `${(mes ?? "").toUpperCase()} DE ${anio ?? ""}`;
+
+  const items: DatosLiquidacionPdf[] = (trabRes.data ?? [])
+    .slice()
+    .sort((a, b) => String(a.apellidos).localeCompare(String(b.apellidos)))
+    .map((t) => {
+      const novs = (novRes.data ?? []).filter((n) => n.trabajador_id === t.id) as NovedadRow[];
+      const dias = diasMap.get(t.id) ?? 30;
+      const entrada = armarEntrada({
+        ind: indRes.data as IndicadoresRow,
+        cliente: cliRes.data as ClienteRow,
+        trabajador: t as TrabajadorRow,
+        contrato: contMap.get(t.id) ?? null,
+        novedades: novs,
+        conceptos: (concRes.data ?? []) as ConceptoRow[],
+        diasTrabajados: dias ?? 30,
+      });
+      return {
+        empresa: { razonSocial: cliRes.data!.razon_social, rut: cliRes.data!.rut_empresa, direccion: cliRes.data!.domicilio },
+        trabajador: {
+          nombre: `${t.apellidos} ${t.nombres}`,
+          rut: t.rut,
+          tipoContrato: labelContrato(t.tipo_contrato),
+          fechaIngreso: fmtFecha(t.fecha_ingreso),
+          fechaTermino: fmtFecha(t.fecha_termino_contrato),
+          cargo: t.cargo,
+          unidadNegocio: t.sucursal,
+          salud: t.salud,
+        },
+        periodoLabel,
+        diasTrabajados: dias ?? 30,
+        sueldoBase: entrada.sueldoBase,
+        r: calcularLiquidacion(entrada),
+      };
+    });
+
+  const bytes = await generarPdfLiquidaciones(items);
+  const base64 = Buffer.from(bytes).toString("base64");
+  return {
+    ok: true,
+    base64,
+    filename: trabajadorId ? `liquidacion_${periodo}.pdf` : `liquidaciones_${periodo}.pdf`,
+  };
 }

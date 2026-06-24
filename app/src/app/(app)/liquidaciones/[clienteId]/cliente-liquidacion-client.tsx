@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Trash2, Calculator, UserPlus } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Calculator, UserPlus, Download } from "lucide-react";
 import { formatMonto } from "@/lib/format";
 import { SelectorPeriodo } from "@/components/selector-periodo";
 import { Button } from "@/components/ui/button";
@@ -44,9 +44,20 @@ import {
   eliminarConcepto,
   guardarFichaTrabajador,
   guardarLiquidacionDetalle,
+  descargarLiquidaciones,
   type ConceptoInput,
   type FichaTrabajadorInput,
 } from "./actions";
+
+function descargarBase64Pdf(base64: string, filename: string) {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const AFP_NOMBRES = ["Capital", "Cuprum", "Habitat", "PlanVital", "Provida", "Modelo", "Uno"];
 
@@ -166,6 +177,14 @@ export function ClienteLiquidacionClient({
     });
   }
 
+  function descargar(trabajadorId?: string) {
+    startGuardar(async () => {
+      const res = await descargarLiquidaciones(cliente.id, periodo, trabajadorId ?? null);
+      if (res.ok && res.base64) descargarBase64Pdf(res.base64, res.filename ?? "liquidaciones.pdf");
+      else toast.error(res.error ?? "Error al generar el PDF");
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -281,9 +300,14 @@ export function ClienteLiquidacionClient({
       <Seccion
         titulo={`Nómina (${trabajadores.length})`}
         accion={
-          <Button size="sm" onClick={() => setFichaAbierta("nuevo")}>
-            <UserPlus className="size-4" /> Carga de empleados para la empresa
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" onClick={() => descargar()} disabled={guardando}>
+              <Download className="size-4" /> Descargar todas
+            </Button>
+            <Button size="sm" onClick={() => setFichaAbierta("nuevo")}>
+              <UserPlus className="size-4" /> Carga de empleados para la empresa
+            </Button>
+          </div>
         }
       >
         {trabajadores.length === 0 ? (
@@ -321,9 +345,16 @@ export function ClienteLiquidacionClient({
                       ) : "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" disabled={!hayIndicadores} onClick={() => setLiqAbierta(t)}>
-                        <Calculator className="size-4" /> Liquidar
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="outline" disabled={!hayIndicadores} onClick={() => setLiqAbierta(t)}>
+                          <Calculator className="size-4" /> Liquidar
+                        </Button>
+                        {liq ? (
+                          <Button size="sm" variant="outline" disabled={guardando} onClick={() => descargar(t.id)} aria-label="Descargar liquidación">
+                            <Download className="size-4" />
+                          </Button>
+                        ) : null}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

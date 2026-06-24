@@ -132,6 +132,7 @@ export type ResultadoLiquidacion = {
   saludAdicional: number; // exceso del plan isapre sobre 7%
   saludMonto: number;
   afcTrabajador: number;
+  tributable: number; // base afecta a impuesto único
   impuestoUnico: number;
   descuentosVarios: LineaLiquidacion[];
   anticipo: number;
@@ -291,7 +292,8 @@ export function calcularLiquidacion(e: EntradaLiquidacion): ResultadoLiquidacion
 
   // ---------- IMPUESTO ÚNICO ----------
   const tributable = baseImponible - afpMonto - saludMonto - afcTrabajador + baseTributableExtra;
-  const impuesto = e.ind.utm ? impuestoUnico(Math.max(0, tributable), e.ind.utm) : 0;
+  const tributablePositivo = Math.max(0, tributable);
+  const impuesto = e.ind.utm ? impuestoUnico(tributablePositivo, e.ind.utm) : 0;
 
   // ---------- ASIGNACIÓN FAMILIAR ----------
   const cargas = (e.cargasSimples ?? 0) + (e.cargasMaternales ?? 0) + (e.cargasInvalidas ?? 0);
@@ -347,6 +349,7 @@ export function calcularLiquidacion(e: EntradaLiquidacion): ResultadoLiquidacion
     saludAdicional,
     saludMonto,
     afcTrabajador,
+    tributable: tributablePositivo,
     impuestoUnico: impuesto,
     descuentosVarios,
     anticipo,
