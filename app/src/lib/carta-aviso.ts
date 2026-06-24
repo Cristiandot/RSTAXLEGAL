@@ -91,8 +91,13 @@ export async function generarYSubirCartaAviso(
   if (!p.fechaEntrega || !p.fechaTermino) {
     return { ok: false, error: "Indica la fecha de entrega de la carta y la fecha de término." };
   }
-  if (!p.hechos.trim()) {
-    return { ok: false, error: "Describe los hechos que fundan la causal (obligatorio en la carta del Art. 162)." };
+  // Causales objetivas del Art. 159 (vencimiento del plazo, conclusión de obra,
+  // caso fortuito) no requieren fundamentación de hechos: esa sección se omite.
+  // Sí se exige en las causales de caducidad (160) y necesidades/desahucio (161).
+  const mostrarHechos =
+    p.causal.startsWith("160") || p.causal.startsWith("161") || p.causal === "163bis";
+  if (mostrarHechos && !p.hechos.trim()) {
+    return { ok: false, error: "Describe los hechos que fundan la causal." };
   }
 
   const { data: g, error: errG } = await supabase
@@ -115,9 +120,17 @@ export async function generarYSubirCartaAviso(
     };
   }
 
-  const avisoTexto = p.avisoCon30Dias
-    ? "El presente aviso se otorga con la anticipación mínima de treinta días."
-    : "Atendido que el término del contrato se hará efectivo sin mediar el aviso previo de treinta días, se pagará a usted la indemnización sustitutiva del aviso previo equivalente a la última remuneración mensual devengada.";
+  // El aviso previo / indemnización sustitutiva solo aplica a las causales con
+  // indemnización (Art. 161 y 163 bis). En el resto (Art. 159 y 160) no
+  // corresponde y el párrafo se omite — en particular, en el vencimiento del
+  // plazo no hay aviso previo ni indemnización sustitutiva.
+  const conIndemnizacion =
+    p.causal === "161-1" || p.causal === "161-2" || p.causal === "163bis";
+  const avisoTexto = !conIndemnizacion
+    ? ""
+    : p.avisoCon30Dias
+      ? "El presente aviso se otorga con la anticipación mínima de treinta días."
+      : "Atendido que el término del contrato se hará efectivo sin mediar el aviso previo de treinta días, se pagará a usted la indemnización sustitutiva del aviso previo equivalente a la última remuneración mensual devengada.";
 
   const entregaTexto =
     p.modalidadEntrega === "personal"
@@ -153,6 +166,7 @@ export async function generarYSubirCartaAviso(
     CAUSAL_TEXTO: causalTexto,
     FECHA_INGRESO: fechaLarga(fechaInicioContrato),
     FECHA_TERMINO: fechaLarga(p.fechaTermino),
+    mostrarHechos: mostrarHechos ? "1" : "",
     HECHOS_TEXTO: p.hechos.trim(),
     AVISO_TEXTO: avisoTexto,
     INDEM_ANIOS: p.resumen.indemAnios > 0 ? clp(p.resumen.indemAnios) : "No procede",
