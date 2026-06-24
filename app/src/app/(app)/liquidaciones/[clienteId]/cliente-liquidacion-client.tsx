@@ -101,6 +101,8 @@ type Liquidacion = {
   kame_cuadra: boolean | null;
   calculado_at: string | null;
   dias_trabajados: number | null;
+  dias_vacaciones: number | null;
+  dias_licencia: number | null;
   detalle: Record<string, unknown> | null;
 };
 type Novedad = {
@@ -135,6 +137,7 @@ export function ClienteLiquidacionClient({
   conceptos,
   liquidaciones,
   novedades,
+  ausencias,
   hayIndicadores,
 }: {
   periodo: string;
@@ -143,6 +146,7 @@ export function ClienteLiquidacionClient({
   conceptos: Concepto[];
   liquidaciones: Liquidacion[];
   novedades: Novedad[];
+  ausencias: Record<string, { vac: number; lic: number }>;
   hayIndicadores: boolean;
 }) {
   const router = useRouter();
@@ -391,6 +395,7 @@ export function ClienteLiquidacionClient({
           conceptos={conceptos}
           novedades={novedades.filter((n) => n.trabajador_id === liqAbierta.id)}
           liquidacion={liqPorTrab.get(liqAbierta.id) ?? null}
+          ausencia={ausencias[liqAbierta.id] ?? { vac: 0, lic: 0 }}
           onClose={() => setLiqAbierta(null)}
           onSaved={() => router.refresh()}
         />
@@ -407,6 +412,7 @@ function LiquidacionDialog({
   conceptos,
   novedades,
   liquidacion,
+  ausencia,
   onClose,
   onSaved,
 }: {
@@ -416,6 +422,7 @@ function LiquidacionDialog({
   conceptos: Concepto[];
   novedades: Novedad[];
   liquidacion: Liquidacion | null;
+  ausencia: { vac: number; lic: number };
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -425,6 +432,8 @@ function LiquidacionDialog({
     return n?.monto != null ? String(n.monto) : "";
   };
   const [dias, setDias] = useState(String(liquidacion?.dias_trabajados ?? 30));
+  const [diasVac, setDiasVac] = useState(String(liquidacion?.dias_vacaciones ?? ausencia.vac ?? 0));
+  const [diasLic, setDiasLic] = useState(String(liquidacion?.dias_licencia ?? ausencia.lic ?? 0));
   const [montos, setMontos] = useState<Record<string, string>>(
     Object.fromEntries(conceptos.map((c) => [c.id, prefill(c.id)])),
   );
@@ -445,6 +454,8 @@ function LiquidacionDialog({
     start(async () => {
       const res = await guardarLiquidacionDetalle(clienteId, trabajador.id, periodo, {
         diasTrabajados: Number(dias) || 30,
+        diasVacaciones: Number(diasVac) || 0,
+        diasLicencia: Number(diasLic) || 0,
         conceptos: conceptos.map((c) => ({ concepto_id: c.id, naturaleza: c.naturaleza, monto: Number(montos[c.id] || 0) })),
         horasExtra: Number(horasExtra) || 0,
         anticipo: Number(anticipo) || 0,
@@ -478,9 +489,19 @@ function LiquidacionDialog({
         <div className="grid gap-4 sm:grid-cols-2">
           {/* Entrada */}
           <div className="space-y-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="dias">Días trabajados</Label>
-              <Input id="dias" type="number" value={dias} onChange={(e) => setDias(e.target.value)} className="w-28" />
+            <div className="flex gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="dias">Días trabajados</Label>
+                <Input id="dias" type="number" value={dias} onChange={(e) => setDias(e.target.value)} className="w-24" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="diasVac">Días vacaciones</Label>
+                <Input id="diasVac" type="number" value={diasVac} onChange={(e) => setDiasVac(e.target.value)} className="w-24" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="diasLic">Días lic. médica</Label>
+                <Input id="diasLic" type="number" value={diasLic} onChange={(e) => setDiasLic(e.target.value)} className="w-24" />
+              </div>
             </div>
 
             {grupos.map((g) =>

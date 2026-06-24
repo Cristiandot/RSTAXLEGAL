@@ -22,6 +22,8 @@ export type DatosLiquidacionPdf = {
   };
   periodoLabel: string; // "JUNIO DE 2026"
   diasTrabajados: number;
+  diasVacaciones: number;
+  diasLicencia: number;
   sueldoBase: number;
   r: ResultadoLiquidacion;
 };
@@ -73,7 +75,10 @@ function dibujar(page: PDFPage, font: PDFFont, bold: PDFFont, d: DatosLiquidacio
   text("Unidad de Negocio:", 380, y); text(d.trabajador.unidadNegocio ?? "", 480, y); y -= 13;
   text("Fecha de Ingreso:", L, y); text(d.trabajador.fechaIngreso ?? "", 120, y);
   text("Fecha de Término:", 380, y); text(d.trabajador.fechaTermino ?? "", 480, y); y -= 13;
-  text("Cargo:", L, y); text(d.trabajador.cargo ?? "", 120, y); y -= 12;
+  text("Cargo:", L, y); text(d.trabajador.cargo ?? "", 120, y); y -= 13;
+  text("Días trabajados:", L, y); text(String(d.diasTrabajados), 120, y);
+  text("Días vacaciones:", 220, y); text(String(d.diasVacaciones), 320, y);
+  text("Días licencia médica:", 380, y); text(String(d.diasLicencia), 500, y); y -= 12;
   hline(y); y -= 16;
 
   // HABERES

@@ -156,7 +156,7 @@ export async function calcularYGuardarLiquidacion(
   clienteId: string,
   trabajadorId: string,
   periodo: string,
-  opts: { diasTrabajados?: number; diasDescanso?: number; kameLiquido?: number | null },
+  opts: { diasTrabajados?: number; diasDescanso?: number; diasVacaciones?: number; diasLicencia?: number; kameLiquido?: number | null },
 ): Promise<Resp & { liquido?: number; detalle?: ReturnType<typeof calcularLiquidacion> }> {
   const supabase = await createClient();
   const usuario = await getUsuarioActual().catch(() => null);
@@ -217,6 +217,8 @@ export async function calcularYGuardarLiquidacion(
     trabajador_id: trabajadorId,
     periodo,
     dias_trabajados: opts.diasTrabajados ?? 30,
+    dias_vacaciones: opts.diasVacaciones ?? 0,
+    dias_licencia: opts.diasLicencia ?? 0,
     total_imponible: r.totalImponible,
     total_no_imponible: r.totalNoImponible,
     total_haberes: r.totalHaberes,
@@ -259,6 +261,8 @@ export async function guardarLiquidacionDetalle(
   periodo: string,
   p: {
     diasTrabajados: number;
+    diasVacaciones: number;
+    diasLicencia: number;
     conceptos: MontoConcepto[];
     horasExtra: number;
     anticipo: number;
@@ -301,6 +305,8 @@ export async function guardarLiquidacionDetalle(
 
   return calcularYGuardarLiquidacion(clienteId, trabajadorId, periodo, {
     diasTrabajados: p.diasTrabajados,
+    diasVacaciones: p.diasVacaciones,
+    diasLicencia: p.diasLicencia,
     kameLiquido: p.kameLiquido,
   });
 }
@@ -332,14 +338,19 @@ export async function descargarLiquidaciones(
   const [cliRes, indRes, liqRes, concRes] = await Promise.all([
     supabase.from("clientes").select("razon_social, rut_empresa, domicilio").eq("id", clienteId).maybeSingle(),
     supabase.from("indicadores_previred").select(COLS_IND).eq("periodo", periodo).maybeSingle(),
-    supabase.from("liquidacion").select("trabajador_id, dias_trabajados").eq("cliente_id", clienteId).eq("periodo", periodo),
+    supabase.from("liquidacion").select("trabajador_id, dias_trabajados, dias_vacaciones, dias_licencia").eq("cliente_id", clienteId).eq("periodo", periodo),
     supabase.from("concepto_remuneracion").select("id, naturaleza, proporcional, tributable, nombre").eq("cliente_id", clienteId),
   ]);
 
   if (!indRes.data) return { ok: false, error: `No hay indicadores Previred para ${periodo}.` };
   if (!cliRes.data) return { ok: false, error: "Empresa no encontrada." };
 
-  const diasMap = new Map((liqRes.data ?? []).map((l) => [l.trabajador_id, l.dias_trabajados as number | null]));
+  const diasMap = new Map(
+    (liqRes.data ?? []).map((l) => [
+      l.trabajador_id,
+      { trab: (l.dias_trabajados as number) ?? 30, vac: (l.dias_vacaciones as number) ?? 0, lic: (l.dias_licencia as number) ?? 0 },
+    ]),
+  );
   const ids = trabajadorId ? [trabajadorId] : (liqRes.data ?? []).map((l) => l.trabajador_id);
   if (ids.length === 0) return { ok: false, error: "No hay liquidaciones calculadas en el período. Liquida primero." };
 
@@ -360,7 +371,7 @@ export async function descargarLiquidaciones(
     .sort((a, b) => String(a.apellidos).localeCompare(String(b.apellidos)))
     .map((t) => {
       const novs = (novRes.data ?? []).filter((n) => n.trabajador_id === t.id) as NovedadRow[];
-      const dias = diasMap.get(t.id) ?? 30;
+      const dias = diasMap.get(t.id) ?? { trab: 30, vac: 0, lic: 0 };
       const entrada = armarEntrada({
         ind: indRes.data as IndicadoresRow,
         cliente: cliRes.data as ClienteRow,
@@ -368,7 +379,7 @@ export async function descargarLiquidaciones(
         contrato: contMap.get(t.id) ?? null,
         novedades: novs,
         conceptos: (concRes.data ?? []) as ConceptoRow[],
-        diasTrabajados: dias ?? 30,
+        diasTrabajados: dias.trab,
       });
       return {
         empresa: { razonSocial: cliRes.data!.razon_social, rut: cliRes.data!.rut_empresa, direccion: cliRes.data!.domicilio },
@@ -383,7 +394,9 @@ export async function descargarLiquidaciones(
           salud: t.salud,
         },
         periodoLabel,
-        diasTrabajados: dias ?? 30,
+        diasTrabajados: dias.trab,
+        diasVacaciones: dias.vac,
+        diasLicencia: dias.lic,
         sueldoBase: entrada.sueldoBase,
         r: calcularLiquidacion(entrada),
       };

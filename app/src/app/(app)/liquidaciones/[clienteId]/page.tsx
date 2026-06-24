@@ -33,17 +33,50 @@ export default async function ClienteLiquidacionPage({
       .order("orden"),
     supabase
       .from("liquidacion")
-      .select("trabajador_id, liquido, total_haberes, total_descuentos, estado, kame_liquido, kame_cuadra, calculado_at, dias_trabajados, detalle")
+      .select("trabajador_id, liquido, total_haberes, total_descuentos, estado, kame_liquido, kame_cuadra, calculado_at, dias_trabajados, dias_vacaciones, dias_licencia, detalle")
       .eq("cliente_id", clienteId)
       .eq("periodo", periodo),
     supabase.from("indicadores_previred").select("periodo").eq("periodo", periodo).maybeSingle(),
   ]);
 
-  const novRes = await supabase
-    .from("novedades_remuneraciones")
-    .select("trabajador_id, tipo, cantidad, monto, concepto_id, origen")
-    .eq("cliente_id", clienteId)
-    .eq("periodo", periodo);
+  const ids = (trabRes.data ?? []).map((t) => t.id as string);
+
+  const [novRes, licRes, vacRes] = await Promise.all([
+    supabase
+      .from("novedades_remuneraciones")
+      .select("trabajador_id, tipo, cantidad, monto, concepto_id, origen")
+      .eq("cliente_id", clienteId)
+      .eq("periodo", periodo),
+    ids.length
+      ? supabase.from("licencias_medicas").select("trabajador_id, fecha_inicio, fecha_termino, dias").in("trabajador_id", ids)
+      : Promise.resolve({ data: [] as { trabajador_id: string | null; fecha_inicio: string | null; fecha_termino: string | null; dias: number | null }[] }),
+    ids.length
+      ? supabase.from("solicitudes_rrhh").select("trabajador_id, datos").eq("tipo", "vacaciones").in("trabajador_id", ids)
+      : Promise.resolve({ data: [] as { trabajador_id: string | null; datos: Record<string, unknown> | null }[] }),
+  ]);
+
+  // Sugerencia de días de ausencia del período (intersección con el mes).
+  const pStart = `${periodo}-01`;
+  const [py, pm] = periodo.split("-").map(Number);
+  const pEnd = `${periodo}-${String(new Date(py, pm, 0).getDate()).padStart(2, "0")}`;
+  const diasEnPeriodo = (ini: string | null, fin: string | null): number => {
+    if (!ini) return 0;
+    const a = ini.slice(0, 10) < pStart ? pStart : ini.slice(0, 10);
+    const b = !fin || fin.slice(0, 10) > pEnd ? pEnd : fin.slice(0, 10);
+    if (b < a) return 0;
+    return Math.round((Date.parse(b) - Date.parse(a)) / 86400000) + 1;
+  };
+  const ausencias: Record<string, { vac: number; lic: number }> = {};
+  for (const id of ids) ausencias[id] = { vac: 0, lic: 0 };
+  for (const l of licRes.data ?? []) {
+    if (l.trabajador_id && ausencias[l.trabajador_id])
+      ausencias[l.trabajador_id].lic += diasEnPeriodo(l.fecha_inicio, l.fecha_termino);
+  }
+  for (const v of vacRes.data ?? []) {
+    const d = (v.datos ?? {}) as Record<string, string>;
+    if (v.trabajador_id && ausencias[v.trabajador_id])
+      ausencias[v.trabajador_id].vac += diasEnPeriodo(d.fecha_inicio ?? null, d.fecha_termino ?? null);
+  }
 
   const cliente = clienteRes.data;
   if (!cliente) {
@@ -65,6 +98,7 @@ export default async function ClienteLiquidacionPage({
         conceptos={concRes.data ?? []}
         liquidaciones={liqRes.data ?? []}
         novedades={novRes.data ?? []}
+        ausencias={ausencias}
         hayIndicadores={!!indRes.data}
       />
     </main>
