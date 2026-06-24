@@ -493,7 +493,14 @@ export async function descargarNominaPrevired(
   for (const c of contRes.data ?? []) if (!contMap.has(c.trabajador_id)) contMap.set(c.trabajador_id, c as ContratoRow);
   const diasMap = new Map((liqRes.data ?? []).map((l) => [l.trabajador_id, { trab: (l.dias_trabajados as number) ?? 30 }]));
   const conceptos = filtrarConsiderados((concRes.data ?? []) as ConceptoRow[], cpRes.data);
-  const uf = Number((indRes.data as { uf_ultimo_dia?: number }).uf_ultimo_dia ?? 0);
+  const indData = indRes.data as { uf_ultimo_dia?: number; tasa_seguro_social?: number | string; afp?: { nombre: string; tasa_total?: number }[] };
+  const uf = Number(indData.uf_ultimo_dia ?? 0);
+  const tasaSeguroSocial = Number(indData.tasa_seguro_social ?? 0);
+  const tasaTotalAfp = (nombre: string | null): number => {
+    const q = (nombre ?? "").toLowerCase().replace("afp", "").trim();
+    const m = (indData.afp ?? []).find((a) => a.nombre.toLowerCase().includes(q) || (q && q.includes(a.nombre.toLowerCase())));
+    return Number(m?.tasa_total ?? 0);
+  };
 
   const datos: DatosPreviredTrabajador[] = trabajadores.map((t) => {
     const dias = diasMap.get(t.id)?.trab ?? 30;
@@ -522,6 +529,8 @@ export async function descargarNominaPrevired(
       tipoTrabajador: t.tipo_trabajador ?? "activo",
       diasTrabajados: dias,
       afp: t.afp,
+      afpTasaTotal: tasaTotalAfp(t.afp),
+      tasaSeguroSocial,
       salud: t.salud,
       monedaPlan: t.salud_plan_unidad,
       valorPlan: Math.round(planUf),

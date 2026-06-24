@@ -46,6 +46,8 @@ export type DatosPreviredTrabajador = {
   tipoTrabajador: string; // activo | pensionado_cotiza | ...
   diasTrabajados: number;
   afp: string | null;
+  afpTasaTotal: number; // % total AFP (incluye 0,1% empleador) para campo 28
+  tasaSeguroSocial: number; // % seguro social 0,9% (campo 94)
   salud: string | null; // 'Fonasa' o nombre de isapre
   monedaPlan: string | null; // 'UF' | '$'
   valorPlan: number; // en $ (si UF, ya convertido a $)
@@ -64,7 +66,9 @@ export type DatosPreviredEmpresa = {
 };
 
 const ent = (n: number): string => String(Math.max(0, Math.round(n || 0)));
-const alfa = (s: string | null | undefined): string => (s ?? "").trim();
+// Alfanumérico: sin tildes/diacríticos (Previred/KAME no los aceptan) y sin espacios extremos.
+const alfa = (s: string | null | undefined): string =>
+  (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 
 /** Una línea de 105 campos (línea principal, tipo 00). */
 export function lineaPrevired(
@@ -91,43 +95,44 @@ export function lineaPrevired(
   A(6, (t.sexo ?? "").toLowerCase().startsWith("f") ? "F" : "M");
   A(7, (t.nacionalidad ?? "").toLowerCase().startsWith("chil") || (t.nacionalidad ?? "") === "" ? "0" : "1");
   A(8, "1"); // Tipo Pago: Remuneraciones del mes
-  A(9, mmaaaa); A(10, mmaaaa);
+  A(9, mmaaaa); A(10, "0"); // Período hasta: 0 (solo se usa en multiperíodo)
   A(11, REGIMEN_COD[t.regimen] ?? "AFP");
   A(12, TIPO_TRAB_COD[t.tipoTrabajador] ?? "0");
   N(13, Math.min(30, Math.max(0, t.diasTrabajados)));
   A(14, "00"); // Línea principal
   A(15, "0"); // Sin movimiento en el mes
   A(16, ""); A(17, ""); // fechas movimiento
-  A(18, cargas > 0 ? (t.tramoAsignacion ?? "D") : ""); // tramo asig. familiar
+  A(18, t.tramoAsignacion ?? "D"); // tramo asig. familiar (D = sin derecho)
   N(19, t.cargasSimples); N(20, t.cargasMaternales); N(21, t.cargasInvalidas);
   N(22, r.asignacionFamiliar);
-  N(23, 0); N(24, 0); A(25, ""); // retroactiva / reintegro / subsidio joven (uso futuro)
+  N(23, 0); N(24, 0); A(25, "N"); // retroactiva / reintegro / subsidio joven (N=No)
 
   // 2- Datos de la AFP
   A(26, esAfp ? (AFP_COD[t.afp ?? ""] ?? "00") : "00");
   N(27, esAfp ? r.baseImponible : 0); // Renta Imponible AFP/Seguro Social
-  N(28, esAfp ? r.afpMonto : 0); // Cotización Obligatoria AFP
+  N(28, esAfp ? Math.round(r.baseImponible * (t.afpTasaTotal || 0) / 100) : 0); // Cotización Obligatoria AFP (tasa TOTAL)
   N(29, esAfp ? r.sisEmpleador : 0); // SIS (cargo empleador)
   // 30..39 cuenta ahorro / sustitutiva / trabajo pesado: 0 (no aplica)
 
-  // 3- APVI (40..44) / 4- APVC (45..49): no aplica
-  A(41, ""); A(46, ""); // n° contratos (alfanuméricos)
+  // 3- APVI (40..44) / 4- APVC (45..49): no aplica (KAME deja N° contrato APVI = 1)
+  A(41, "1"); A(46, ""); // n° contratos
 
-  // 5- Afiliado Voluntario (50..61): no aplica
-  A(51, ""); A(52, ""); A(53, ""); A(54, ""); A(56, ""); A(57, "");
+  // 5- Afiliado Voluntario (50..61): no aplica (KAME deja fechas 01/01/1900 y N° períodos 1)
+  A(51, ""); A(52, ""); A(53, ""); A(54, "");
+  A(56, "01/01/1900"); A(57, "01/01/1900"); A(58, ""); A(61, "1");
 
   // 6- IPS / ISL / Fonasa (62..74)
-  A(62, "0000"); // no pertenece al IPS (AFP)
-  // 64 Renta Imponible IPS/ISL/Fonasa: base para Fonasa y/o accidente ISL
-  N(64, esFonasa || esIsl ? r.baseImponible : 0);
+  A(62, "0"); // no pertenece al IPS (AFP)
+  N(64, esFonasa || esIsl ? r.baseImponible : 0); // Renta Imponible IPS/ISL/Fonasa
+  A(67, ""); // código ex-caja desahucio (blanco)
   N(70, esFonasa ? r.saludLegal : 0); // Cotización Fonasa (7%)
   N(71, esIsl ? r.mutualEmpleador : 0); // Acc. trabajo ISL (si no hay mutual privada)
 
   // 7- Datos Salud (75..82)
   A(75, esIsapre ? (SALUD_COD[t.salud ?? ""] ?? "00") : esFonasa ? "07" : "00");
   A(76, ""); // N° FUN
-  N(77, esIsapre ? r.baseImponible : 0); // Renta imponible isapre
-  A(78, esIsapre ? (t.monedaPlan === "UF" ? "2" : "1") : "0"); // moneda plan
+  N(77, esFonasa || esIsapre ? r.baseImponible : 0); // Renta imponible (KAME la informa también para Fonasa)
+  A(78, esIsapre && t.monedaPlan === "UF" ? "2" : "1"); // moneda plan (1 = pesos por defecto)
   N(79, esIsapre ? t.valorPlan : 0); // cotización pactada (plan, en $)
   N(80, esIsapre ? r.saludLegal : 0); // cotización obligatoria isapre (7%)
   N(81, esIsapre ? r.saludAdicional : 0); // cotización adicional isapre
@@ -135,13 +140,14 @@ export function lineaPrevired(
 
   // 8- CCAF (83..91)
   A(83, CCAF_COD[emp.ccaf ?? ""] ?? "00");
-  // 84..91 montos CCAF: 0
+  A(86, ""); // descuento dental CCAF (blanco)
+  // 84,85,87..91 montos CCAF: 0
 
   // RIMA / Jornada / Expectativa / Rentabilidad (92..95)
   N(92, 0); // RIMA (solo mov. 3/6)
   A(93, t.jornada === "parcial" ? "2" : "1"); // Tipo de jornada (obligatorio)
-  N(94, 0); // Cotización expectativa de vida 0,9% (rige desde agosto 2026)
-  N(95, 0); // Rentabilidad protegida
+  N(94, esAfp && t.tipoTrabajador === "activo" ? Math.round(r.baseImponible * (t.tasaSeguroSocial || 0) / 100) : 0); // Cotización 0,9% seguro social
+  A(95, "1"); // Rentabilidad protegida
 
   // 9- Mutualidad (96..99)
   A(96, mutualCod);
