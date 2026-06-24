@@ -33,11 +33,17 @@ export default async function ClienteLiquidacionPage({
       .order("orden"),
     supabase
       .from("liquidacion")
-      .select("trabajador_id, liquido, total_haberes, total_descuentos, estado, kame_liquido, kame_cuadra, calculado_at")
+      .select("trabajador_id, liquido, total_haberes, total_descuentos, estado, kame_liquido, kame_cuadra, calculado_at, dias_trabajados, detalle")
       .eq("cliente_id", clienteId)
       .eq("periodo", periodo),
     supabase.from("indicadores_previred").select("periodo").eq("periodo", periodo).maybeSingle(),
   ]);
+
+  const novRes = await supabase
+    .from("novedades_remuneraciones")
+    .select("trabajador_id, tipo, cantidad, monto, concepto_id, origen")
+    .eq("cliente_id", clienteId)
+    .eq("periodo", periodo);
 
   const cliente = clienteRes.data;
   if (!cliente) {
@@ -58,6 +64,7 @@ export default async function ClienteLiquidacionPage({
         trabajadores={trabRes.data ?? []}
         conceptos={concRes.data ?? []}
         liquidaciones={liqRes.data ?? []}
+        novedades={novRes.data ?? []}
         hayIndicadores={!!indRes.data}
       />
     </main>

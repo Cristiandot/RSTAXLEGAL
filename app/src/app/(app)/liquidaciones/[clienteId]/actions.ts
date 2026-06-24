@@ -155,7 +155,7 @@ export async function calcularYGuardarLiquidacion(
   trabajadorId: string,
   periodo: string,
   opts: { diasTrabajados?: number; diasDescanso?: number; kameLiquido?: number | null },
-): Promise<Resp & { liquido?: number }> {
+): Promise<Resp & { liquido?: number; detalle?: ReturnType<typeof calcularLiquidacion> }> {
   const supabase = await createClient();
   const usuario = await getUsuarioActual().catch(() => null);
   let usuarioId: string | null = null;
@@ -241,5 +241,64 @@ export async function calcularYGuardarLiquidacion(
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/liquidaciones/${clienteId}`);
-  return { ok: true, liquido: r.liquido };
+  return { ok: true, liquido: r.liquido, detalle: r };
+}
+
+export type MontoConcepto = { concepto_id: string; naturaleza: string; monto: number };
+
+/**
+ * Guarda los montos del mes que el equipo ingresa por trabajador (conceptos de
+ * la empresa + horas extra + anticipo) como novedades (origen 'equipo') y
+ * recalcula la liquidación. Reemplaza las novedades 'equipo' previas del período.
+ */
+export async function guardarLiquidacionDetalle(
+  clienteId: string,
+  trabajadorId: string,
+  periodo: string,
+  p: {
+    diasTrabajados: number;
+    conceptos: MontoConcepto[];
+    horasExtra: number;
+    anticipo: number;
+    kameLiquido: number | null;
+  },
+): Promise<Resp & { liquido?: number; detalle?: ReturnType<typeof calcularLiquidacion> }> {
+  const supabase = await createClient();
+
+  // Reemplaza lo que cargó el equipo en el período (no toca lo del portal = origen 'cliente').
+  const del = await supabase
+    .from("novedades_remuneraciones")
+    .delete()
+    .eq("trabajador_id", trabajadorId)
+    .eq("periodo", periodo)
+    .eq("origen", "equipo");
+  if (del.error) return { ok: false, error: del.error.message };
+
+  const filas: Record<string, unknown>[] = [];
+  for (const c of p.conceptos) {
+    if (!c.monto || c.monto === 0) continue;
+    filas.push({
+      cliente_id: clienteId,
+      trabajador_id: trabajadorId,
+      periodo,
+      tipo: c.naturaleza === "descuento" ? "descuento" : "bono",
+      monto: c.monto,
+      concepto_id: c.concepto_id,
+      origen: "equipo",
+    });
+  }
+  if (p.horasExtra > 0)
+    filas.push({ cliente_id: clienteId, trabajador_id: trabajadorId, periodo, tipo: "hora_extra", cantidad: p.horasExtra, origen: "equipo" });
+  if (p.anticipo > 0)
+    filas.push({ cliente_id: clienteId, trabajador_id: trabajadorId, periodo, tipo: "anticipo", monto: p.anticipo, origen: "equipo" });
+
+  if (filas.length > 0) {
+    const ins = await supabase.from("novedades_remuneraciones").insert(filas);
+    if (ins.error) return { ok: false, error: ins.error.message };
+  }
+
+  return calcularYGuardarLiquidacion(clienteId, trabajadorId, periodo, {
+    diasTrabajados: p.diasTrabajados,
+    kameLiquido: p.kameLiquido,
+  });
 }

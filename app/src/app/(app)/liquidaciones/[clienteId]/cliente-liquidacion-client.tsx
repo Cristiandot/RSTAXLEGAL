@@ -43,7 +43,7 @@ import {
   guardarConcepto,
   eliminarConcepto,
   guardarFichaTrabajador,
-  calcularYGuardarLiquidacion,
+  guardarLiquidacionDetalle,
   type ConceptoInput,
   type FichaTrabajadorInput,
 } from "./actions";
@@ -89,6 +89,16 @@ type Liquidacion = {
   kame_liquido: number | null;
   kame_cuadra: boolean | null;
   calculado_at: string | null;
+  dias_trabajados: number | null;
+  detalle: Record<string, unknown> | null;
+};
+type Novedad = {
+  trabajador_id: string;
+  tipo: string;
+  cantidad: number | string | null;
+  monto: number | string | null;
+  concepto_id: string | null;
+  origen: string;
 };
 
 const str = (v: unknown): string => (v === null || v === undefined ? "" : String(v));
@@ -113,6 +123,7 @@ export function ClienteLiquidacionClient({
   trabajadores,
   conceptos,
   liquidaciones,
+  novedades,
   hayIndicadores,
 }: {
   periodo: string;
@@ -120,12 +131,14 @@ export function ClienteLiquidacionClient({
   trabajadores: Trabajador[];
   conceptos: Concepto[];
   liquidaciones: Liquidacion[];
+  novedades: Novedad[];
   hayIndicadores: boolean;
 }) {
   const router = useRouter();
   const [guardando, startGuardar] = useTransition();
   const [fichaAbierta, setFichaAbierta] = useState<Trabajador | "nuevo" | null>(null);
   const [conceptoAbierto, setConceptoAbierto] = useState<Concepto | "nuevo" | null>(null);
+  const [liqAbierta, setLiqAbierta] = useState<Trabajador | null>(null);
 
   const liqPorTrab = useMemo(
     () => new Map(liquidaciones.map((l) => [l.trabajador_id, l])),
@@ -150,16 +163,6 @@ export function ClienteLiquidacionClient({
         toast.success("Configuración guardada");
         router.refresh();
       } else toast.error(res.error ?? "Error");
-    });
-  }
-
-  function liquidar(t: Trabajador) {
-    startGuardar(async () => {
-      const res = await calcularYGuardarLiquidacion(cliente.id, t.id, periodo, { diasTrabajados: 30 });
-      if (res.ok) {
-        toast.success(`Liquidación calculada — líquido ${formatMonto(res.liquido ?? 0)}`);
-        router.refresh();
-      } else toast.error(res.error ?? "Error al calcular");
     });
   }
 
@@ -318,7 +321,7 @@ export function ClienteLiquidacionClient({
                       ) : "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button size="sm" variant="outline" disabled={guardando || !hayIndicadores} onClick={() => liquidar(t)}>
+                      <Button size="sm" variant="outline" disabled={!hayIndicadores} onClick={() => setLiqAbierta(t)}>
                         <Calculator className="size-4" /> Liquidar
                       </Button>
                     </TableCell>
@@ -348,6 +351,195 @@ export function ClienteLiquidacionClient({
           onSaved={() => { setFichaAbierta(null); router.refresh(); }}
         />
       ) : null}
+
+      {liqAbierta ? (
+        <LiquidacionDialog
+          clienteId={cliente.id}
+          periodo={periodo}
+          trabajador={liqAbierta}
+          conceptos={conceptos}
+          novedades={novedades.filter((n) => n.trabajador_id === liqAbierta.id)}
+          liquidacion={liqPorTrab.get(liqAbierta.id) ?? null}
+          onClose={() => setLiqAbierta(null)}
+          onSaved={() => router.refresh()}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------- Liquidación por trabajador (editor de montos + cálculo) ----------------
+function LiquidacionDialog({
+  clienteId,
+  periodo,
+  trabajador,
+  conceptos,
+  novedades,
+  liquidacion,
+  onClose,
+  onSaved,
+}: {
+  clienteId: string;
+  periodo: string;
+  trabajador: Trabajador;
+  conceptos: Concepto[];
+  novedades: Novedad[];
+  liquidacion: Liquidacion | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [guardando, start] = useTransition();
+  const prefill = (conceptoId: string): string => {
+    const n = novedades.find((x) => x.concepto_id === conceptoId);
+    return n?.monto != null ? String(n.monto) : "";
+  };
+  const [dias, setDias] = useState(String(liquidacion?.dias_trabajados ?? 30));
+  const [montos, setMontos] = useState<Record<string, string>>(
+    Object.fromEntries(conceptos.map((c) => [c.id, prefill(c.id)])),
+  );
+  const [horasExtra, setHorasExtra] = useState(
+    String(novedades.find((n) => n.tipo === "hora_extra")?.cantidad ?? ""),
+  );
+  const [anticipo, setAnticipo] = useState(
+    String(novedades.find((n) => n.tipo === "anticipo")?.monto ?? ""),
+  );
+  const [kameLiquido, setKameLiquido] = useState(String(liquidacion?.kame_liquido ?? ""));
+  const [resultado, setResultado] = useState<Record<string, unknown> | null>(
+    (liquidacion?.detalle as Record<string, unknown> | null) ?? null,
+  );
+
+  const porNaturaleza = (nat: string) => conceptos.filter((c) => c.naturaleza === nat);
+
+  function calcular() {
+    start(async () => {
+      const res = await guardarLiquidacionDetalle(clienteId, trabajador.id, periodo, {
+        diasTrabajados: Number(dias) || 30,
+        conceptos: conceptos.map((c) => ({ concepto_id: c.id, naturaleza: c.naturaleza, monto: Number(montos[c.id] || 0) })),
+        horasExtra: Number(horasExtra) || 0,
+        anticipo: Number(anticipo) || 0,
+        kameLiquido: kameLiquido === "" ? null : Number(kameLiquido),
+      });
+      if (res.ok) {
+        setResultado((res.detalle as Record<string, unknown>) ?? null);
+        toast.success(`Líquido ${formatMonto(res.liquido ?? 0)}`);
+        onSaved();
+      } else toast.error(res.error ?? "Error al calcular");
+    });
+  }
+
+  const r = resultado;
+  const money = (k: string) => formatMonto((r?.[k] as number) ?? 0);
+  const grupos: { nat: string; titulo: string }[] = [
+    { nat: "haber_imponible", titulo: "Bonos imponibles" },
+    { nat: "haber_no_imponible", titulo: "Bonos no imponibles" },
+    { nat: "descuento", titulo: "Descuentos" },
+  ];
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>
+            Liquidación · {str(trabajador.apellidos)}, {str(trabajador.nombres)} · {periodo}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Entrada */}
+          <div className="space-y-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="dias">Días trabajados</Label>
+              <Input id="dias" type="number" value={dias} onChange={(e) => setDias(e.target.value)} className="w-28" />
+            </div>
+
+            {grupos.map((g) =>
+              porNaturaleza(g.nat).length > 0 ? (
+                <div key={g.nat} className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">{g.titulo}</p>
+                  {porNaturaleza(g.nat).map((c) => (
+                    <div key={c.id} className="flex items-center gap-2">
+                      <span className="flex-1 truncate text-sm" title={c.nombre}>{c.nombre}</span>
+                      <Input
+                        type="number"
+                        className="w-32"
+                        value={montos[c.id] ?? ""}
+                        onChange={(e) => setMontos((m) => ({ ...m, [c.id]: e.target.value }))}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : null,
+            )}
+
+            <div className="flex items-center gap-2">
+              <span className="flex-1 text-sm">Horas extra</span>
+              <Input type="number" className="w-32" value={horasExtra} onChange={(e) => setHorasExtra(e.target.value)} />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="flex-1 text-sm">Anticipo</span>
+              <Input type="number" className="w-32" value={anticipo} onChange={(e) => setAnticipo(e.target.value)} />
+            </div>
+            <div className="flex items-center gap-2 border-t pt-2">
+              <span className="flex-1 text-sm font-medium">Líquido KAME (para cuadrar)</span>
+              <Input type="number" className="w-32" value={kameLiquido} onChange={(e) => setKameLiquido(e.target.value)} />
+            </div>
+            <Button onClick={calcular} disabled={guardando} className="w-full">
+              {guardando ? "Calculando…" : "Calcular y guardar"}
+            </Button>
+          </div>
+
+          {/* Resultado */}
+          <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+            {r ? (
+              <dl className="space-y-1">
+                <Row label="Sueldo base" val={money("sueldoBase")} />
+                {Number(r.gratificacion) ? <Row label="Gratificación" val={money("gratificacion")} /> : null}
+                {Number(r.horasExtras) ? <Row label="Horas extra" val={money("horasExtras")} /> : null}
+                {Number(r.semanaCorrida) ? <Row label="Semana corrida" val={money("semanaCorrida")} /> : null}
+                {(r.haberesImponibles as { glosa: string; monto: number }[] | undefined)?.map((h, i) => (
+                  <Row key={`hi${i}`} label={h.glosa} val={formatMonto(h.monto)} />
+                ))}
+                <Row label="Total imponible" val={money("totalImponible")} bold />
+                {(r.haberesNoImponibles as { glosa: string; monto: number }[] | undefined)?.map((h, i) => (
+                  <Row key={`hn${i}`} label={h.glosa} val={formatMonto(h.monto)} />
+                ))}
+                {Number(r.asignacionFamiliar) ? <Row label="Asignación familiar" val={money("asignacionFamiliar")} /> : null}
+                <Row label="AFP" val={`−${money("afpMonto")}`} />
+                <Row label="Salud" val={`−${money("saludMonto")}`} />
+                {Number(r.afcTrabajador) ? <Row label="AFC" val={`−${money("afcTrabajador")}`} /> : null}
+                {Number(r.impuestoUnico) ? <Row label="Impuesto único" val={`−${money("impuestoUnico")}`} /> : null}
+                {Number(r.anticipo) ? <Row label="Anticipo" val={`−${money("anticipo")}`} /> : null}
+                {(r.descuentosVarios as { glosa: string; monto: number }[] | undefined)?.map((d, i) => (
+                  <Row key={`dv${i}`} label={d.glosa} val={`−${formatMonto(d.monto)}`} />
+                ))}
+                <div className="border-t pt-1">
+                  <Row label="Líquido" val={money("liquido")} bold />
+                </div>
+                {liquidacion?.kame_cuadra === true ? (
+                  <p className="pt-1 text-emerald-600">✓ Cuadra con KAME</p>
+                ) : liquidacion?.kame_cuadra === false ? (
+                  <p className="pt-1 text-red-600">Difiere de KAME ({formatMonto(liquidacion.kame_liquido)})</p>
+                ) : null}
+              </dl>
+            ) : (
+              <p className="text-muted-foreground">Ingresa los montos y presiona “Calcular y guardar”.</p>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cerrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Row({ label, val, bold }: { label: string; val: string; bold?: boolean }) {
+  return (
+    <div className={`flex justify-between gap-3 ${bold ? "font-semibold" : ""}`}>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd>{val}</dd>
     </div>
   );
 }
