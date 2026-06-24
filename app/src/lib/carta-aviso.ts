@@ -35,34 +35,28 @@ export type ParametrosCartaAviso = {
   };
 };
 
-/** Texto legal de la causal para la carta (artículo + glosa). */
+/**
+ * Glosa de la causal para la carta, en palabras (sin referencia al Código del
+ * Trabajo). Regla RSTL: las cartas/documentos tipo NO citan artículos del CT.
+ */
 const CAUSAL_CARTA: Record<string, string> = {
-  "159-4":
-    "el artículo 159 N°4 del Código del Trabajo, esto es, vencimiento del plazo convenido en el contrato",
-  "159-5":
-    "el artículo 159 N°5 del Código del Trabajo, esto es, conclusión del trabajo o servicio que dio origen al contrato",
-  "159-6":
-    "el artículo 159 N°6 del Código del Trabajo, esto es, caso fortuito o fuerza mayor",
+  "159-4": "el vencimiento del plazo convenido en el contrato",
+  "159-5": "la conclusión del trabajo o servicio que dio origen al contrato",
+  "159-6": "caso fortuito o fuerza mayor",
   "160-1":
-    "el artículo 160 N°1 del Código del Trabajo, esto es, alguna de las conductas indebidas de carácter grave, debidamente comprobadas, que en dicha norma se señalan",
+    "alguna de las conductas indebidas de carácter grave, debidamente comprobadas",
   "160-2":
-    "el artículo 160 N°2 del Código del Trabajo, esto es, negociaciones que ejecute el trabajador dentro del giro del negocio y que hubieren sido prohibidas por escrito en el respectivo contrato",
-  "160-3":
-    "el artículo 160 N°3 del Código del Trabajo, esto es, no concurrencia del trabajador a sus labores sin causa justificada",
-  "160-4":
-    "el artículo 160 N°4 del Código del Trabajo, esto es, abandono del trabajo",
+    "negociaciones que ejecuta el trabajador dentro del giro del negocio y que fueron prohibidas por escrito en el respectivo contrato",
+  "160-3": "la no concurrencia del trabajador a sus labores sin causa justificada",
+  "160-4": "el abandono del trabajo",
   "160-5":
-    "el artículo 160 N°5 del Código del Trabajo, esto es, actos, omisiones o imprudencias temerarias que afecten a la seguridad o al funcionamiento del establecimiento, a la seguridad o a la actividad de los trabajadores, o a la salud de éstos",
+    "actos, omisiones o imprudencias temerarias que afectan a la seguridad o al funcionamiento del establecimiento, a la seguridad o a la actividad de los trabajadores, o a la salud de éstos",
   "160-6":
-    "el artículo 160 N°6 del Código del Trabajo, esto es, perjuicio material causado intencionalmente en las instalaciones, maquinarias, herramientas, útiles de trabajo, productos o mercaderías",
-  "160-7":
-    "el artículo 160 N°7 del Código del Trabajo, esto es, incumplimiento grave de las obligaciones que impone el contrato",
-  "161-1":
-    "el artículo 161 inciso primero del Código del Trabajo, esto es, necesidades de la empresa, establecimiento o servicio",
-  "161-2":
-    "el artículo 161 inciso segundo del Código del Trabajo, esto es, desahucio escrito del empleador",
-  "163bis":
-    "el artículo 163 bis del Código del Trabajo, esto es, sometimiento del empleador a un procedimiento concursal de liquidación",
+    "el perjuicio material causado intencionalmente en las instalaciones, maquinarias, herramientas, útiles de trabajo, productos o mercaderías",
+  "160-7": "el incumplimiento grave de las obligaciones que impone el contrato",
+  "161-1": "las necesidades de la empresa, establecimiento o servicio",
+  "161-2": "el desahucio escrito del empleador",
+  "163bis": "el sometimiento del empleador a un procedimiento concursal de liquidación",
 };
 
 /** Causales que admiten carta de aviso del Art. 162. */
@@ -122,13 +116,13 @@ export async function generarYSubirCartaAviso(
   }
 
   const avisoTexto = p.avisoCon30Dias
-    ? "El presente aviso se otorga con la anticipación mínima de treinta días que exige el artículo 162 inciso cuarto del Código del Trabajo."
-    : "Atendido que el término del contrato se hará efectivo sin mediar el aviso previo de treinta días, se pagará a usted la indemnización sustitutiva del aviso previo equivalente a la última remuneración mensual devengada, conforme al artículo 162 inciso cuarto del Código del Trabajo.";
+    ? "El presente aviso se otorga con la anticipación mínima de treinta días."
+    : "Atendido que el término del contrato se hará efectivo sin mediar el aviso previo de treinta días, se pagará a usted la indemnización sustitutiva del aviso previo equivalente a la última remuneración mensual devengada.";
 
   const entregaTexto =
     p.modalidadEntrega === "personal"
       ? "La presente carta se entrega personalmente al trabajador, quien firma su recepción al pie."
-      : "La presente carta se remite por correo certificado al domicilio del trabajador registrado en su contrato de trabajo, conforme al artículo 162 inciso primero del Código del Trabajo.";
+      : "La presente carta se remite por correo certificado al domicilio del trabajador registrado en su contrato de trabajo.";
 
   // Fecha de inicio del CONTRATO ORIGINAL (antigüedad reconocida): la misma que
   // usa el cálculo de indemnización. Criterio RSTL: las cartas de aviso (y los
@@ -166,7 +160,7 @@ export async function generarYSubirCartaAviso(
     VACACIONES_TEXTO: `${clp(p.resumen.vacacionesMonto)} (${p.resumen.vacacionesDias.toLocaleString("es-CL")} días corridos)`,
     REM_PENDIENTE: clp(p.resumen.remuneracionPendiente),
     TOTAL_FINIQUITO: clp(p.resumen.total),
-    COTIZACIONES_TEXTO: `Asimismo, se informa a usted que sus cotizaciones previsionales se encuentran íntegramente pagadas hasta el mes de ${mesLargo(p.cotizacionesHasta)}, según consta en los certificados que se adjuntan a la presente comunicación (artículo 162 inciso quinto del Código del Trabajo).`,
+    COTIZACIONES_TEXTO: `Asimismo, se informa a usted que sus cotizaciones previsionales se encuentran íntegramente pagadas hasta el mes de ${mesLargo(p.cotizacionesHasta)}, según consta en los certificados que se adjuntan a la presente comunicación.`,
     ENTREGA_TEXTO: entregaTexto,
   };
 
