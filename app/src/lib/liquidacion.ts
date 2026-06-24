@@ -89,6 +89,7 @@ export type EntradaLiquidacion = {
   tipoTrabajador: TipoTrabajador;
   tipoContrato: TipoContrato;
   mas11Anios?: boolean; // AFC empleador 0,8% en indefinidos de 11+ años
+  sueldoEmpresarial?: boolean; // socio/dueño: no cotiza AFC (sin subordinación)
   salud: string | null; // 'Fonasa' o nombre de isapre
   planSaludUf?: number; // valor del plan en UF (isapre)
   planSaludPesos?: number; // valor del plan en $ (isapre)
@@ -271,10 +272,15 @@ export function calcularLiquidacion(e: EntradaLiquidacion): ResultadoLiquidacion
   }
   const saludMonto = saludLegal + saludAdicional;
 
-  // AFC trabajador: sólo indefinidos con menos de 11 años (0,6%); plazo fijo no cotiza.
+  // AFC trabajador: sólo indefinidos con menos de 11 años (0,6%); plazo fijo no
+  // cotiza; sueldo empresarial no cotiza (sin subordinación/dependencia).
   let afcTrabajador = 0;
-  if (e.tipoContrato === "indefinido" && !e.mas11Anios && e.tipoTrabajador === "activo") {
+  if (e.sueldoEmpresarial) {
+    notas.push("Sueldo empresarial: no cotiza seguro de cesantía (sin relación de subordinación).");
+  } else if (e.tipoContrato === "indefinido" && !e.mas11Anios && e.tipoTrabajador === "activo") {
     afcTrabajador = pesos(baseImponibleAfc * 0.006);
+  } else if (e.tipoContrato === "indefinido" && e.mas11Anios) {
+    notas.push("11+ años de antigüedad: el trabajador deja de cotizar AFC y el empleador baja a 0,8%.");
   } else if (e.tipoContrato === "plazo_fijo") {
     notas.push("Plazo fijo: el trabajador no cotiza AFC (3% íntegro del empleador).");
   }
@@ -324,7 +330,8 @@ export function calcularLiquidacion(e: EntradaLiquidacion): ResultadoLiquidacion
       ? pesos((baseImponible * e.ind.tasaSis) / 100)
       : 0;
   let tasaAfcEmpleador = 0;
-  if (e.tipoContrato === "plazo_fijo" || e.tipoContrato === "casa_particular") tasaAfcEmpleador = 0.03;
+  if (e.sueldoEmpresarial) tasaAfcEmpleador = 0; // socio: sin AFC
+  else if (e.tipoContrato === "plazo_fijo" || e.tipoContrato === "casa_particular") tasaAfcEmpleador = 0.03;
   else if (e.tipoContrato === "indefinido") tasaAfcEmpleador = e.mas11Anios ? 0.008 : 0.024;
   const afcEmpleador = pesos(baseImponibleAfc * tasaAfcEmpleador);
   const mutualEmpleador = pesos((baseImponible * e.mutualTasa) / 100);

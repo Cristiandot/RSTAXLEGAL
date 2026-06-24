@@ -46,6 +46,8 @@ export type TrabajadorRow = {
   regimen_previsional?: string | null;
   horas_semanales?: number | string | null;
   mas_11_anios?: boolean | null;
+  sueldo_empresarial?: boolean | null;
+  fecha_ingreso?: string | null;
   cargas_simples?: number | null;
   cargas_maternales?: number | null;
   cargas_invalidas?: number | null;
@@ -114,11 +116,29 @@ export type ArmarParams = {
   contrato: ContratoRow | null;
   novedades: NovedadRow[];
   conceptos: ConceptoRow[];
+  /** Período 'YYYY-MM' para calcular la antigüedad (regla 11 años AFC). */
+  periodo?: string;
   /** Días trabajados del mes (default 30). */
   diasTrabajados?: number;
   /** Domingos + festivos del mes (para semana corrida). */
   diasDescanso?: number;
 };
+
+/** TRUE si al cierre del período el trabajador cumple 11+ años desde su ingreso. */
+function tiene11Anios(fechaIngreso: string | null | undefined, periodo: string | undefined): boolean | null {
+  if (!fechaIngreso) return null; // sin fecha → no se puede determinar
+  const ing = new Date(fechaIngreso.slice(0, 10));
+  if (Number.isNaN(ing.getTime())) return null;
+  let ref: Date;
+  if (periodo) {
+    const [y, m] = periodo.split("-").map(Number);
+    ref = new Date(y, m, 0); // último día del mes del período
+  } else {
+    ref = new Date();
+  }
+  const hito = new Date(ing.getFullYear() + 11, ing.getMonth(), ing.getDate());
+  return hito <= ref;
+}
 
 export function armarEntrada(p: ArmarParams): EntradaLiquidacion {
   const rem = p.contrato?.remuneracion ?? null;
@@ -172,7 +192,10 @@ export function armarEntrada(p: ArmarParams): EntradaLiquidacion {
     regimenPrevisional: (p.trabajador.regimen_previsional as RegimenPrevisional) ?? "afp",
     tipoTrabajador: (p.trabajador.tipo_trabajador as TipoTrabajador) ?? "activo",
     tipoContrato: tipoContrato(p.trabajador.tipo_contrato),
-    mas11Anios: p.trabajador.mas_11_anios ?? false,
+    // Automático por antigüedad (fecha de ingreso del contrato original); si no
+    // hay fecha, cae al flag manual de la ficha.
+    mas11Anios: tiene11Anios(p.trabajador.fecha_ingreso, p.periodo) ?? (p.trabajador.mas_11_anios ?? false),
+    sueldoEmpresarial: p.trabajador.sueldo_empresarial ?? false,
     salud: p.trabajador.salud ?? null,
     planSaludUf: p.trabajador.salud_plan_unidad === "UF" ? num(p.trabajador.salud_plan_valor) : undefined,
     planSaludPesos: p.trabajador.salud_plan_unidad === "$" ? num(p.trabajador.salud_plan_valor) : undefined,

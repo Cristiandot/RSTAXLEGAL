@@ -98,6 +98,7 @@ export type FichaTrabajadorInput = {
   salud_plan_unidad: string | null;
   sueldo_base: number | null;
   mas_11_anios: boolean;
+  sueldo_empresarial: boolean;
   cargas_simples: number;
   cargas_maternales: number;
   cargas_invalidas: number;
@@ -134,6 +135,7 @@ export async function guardarFichaTrabajador(
     salud_plan_unidad: t.salud_plan_unidad,
     sueldo_base: t.sueldo_base,
     mas_11_anios: t.mas_11_anios,
+    sueldo_empresarial: t.sueldo_empresarial,
     cargas_simples: t.cargas_simples,
     cargas_maternales: t.cargas_maternales,
     cargas_invalidas: t.cargas_invalidas,
@@ -205,6 +207,7 @@ export async function calcularYGuardarLiquidacion(
     contrato: (contRes.data ?? null) as ContratoRow | null,
     novedades: (novRes.data ?? []) as NovedadRow[],
     conceptos: (concRes.data ?? []) as ConceptoRow[],
+    periodo,
     diasTrabajados: opts.diasTrabajados ?? 30,
     diasDescanso: opts.diasDescanso,
   });
@@ -379,6 +382,7 @@ export async function descargarLiquidaciones(
         contrato: contMap.get(t.id) ?? null,
         novedades: novs,
         conceptos: (concRes.data ?? []) as ConceptoRow[],
+        periodo,
         diasTrabajados: dias.trab,
       });
       return {

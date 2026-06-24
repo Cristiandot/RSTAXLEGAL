@@ -718,6 +718,7 @@ function FichaDialog({
       salud_plan_unidad: esIsapre ? String(fd.get("salud_plan_unidad") ?? "UF") : null,
       sueldo_base: numOrNull(fd.get("sueldo_base")),
       mas_11_anios: fd.get("mas_11_anios") === "on",
+      sueldo_empresarial: fd.get("sueldo_empresarial") === "on",
       cargas_simples: Number(fd.get("cargas_simples") ?? 0),
       cargas_maternales: Number(fd.get("cargas_maternales") ?? 0),
       cargas_invalidas: Number(fd.get("cargas_invalidas") ?? 0),
@@ -821,7 +822,10 @@ function FichaDialog({
             </select>
           </div>
           <label className="col-span-2 flex items-center gap-2 pt-2 text-sm sm:col-span-3">
-            <input type="checkbox" name="mas_11_anios" defaultChecked={trabajador?.mas_11_anios === true} /> Más de 11 años de antigüedad (AFC empleador 0,8%)
+            <input type="checkbox" name="sueldo_empresarial" defaultChecked={trabajador?.sueldo_empresarial === true} /> Sueldo empresarial (socio/dueño — no cotiza seguro de cesantía)
+          </label>
+          <label className="col-span-2 flex items-center gap-2 text-sm sm:col-span-3">
+            <input type="checkbox" name="mas_11_anios" defaultChecked={trabajador?.mas_11_anios === true} /> Más de 11 años de antigüedad <span className="text-muted-foreground">(se calcula solo desde la fecha de ingreso; marca solo si no la cargaste)</span>
           </label>
         </form>
         <DialogFooter>
