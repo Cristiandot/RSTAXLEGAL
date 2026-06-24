@@ -45,6 +45,7 @@ import {
   guardarFichaTrabajador,
   guardarLiquidacionDetalle,
   descargarLiquidaciones,
+  descargarNominaPrevired,
   marcarConceptoPeriodo,
   type ConceptoInput,
   type FichaTrabajadorInput,
@@ -156,6 +157,11 @@ export function ClienteLiquidacionClient({
     () => conceptos.filter((c) => considerado[c.id] !== false),
     [conceptos, considerado],
   );
+  const unidades = useMemo(
+    () => Array.from(new Set(trabajadores.map((t) => str(t.sucursal)).filter(Boolean))).sort(),
+    [trabajadores],
+  );
+  const [unidadPrevired, setUnidadPrevired] = useState("");
   const router = useRouter();
   const [guardando, startGuardar] = useTransition();
   const [fichaAbierta, setFichaAbierta] = useState<Trabajador | "nuevo" | null>(null);
@@ -193,6 +199,21 @@ export function ClienteLiquidacionClient({
       const res = await descargarLiquidaciones(cliente.id, periodo, trabajadorId ?? null);
       if (res.ok && res.base64) descargarBase64Pdf(res.base64, res.filename ?? "liquidaciones.pdf");
       else toast.error(res.error ?? "Error al generar el PDF");
+    });
+  }
+
+  function descargarPrevired() {
+    startGuardar(async () => {
+      const res = await descargarNominaPrevired(cliente.id, periodo, unidadPrevired || null);
+      if (res.ok && res.base64) {
+        const bytes = Uint8Array.from(atob(res.base64), (c) => c.charCodeAt(0));
+        const url = URL.createObjectURL(new Blob([bytes], { type: "text/plain;charset=latin1" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = res.filename ?? "previred.txt";
+        a.click();
+        URL.revokeObjectURL(url);
+      } else toast.error(res.error ?? "Error al generar el archivo");
     });
   }
 
@@ -388,6 +409,26 @@ export function ClienteLiquidacionClient({
             </TableBody>
           </Table>
         )}
+      </Seccion>
+
+      {/* CARGA ELECTRÓNICA PREVIRED */}
+      <Seccion titulo="Carga electrónica Previred">
+        <p className="mb-3 text-sm text-muted-foreground">
+          Genera el archivo de nómina (Formato Largo Variable, 105 campos) para subir a Previred.
+          Elige la unidad de negocio (centro de costo) o todas.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1.5">
+            <Label>Unidad de negocio</Label>
+            <select className={selectCls} value={unidadPrevired} onChange={(e) => setUnidadPrevired(e.target.value)}>
+              <option value="">Todas</option>
+              {unidades.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>
+          <Button variant="outline" onClick={descargarPrevired} disabled={guardando || !hayIndicadores}>
+            <Download className="size-4" /> Descargar archivo Previred
+          </Button>
+        </div>
       </Seccion>
 
       {conceptoAbierto ? (

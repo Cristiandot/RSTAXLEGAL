@@ -14,6 +14,7 @@ import {
   type ConceptoRow,
 } from "@/lib/armar-liquidacion";
 import { generarPdfLiquidaciones, type DatosLiquidacionPdf } from "@/lib/liquidacion-pdf";
+import { generarNominaPrevired, type DatosPreviredTrabajador } from "@/lib/previred-nomina";
 import { etiquetaPeriodo } from "@/lib/periodos";
 
 type Resp = { ok: boolean; error?: string };
@@ -445,4 +446,97 @@ export async function descargarLiquidaciones(
     base64,
     filename: trabajadorId ? `liquidacion_${periodo}.pdf` : `liquidaciones_${periodo}.pdf`,
   };
+}
+
+function partirRut(rut: string | null): { num: string; dv: string } {
+  const limpio = (rut ?? "").replace(/[.\s]/g, "").toUpperCase();
+  const m = limpio.match(/^(\d+)-?([0-9K])$/);
+  if (m) return { num: m[1], dv: m[2] };
+  return { num: limpio.replace(/[^0-9]/g, ""), dv: "" };
+}
+
+/**
+ * Genera el archivo de carga electrónica de Previred (Formato Largo Variable,
+ * 105 campos) para el período. Filtra por unidad de negocio (centro de costo)
+ * si se indica. Recalcula cada trabajador con los datos actuales.
+ */
+export async function descargarNominaPrevired(
+  clienteId: string,
+  periodo: string,
+  unidadNegocio?: string | null,
+): Promise<{ ok: boolean; base64?: string; filename?: string; error?: string }> {
+  const supabase = await createClient();
+
+  const [cliRes, indRes, liqRes, concRes, cpRes] = await Promise.all([
+    supabase.from("clientes").select("razon_social, mutual_institucion, caja_compensacion, mutual_tasa, sabado_habil").eq("id", clienteId).maybeSingle(),
+    supabase.from("indicadores_previred").select(COLS_IND).eq("periodo", periodo).maybeSingle(),
+    supabase.from("liquidacion").select("trabajador_id, dias_trabajados, dias_licencia").eq("cliente_id", clienteId).eq("periodo", periodo),
+    supabase.from("concepto_remuneracion").select("id, naturaleza, proporcional, tributable, nombre").eq("cliente_id", clienteId),
+    supabase.from("concepto_periodo").select("concepto_id, considerado").eq("cliente_id", clienteId).eq("periodo", periodo),
+  ]);
+
+  if (!indRes.data) return { ok: false, error: `No hay indicadores Previred para ${periodo}.` };
+  if (!cliRes.data) return { ok: false, error: "Empresa no encontrada." };
+
+  let trabQuery = supabase.from("trabajadores").select("*").eq("cliente_id", clienteId).eq("activo", true);
+  if (unidadNegocio) trabQuery = trabQuery.eq("sucursal", unidadNegocio);
+  const trabRes = await trabQuery.order("apellidos");
+  const trabajadores = trabRes.data ?? [];
+  if (trabajadores.length === 0) return { ok: false, error: "No hay trabajadores para esa unidad de negocio." };
+
+  const ids = trabajadores.map((t) => t.id);
+  const [novRes, contRes] = await Promise.all([
+    supabase.from("novedades_remuneraciones").select("trabajador_id, tipo, cantidad, monto, concepto_id").eq("periodo", periodo).in("trabajador_id", ids),
+    supabase.from("contratos").select("trabajador_id, remuneracion, jornada, estado, created_at").in("trabajador_id", ids).neq("estado", "anulado").order("created_at", { ascending: false }),
+  ]);
+  const contMap = new Map<string, ContratoRow>();
+  for (const c of contRes.data ?? []) if (!contMap.has(c.trabajador_id)) contMap.set(c.trabajador_id, c as ContratoRow);
+  const diasMap = new Map((liqRes.data ?? []).map((l) => [l.trabajador_id, { trab: (l.dias_trabajados as number) ?? 30 }]));
+  const conceptos = filtrarConsiderados((concRes.data ?? []) as ConceptoRow[], cpRes.data);
+  const uf = Number((indRes.data as { uf_ultimo_dia?: number }).uf_ultimo_dia ?? 0);
+
+  const datos: DatosPreviredTrabajador[] = trabajadores.map((t) => {
+    const dias = diasMap.get(t.id)?.trab ?? 30;
+    const entrada = armarEntrada({
+      ind: indRes.data as IndicadoresRow,
+      cliente: cliRes.data as ClienteRow,
+      trabajador: t as TrabajadorRow,
+      contrato: contMap.get(t.id) ?? null,
+      novedades: (novRes.data ?? []).filter((n) => n.trabajador_id === t.id) as NovedadRow[],
+      conceptos,
+      periodo,
+      diasTrabajados: dias,
+    });
+    const r = calcularLiquidacion(entrada);
+    const { num, dv } = partirRut(t.rut);
+    const planUf = t.salud_plan_unidad === "UF" ? Number(t.salud_plan_valor ?? 0) * uf : Number(t.salud_plan_valor ?? 0);
+    return {
+      rutSinDv: num,
+      dv,
+      apellidoPaterno: t.apellido_paterno ?? (t.apellidos ?? "").split(" ")[0] ?? "",
+      apellidoMaterno: t.apellido_materno ?? (t.apellidos ?? "").split(" ").slice(1).join(" ") ?? "",
+      nombres: t.nombres ?? "",
+      sexo: t.sexo,
+      nacionalidad: t.nacionalidad,
+      regimen: t.regimen_previsional ?? "afp",
+      tipoTrabajador: t.tipo_trabajador ?? "activo",
+      diasTrabajados: dias,
+      afp: t.afp,
+      salud: t.salud,
+      monedaPlan: t.salud_plan_unidad,
+      valorPlan: Math.round(planUf),
+      tramoAsignacion: t.tramo_asignacion,
+      cargasSimples: t.cargas_simples ?? 0,
+      cargasMaternales: t.cargas_maternales ?? 0,
+      cargasInvalidas: t.cargas_invalidas ?? 0,
+      jornada: t.jornada_tipo,
+      centroCosto: t.sucursal,
+      r,
+    };
+  });
+
+  const txt = generarNominaPrevired(periodo, { mutual: cliRes.data.mutual_institucion, ccaf: cliRes.data.caja_compensacion }, datos);
+  const base64 = Buffer.from(txt, "latin1").toString("base64");
+  const suf = unidadNegocio ? `_${unidadNegocio.replace(/[^a-zA-Z0-9]/g, "")}` : "";
+  return { ok: true, base64, filename: `previred_${periodo}${suf}.txt` };
 }
