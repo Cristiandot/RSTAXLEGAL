@@ -48,6 +48,7 @@ export type TrabajadorRow = {
   mas_11_anios?: boolean | null;
   sueldo_empresarial?: boolean | null;
   fecha_ingreso?: string | null;
+  montos_fijos?: { colacion?: number; movilizacion?: number; conceptos?: Record<string, number> } | null;
   cargas_simples?: number | null;
   cargas_maternales?: number | null;
   cargas_invalidas?: number | null;
@@ -147,7 +148,18 @@ export function armarEntrada(p: ArmarParams): EntradaLiquidacion {
     num(p.contrato?.jornada?.horas_semanales ?? p.trabajador.horas_semanales, 45) || 45;
   const porId = new Map(p.conceptos.map((c) => [c.id, c]));
 
-  // Novedades → entradas del motor
+  // Montos fijos de la ficha del trabajador (recurren cada mes).
+  const fijos = (p.trabajador.montos_fijos ?? {}) as {
+    colacion?: number;
+    movilizacion?: number;
+    conceptos?: Record<string, number>;
+  };
+
+  // Monto por concepto: parte de los fijos de la ficha; una novedad del mes
+  // (con concepto_id) lo sobrescribe.
+  const montoConcepto = new Map<string, number>();
+  for (const [cid, m] of Object.entries(fijos.conceptos ?? {})) if (num(m)) montoConcepto.set(cid, num(m));
+
   const horasExtras: HoraExtraInput[] = [];
   const conceptosValor: ConceptoValor[] = [];
   let anticipo = 0;
@@ -159,19 +171,9 @@ export function armarEntrada(p: ArmarParams): EntradaLiquidacion {
     } else if (n.tipo === "anticipo") {
       anticipo += num(n.monto);
     } else if (n.tipo === "bono" || n.tipo === "descuento") {
-      const c = n.concepto_id ? porId.get(n.concepto_id) : undefined;
-      if (c) {
-        conceptosValor.push({
-          nombre: c.nombre,
-          naturaleza: c.naturaleza as ConceptoValor["naturaleza"],
-          monto: num(n.monto),
-          proporcional: c.proporcional,
-          tributable: c.tributable,
-        });
-        if (c.naturaleza === "haber_imponible" && /comisi|semana corrida|trato/i.test(c.nombre))
-          semanaCorridaVariable += num(n.monto);
+      if (n.concepto_id && porId.has(n.concepto_id)) {
+        montoConcepto.set(n.concepto_id, num(n.monto)); // novedad del mes pisa el fijo
       } else {
-        // Bono/descuento genérico sin concepto: imponible si bono, descuento si no.
         conceptosValor.push({
           nombre: n.tipo === "bono" ? "Bono" : "Descuento",
           naturaleza: n.tipo === "bono" ? "haber_imponible" : "descuento",
@@ -180,6 +182,25 @@ export function armarEntrada(p: ArmarParams): EntradaLiquidacion {
       }
     }
   }
+
+  // Emitir conceptos (fijos + novedades ya combinados).
+  for (const [cid, m] of montoConcepto) {
+    const c = porId.get(cid);
+    if (!c || !m) continue;
+    conceptosValor.push({
+      nombre: c.nombre,
+      naturaleza: c.naturaleza as ConceptoValor["naturaleza"],
+      monto: m,
+      proporcional: c.proporcional,
+      tributable: c.tributable,
+    });
+    if (c.naturaleza === "haber_imponible" && /comisi|semana corrida|trato/i.test(c.nombre))
+      semanaCorridaVariable += m;
+  }
+
+  // Colación y movilización (no imponibles) desde la ficha.
+  if (num(fijos.colacion)) conceptosValor.push({ nombre: "Colación", naturaleza: "haber_no_imponible", monto: num(fijos.colacion) });
+  if (num(fijos.movilizacion)) conceptosValor.push({ nombre: "Movilización", naturaleza: "haber_no_imponible", monto: num(fijos.movilizacion) });
 
   return {
     ind: mapearIndicadores(p.ind),

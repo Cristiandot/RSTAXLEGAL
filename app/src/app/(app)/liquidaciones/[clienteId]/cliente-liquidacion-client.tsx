@@ -382,6 +382,7 @@ export function ClienteLiquidacionClient({
         <FichaDialog
           clienteId={cliente.id}
           trabajador={fichaAbierta === "nuevo" ? null : fichaAbierta}
+          conceptos={conceptos}
           onClose={() => setFichaAbierta(null)}
           onSaved={() => { setFichaAbierta(null); router.refresh(); }}
         />
@@ -689,11 +690,13 @@ function ConceptoDialog({
 function FichaDialog({
   clienteId,
   trabajador,
+  conceptos,
   onClose,
   onSaved,
 }: {
   clienteId: string;
   trabajador: Trabajador | null;
+  conceptos: Concepto[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -701,6 +704,13 @@ function FichaDialog({
   const g = (k: string): string => str(trabajador?.[k]);
   const [salud, setSalud] = useState(g("salud") || "Fonasa");
   const esIsapre = salud !== "Fonasa" && salud !== "Sin Isapre" && salud !== "";
+
+  const fijosIni = (trabajador?.montos_fijos ?? {}) as { colacion?: number; movilizacion?: number; conceptos?: Record<string, number> };
+  const [colacion, setColacion] = useState(fijosIni.colacion != null ? String(fijosIni.colacion) : "");
+  const [movilizacion, setMovilizacion] = useState(fijosIni.movilizacion != null ? String(fijosIni.movilizacion) : "");
+  const [montosFijos, setMontosFijos] = useState<Record<string, string>>(
+    Object.fromEntries(conceptos.map((c) => [c.id, fijosIni.conceptos?.[c.id] != null ? String(fijosIni.conceptos[c.id]) : ""])),
+  );
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -724,8 +734,15 @@ function FichaDialog({
       salud_plan_valor: esIsapre ? numOrNull(fd.get("salud_plan_valor")) : null,
       salud_plan_unidad: esIsapre ? String(fd.get("salud_plan_unidad") ?? "UF") : null,
       sueldo_base: numOrNull(fd.get("sueldo_base")),
-      mas_11_anios: fd.get("mas_11_anios") === "on",
+      mas_11_anios: false,
       sueldo_empresarial: fd.get("sueldo_empresarial") === "on",
+      montos_fijos: {
+        colacion: Number(colacion) || 0,
+        movilizacion: Number(movilizacion) || 0,
+        conceptos: Object.fromEntries(
+          Object.entries(montosFijos).map(([id, v]) => [id, Number(v) || 0]).filter(([, v]) => (v as number) !== 0),
+        ),
+      },
       cargas_simples: Number(fd.get("cargas_simples") ?? 0),
       cargas_maternales: Number(fd.get("cargas_maternales") ?? 0),
       cargas_invalidas: Number(fd.get("cargas_invalidas") ?? 0),
@@ -831,9 +848,44 @@ function FichaDialog({
           <label className="col-span-2 flex items-center gap-2 pt-2 text-sm sm:col-span-3">
             <input type="checkbox" name="sueldo_empresarial" defaultChecked={trabajador?.sueldo_empresarial === true} /> Sueldo empresarial (socio/dueño — no cotiza seguro de cesantía)
           </label>
-          <label className="col-span-2 flex items-center gap-2 text-sm sm:col-span-3">
-            <input type="checkbox" name="mas_11_anios" defaultChecked={trabajador?.mas_11_anios === true} /> Más de 11 años de antigüedad <span className="text-muted-foreground">(se calcula solo desde la fecha de ingreso; marca solo si no la cargaste)</span>
-          </label>
+          <p className="col-span-2 text-xs text-muted-foreground sm:col-span-3">
+            Los 11 años de antigüedad se calculan solos desde la fecha de ingreso.
+          </p>
+
+          <div className="col-span-2 mt-2 border-t pt-3 sm:col-span-3">
+            <p className="mb-2 text-sm font-semibold">Haberes y descuentos fijos del trabajador</p>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Montos que se repiten cada mes. En “Liquidar” puedes sobrescribir un mes puntual.
+            </p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="flex flex-col gap-1.5">
+                <Label>Colación</Label>
+                <Input type="number" value={colacion} onChange={(e) => setColacion(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Movilización</Label>
+                <Input type="number" value={movilizacion} onChange={(e) => setMovilizacion(e.target.value)} />
+              </div>
+              {conceptos.map((c) => (
+                <div key={c.id} className="flex flex-col gap-1.5">
+                  <Label title={c.nombre}>
+                    <span className="truncate">{c.nombre}</span>{" "}
+                    <span className="text-xs text-muted-foreground">
+                      ({NATURALEZAS_CONCEPTO.find((n) => n.value === c.naturaleza)?.label ?? c.naturaleza})
+                    </span>
+                  </Label>
+                  <Input
+                    type="number"
+                    value={montosFijos[c.id] ?? ""}
+                    onChange={(e) => setMontosFijos((m) => ({ ...m, [c.id]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+            {conceptos.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Aún no hay bonos/descuentos configurados en la empresa.</p>
+            ) : null}
+          </div>
         </form>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>

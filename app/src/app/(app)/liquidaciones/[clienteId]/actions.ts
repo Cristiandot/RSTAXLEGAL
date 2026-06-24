@@ -99,6 +99,7 @@ export type FichaTrabajadorInput = {
   sueldo_base: number | null;
   mas_11_anios: boolean;
   sueldo_empresarial: boolean;
+  montos_fijos: { colacion: number; movilizacion: number; conceptos: Record<string, number> };
   cargas_simples: number;
   cargas_maternales: number;
   cargas_invalidas: number;
@@ -136,6 +137,7 @@ export async function guardarFichaTrabajador(
     sueldo_base: t.sueldo_base,
     mas_11_anios: t.mas_11_anios,
     sueldo_empresarial: t.sueldo_empresarial,
+    montos_fijos: t.montos_fijos,
     cargas_simples: t.cargas_simples,
     cargas_maternales: t.cargas_maternales,
     cargas_invalidas: t.cargas_invalidas,
