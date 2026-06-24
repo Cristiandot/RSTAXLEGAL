@@ -74,6 +74,8 @@ const COLUMNAS_PASO = new Set([
   "fecha_consulta_enviada",
   "fecha_detalle_recibido",
   "fecha_liquidaciones_enviadas",
+  "fecha_datos_nomina_ok",
+  "fecha_liq_confirmadas",
 ]);
 
 /**

@@ -21,6 +21,8 @@ export type LiquidacionRow = {
   fecha_detalle_recibido: string | null;
   fecha_liquidaciones_enviadas: string | null;
   fecha_previred_presentada: string | null;
+  fecha_datos_nomina_ok: string | null;
+  fecha_liq_confirmadas: string | null;
   fecha_previred_listo_pago: string | null;
   fecha_previred_pagado: string | null;
   fecha_dnp_declarado: string | null;

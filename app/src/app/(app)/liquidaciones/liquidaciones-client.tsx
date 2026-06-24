@@ -56,6 +56,21 @@ const PASOS = [
   { columna: "fecha_liquidaciones_enviadas", label: "Envío previred" },
 ] satisfies { columna: keyof LiquidacionRow; label: string }[];
 
+// Checklist de control de la migración KAME → Claude. Marcas independientes que
+// el usuario activa cuando la nómina queda lista y cuando los cálculos cuadran.
+const CHECKLIST_NOMINA = [
+  {
+    columna: "fecha_datos_nomina_ok",
+    label: "Datos nómina",
+    titulo: "Todos los trabajadores de la nómina tienen sus datos cargados",
+  },
+  {
+    columna: "fecha_liq_confirmadas",
+    label: "Liq. confirmadas",
+    titulo: "Liquidaciones confirmadas: el cálculo cuadra con KAME",
+  },
+] satisfies { columna: keyof LiquidacionRow; label: string; titulo: string }[];
+
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -290,6 +305,11 @@ export function LiquidacionesClient({
               <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
               <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>
               <ThSort col="dias" orden={orden} setOrden={setOrden} className="text-center">Días</ThSort>
+              {CHECKLIST_NOMINA.map((p) => (
+                <TableHead key={p.columna} className="text-center" title={p.titulo}>
+                  {p.label}
+                </TableHead>
+              ))}
               {PASOS.map((p) => (
                 <TableHead key={p.columna} className="text-center">
                   {p.label}
@@ -303,7 +323,7 @@ export function LiquidacionesClient({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={12}
+                  colSpan={14}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -345,6 +365,27 @@ export function LiquidacionesClient({
                   >
                     {c.dias_restantes_previred ?? "—"}
                   </TableCell>
+                  {CHECKLIST_NOMINA.map((p) => (
+                    <TableCell
+                      key={p.columna}
+                      className="text-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Checkbox
+                        checked={c[p.columna] !== null}
+                        disabled={marcando}
+                        onCheckedChange={(v) =>
+                          toggle(c.ciclo_id, p.columna, v === true)
+                        }
+                        aria-label={p.titulo}
+                        title={
+                          c[p.columna]
+                            ? `${p.label} · ${formatFecha(c[p.columna])}`
+                            : p.titulo
+                        }
+                      />
+                    </TableCell>
+                  ))}
                   {PASOS.map((p) => (
                     <TableCell
                       key={p.columna}
