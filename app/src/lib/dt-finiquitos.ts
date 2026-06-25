@@ -122,6 +122,8 @@ const COMUNAS_DT: Record<string, number> = {
   MELIPILLA: 13501,
   CURACAVI: 13503,
   TALAGANTE: 13601,
+  // VI Región del Libertador B. O'Higgins (CUT) — agregar a medida que aparezcan
+  "SAN VICENTE DE TAGUA TAGUA": 6117,
 };
 
 /** Código DT de una comuna por nombre (null si no está en el catálogo). */
