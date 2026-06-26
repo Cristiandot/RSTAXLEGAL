@@ -32,6 +32,30 @@ def parse_turnos(raw):
                 cats[-1][1][-1][1].append((cod.strip(), hor.strip()))
     return cats
 
+
+def add_turnos(d):
+    """Inserta los turnos como tablas (Turno | Horario) por categoría de horas."""
+    def set_cell(cell, text, bold=False, size=9, shade=None):
+        cell.paragraphs[0].alignment = AL.LEFT
+        r = cell.paragraphs[0].add_run(text); r.bold = bold; r.font.size = Pt(size)
+        if shade:
+            from docx.oxml.ns import qn
+            from docx.oxml import OxmlElement
+            sh = OxmlElement("w:shd"); sh.set(qn("w:fill"), shade)
+            cell._tc.get_or_add_tcPr().append(sh)
+    for cat_title, groups in parse_turnos(TURNOS_RAW):
+        h = d.add_paragraph(); h.paragraph_format.space_before = Pt(6); h.paragraph_format.keep_with_next = True
+        h.add_run(cat_title).bold = True
+        tbl = d.add_table(rows=0, cols=2); tbl.style = "Table Grid"; tbl.autofit = False
+        for sub_title, turnos in groups:
+            c = tbl.add_row().cells; c[0].merge(c[1])
+            set_cell(c[0], sub_title, bold=True, shade="EFEFEF")
+            for cod, hor in turnos:
+                c = tbl.add_row().cells
+                set_cell(c[0], cod, bold=True); set_cell(c[1], hor)
+                c[0].width = Cm(1.6); c[1].width = Cm(15.4)
+        d.add_paragraph()
+
 # --- TURNOS (verbatim) ---
 TURNOS_RAW = """
 JORNADA DE 7 HORAS APROXIMADAS.
@@ -207,28 +231,7 @@ def build(extranjero: bool, out_path: str):
     vacio()
     cl("SEGUNDO: JORNADA DE TRABAJO. ", "La jornada de trabajo será de 30 horas semanales, distribuida de lunes a domingo conforme al sistema de turnos rotativos y variables que el Empleador publicará semanalmente, con un día de descanso a la semana (y al menos dos domingos libres al mes). El Trabajador contará con una colación de 30 minutos diarios (no imputables a la jornada). De lo anterior, se seguirá lo informado en el respectivo Reglamento Interno de Orden, Higiene y Seguridad. Los turnos de trabajo, de carácter referencial, se distribuirán conforme a las siguientes tablas:")
     vacio()
-
-    def set_cell(cell, text, bold=False, size=9, shade=None):
-        cell.paragraphs[0].alignment = AL.LEFT
-        r = cell.paragraphs[0].add_run(text); r.bold = bold; r.font.size = Pt(size)
-        if shade:
-            from docx.oxml.ns import qn
-            from docx.oxml import OxmlElement
-            sh = OxmlElement("w:shd"); sh.set(qn("w:fill"), shade)
-            cell._tc.get_or_add_tcPr().append(sh)
-
-    for cat_title, groups in parse_turnos(TURNOS_RAW):
-        h = d.add_paragraph(); h.paragraph_format.space_before = Pt(6); h.paragraph_format.keep_with_next = True
-        rr = h.add_run(cat_title); rr.bold = True
-        tbl = d.add_table(rows=0, cols=2); tbl.style = "Table Grid"; tbl.autofit = False
-        for sub_title, turnos in groups:
-            c = tbl.add_row().cells; c[0].merge(c[1])
-            set_cell(c[0], sub_title, bold=True, shade="EFEFEF")
-            for cod, hor in turnos:
-                c = tbl.add_row().cells
-                set_cell(c[0], cod, bold=True); set_cell(c[1], hor)
-                c[0].width = Cm(1.6); c[1].width = Cm(15.4)
-        vacio()
+    add_turnos(d)
     cl("", CIERRE_TURNOS)
     vacio()
     cl("TERCERO: LUGAR DE TRABAJO. ", "Preferentemente en Calle Ramón Freire 1551, Local 5, Quillota. El Empleador podrá trasladar al Trabajador a otras sucursales dentro de la misma ciudad, en ejercicio de la facultad de Ius Variandi, sin que ello signifique menoscabo.")
@@ -278,6 +281,64 @@ def build(extranjero: bool, out_path: str):
     print("Generado:", out_path, "| párrafos:", len(d.paragraphs))
 
 
+def build_anexo(out_path):
+    """Anexo de jornada laboral: empresa pre-llenada, datos del trabajador y
+    turno asignado en blanco para completar a mano. Form impreso (sin placeholders)."""
+    d = Document(); d.styles['Normal'].paragraph_format.space_after = Pt(0)
+    L = "______________________"
+
+    def cab(t):
+        p = d.add_paragraph(); p.alignment = AL.CENTER; p.add_run(t).bold = True
+
+    def vacio():
+        d.add_paragraph()
+
+    def cl(lead, resto=""):
+        p = d.add_paragraph(); p.alignment = AL.JUSTIFY
+        if lead:
+            p.add_run(lead).bold = True
+        if resto:
+            p.add_run(resto)
+
+    cab("ANEXO DE CONTRATO INDIVIDUAL DE TRABAJO")
+    cab("(Establecimiento de Jornada Laboral)")
+    vacio()
+    cl("", 'En Quillota, a ____ de ' + L + ' de 2026, entre JEREZ DE LA FRONTERA SPA, RUT 78.269.062-0, representada legalmente por don Daniel Elías Améstica Hernández, RUT 13.635.853-7, ambos domiciliados en Avenida Freire 1551, Lote A, Depto. #L5, Quillota, Región de Valparaíso, correo electrónico danielamesticah@gmail.com, en adelante "el empleador", y don(ña) _________________________________________________, cédula de identidad N° ____________________, en adelante "el trabajador", se ha convenido el siguiente anexo al contrato individual de trabajo suscrito con fecha ____ de ' + L + ' de __________:')
+    vacio()
+    cl("PRIMERO. ", "Las partes dejan constancia de que el contrato individual de trabajo vigente no especificaba la distribución de la jornada de trabajo. Por el presente acto, de común acuerdo, regularizan y establecen expresamente la jornada laboral del trabajador conforme a las cláusulas siguientes.")
+    vacio()
+    cl("SEGUNDO. ", "La jornada ordinaria de trabajo será de ________ horas semanales, distribuida según el sistema de turnos rotativos y variables que el empleador publica semanalmente, con los descansos legales correspondientes. El turno asignado al trabajador es el siguiente:")
+    vacio()
+    cl("", "Turno asignado: ___________________________________________________________")
+    cl("", "Días y horario: ____________________________________________________________")
+    cl("", "___________________________________________________________________________")
+    vacio()
+    cl("", "Para todos los efectos, los turnos referenciales de la empresa son los siguientes:")
+    vacio()
+    add_turnos(d)
+    cl("", CIERRE_TURNOS)
+    vacio()
+    cl("TERCERO. ", "El presente anexo rige a partir del día ____ de " + L + " de __________. En todo lo no modificado por este instrumento, se mantienen vigentes e inalteradas todas las demás estipulaciones del contrato individual de trabajo.")
+    vacio()
+    cl("CUARTO. ", "Se firma en dos ejemplares de igual tenor y fecha, quedando uno en poder de cada parte.")
+    vacio(); vacio()
+    tb = d.add_table(rows=5, cols=2); tb.alignment = WD_TABLE_ALIGNMENT.CENTER
+    filas = [
+        ("_______________________________", "_______________________________"),
+        ("JEREZ DE LA FRONTERA SPA", "Nombre: ______________________"),
+        ("RUT 78.269.062-0", "RUT: ______________________"),
+        ("p.p. Daniel Elías Améstica Hernández", ""),
+        ("EMPLEADOR", "TRABAJADOR"),
+    ]
+    for i, (a, b) in enumerate(filas):
+        c = tb.rows[i].cells
+        for cell, txt in ((c[0], a), (c[1], b)):
+            cell.paragraphs[0].alignment = AL.CENTER; cell.paragraphs[0].add_run(txt)
+    d.save(out_path)
+    print("Generado:", out_path, "| párrafos:", len(d.paragraphs))
+
+
 BASE = "plantillas/JEREZ 78269062-0/"
 build(False, BASE + "CONTRATO Ayudante Cocina PT - Plazo Fijo.docx")
 build(True, BASE + "CONTRATO Ayudante Cocina PT Extranjero - Plazo Fijo.docx")
+build_anexo(BASE + "ANEXO Jornada Laboral (form manual).docx")
