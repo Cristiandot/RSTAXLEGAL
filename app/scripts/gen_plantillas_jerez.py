@@ -7,9 +7,30 @@ referencial. Reusar para nuevos cargos/variantes.
 Ejecutar:  py scripts/gen_plantillas_jerez.py   (desde app/)
 """
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH as AL
 from docx.enum.table import WD_TABLE_ALIGNMENT
+
+
+def parse_turnos(raw):
+    """[(categoria, [(subgrupo, [(codigo, horario)])])]"""
+    cats = []
+    for line in raw.strip().splitlines():
+        t = line.strip()
+        if not t:
+            continue
+        low = t.lower()
+        if low.startswith("jornada de"):
+            cats.append((t.rstrip("."), []))
+        elif low.startswith("turnos am") or low.startswith("turnos pm"):
+            cats[-1][1].append((t.rstrip("."), []))
+        elif t.startswith("●"):
+            body = t[1:].strip()
+            if body.lower().startswith("turno"):
+                resto = body[5:].strip()
+                cod, _, hor = resto.partition(":")
+                cats[-1][1][-1][1].append((cod.strip(), hor.strip()))
+    return cats
 
 # --- TURNOS (verbatim) ---
 TURNOS_RAW = """
@@ -184,20 +205,30 @@ def build(extranjero: bool, out_path: str):
     li('- Apoyo al Equipo: colaborar en la inducción de nuevos ingresos y asumir la encargatura de turno si es solicitado por la jefatura.')
     cl("2. Otras funciones relevantes: ", "El Trabajador deberá estar capacitado para cubrir cualquier estación de trabajo en caso de emergencia y realizar labores administrativas conexas al cargo.")
     vacio()
-    cl("SEGUNDO: JORNADA DE TRABAJO. ", "La jornada de trabajo será de 30 horas semanales, distribuida de lunes a domingo conforme al sistema de turnos rotativos y variables que el Empleador publicará semanalmente, con un día de descanso a la semana (y al menos dos domingos libres al mes). El Trabajador contará con una colación de 30 minutos diarios (no imputables a la jornada). De lo anterior, se seguirá lo informado en el respectivo Reglamento Interno de Orden, Higiene y Seguridad. Los turnos de trabajo, de carácter referencial, se distribuirán conforme a la siguiente tabla:")
-    for raw in TURNOS_RAW.strip().splitlines():
-        t = raw.strip()
-        if not t:
-            continue
-        low = t.lower()
-        if t.startswith("●"):
-            li(t[1:].strip())
-        elif low.startswith("jornada de"):
-            li(t.rstrip("."), bold=True)
-        elif low.startswith("turnos am") or low.startswith("turnos pm"):
-            li(t.rstrip("."), bold=True)
-        else:
-            li(t)
+    cl("SEGUNDO: JORNADA DE TRABAJO. ", "La jornada de trabajo será de 30 horas semanales, distribuida de lunes a domingo conforme al sistema de turnos rotativos y variables que el Empleador publicará semanalmente, con un día de descanso a la semana (y al menos dos domingos libres al mes). El Trabajador contará con una colación de 30 minutos diarios (no imputables a la jornada). De lo anterior, se seguirá lo informado en el respectivo Reglamento Interno de Orden, Higiene y Seguridad. Los turnos de trabajo, de carácter referencial, se distribuirán conforme a las siguientes tablas:")
+    vacio()
+
+    def set_cell(cell, text, bold=False, size=9, shade=None):
+        cell.paragraphs[0].alignment = AL.LEFT
+        r = cell.paragraphs[0].add_run(text); r.bold = bold; r.font.size = Pt(size)
+        if shade:
+            from docx.oxml.ns import qn
+            from docx.oxml import OxmlElement
+            sh = OxmlElement("w:shd"); sh.set(qn("w:fill"), shade)
+            cell._tc.get_or_add_tcPr().append(sh)
+
+    for cat_title, groups in parse_turnos(TURNOS_RAW):
+        h = d.add_paragraph(); h.paragraph_format.space_before = Pt(6); h.paragraph_format.keep_with_next = True
+        rr = h.add_run(cat_title); rr.bold = True
+        tbl = d.add_table(rows=0, cols=2); tbl.style = "Table Grid"; tbl.autofit = False
+        for sub_title, turnos in groups:
+            c = tbl.add_row().cells; c[0].merge(c[1])
+            set_cell(c[0], sub_title, bold=True, shade="EFEFEF")
+            for cod, hor in turnos:
+                c = tbl.add_row().cells
+                set_cell(c[0], cod, bold=True); set_cell(c[1], hor)
+                c[0].width = Cm(1.6); c[1].width = Cm(15.4)
+        vacio()
     cl("", CIERRE_TURNOS)
     vacio()
     cl("TERCERO: LUGAR DE TRABAJO. ", "Preferentemente en Calle Ramón Freire 1551, Local 5, Quillota. El Empleador podrá trasladar al Trabajador a otras sucursales dentro de la misma ciudad, en ejercicio de la facultad de Ius Variandi, sin que ello signifique menoscabo.")
