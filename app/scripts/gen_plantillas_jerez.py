@@ -281,9 +281,10 @@ def build(extranjero: bool, out_path: str):
     print("Generado:", out_path, "| párrafos:", len(d.paragraphs))
 
 
-def build_anexo(out_path):
-    """Anexo de jornada laboral: empresa pre-llenada, datos del trabajador y
-    turno asignado en blanco para completar a mano. Form impreso (sin placeholders)."""
+def build_anexo(out_path, extranjero=False):
+    """Anexo de jornada laboral: empresa pre-llenada, datos del trabajador en
+    blanco para completar a mano. Form impreso (sin placeholders). Si
+    extranjero=True agrega la cláusula de regularización de trabajador extranjero."""
     d = Document(); d.styles['Normal'].paragraph_format.space_after = Pt(0)
     L = "______________________"
 
@@ -300,8 +301,12 @@ def build_anexo(out_path):
         if resto:
             p.add_run(resto)
 
+    def li(t):
+        p = d.add_paragraph(); p.alignment = AL.JUSTIFY
+        p.paragraph_format.left_indent = Pt(18); p.add_run(t)
+
     cab("ANEXO DE CONTRATO INDIVIDUAL DE TRABAJO")
-    cab("(Establecimiento de Jornada Laboral)")
+    cab("(Jornada Laboral y Regularización de Trabajador Extranjero)" if extranjero else "(Establecimiento de Jornada Laboral)")
     vacio()
     cl("", 'En Quillota, a ____ de ' + L + ' de 2026, entre JEREZ DE LA FRONTERA SPA, RUT 78.269.062-0, representada legalmente por don Daniel Elías Améstica Hernández, RUT 13.635.853-7, ambos domiciliados en Avenida Freire 1551, Lote A, Depto. #L5, Quillota, Región de Valparaíso, correo electrónico danielamesticah@gmail.com, en adelante "el empleador", y don(ña) _________________________________________________, cédula de identidad N° ____________________, en adelante "el trabajador", se ha convenido el siguiente anexo al contrato individual de trabajo suscrito con fecha ____ de ' + L + ' de __________:')
     vacio()
@@ -314,9 +319,18 @@ def build_anexo(out_path):
     add_turnos(d)
     cl("", CIERRE_TURNOS)
     vacio()
-    cl("TERCERO. ", "El presente anexo rige a partir del día ____ de " + L + " de __________. En todo lo no modificado por este instrumento, se mantienen vigentes e inalteradas todas las demás estipulaciones del contrato individual de trabajo.")
+    n = 3
+    if extranjero:
+        cl("TERCERO. ", "Tratándose de un trabajador extranjero, las partes regularizan y dejan expresa constancia de las siguientes cláusulas especiales:")
+        li("- Vigencia: La obligación de prestar servicios emanada del contrato sólo podrá cumplirse una vez que el trabajador haya obtenido la visación de residencia correspondiente en Chile o el permiso especial de trabajo para extranjeros con visa en trámite.")
+        li("- Régimen previsional: El empleador se compromete a efectuar las retenciones correspondientes y entregarlas a las instituciones de seguridad social, salvo que las partes se acojan a la Ley 18.156.")
+        li("- Impuesto a la renta: El empleador se obliga a responder por el pago del impuesto a la renta correspondiente a la remuneración del trabajador extranjero, para rentas superiores a 13,5 UTM.")
+        vacio()
+        n = 4
+    ordinal = {3: "TERCERO", 4: "CUARTO", 5: "QUINTO"}
+    cl(f"{ordinal[n]}. ", "El presente anexo rige a partir del día ____ de " + L + " de __________. En todo lo no modificado por este instrumento, se mantienen vigentes e inalteradas todas las demás estipulaciones del contrato individual de trabajo.")
     vacio()
-    cl("CUARTO. ", "Se firma en dos ejemplares de igual tenor y fecha, quedando uno en poder de cada parte.")
+    cl(f"{ordinal[n+1]}. ", "Se firma en dos ejemplares de igual tenor y fecha, quedando uno en poder de cada parte.")
     vacio(); vacio()
     tb = d.add_table(rows=5, cols=2); tb.alignment = WD_TABLE_ALIGNMENT.CENTER
     filas = [
@@ -334,7 +348,56 @@ def build_anexo(out_path):
     print("Generado:", out_path, "| párrafos:", len(d.paragraphs))
 
 
+def build_anexo_lesly(out_path):
+    """Anexo específico de Lesly Fernández: elimina el numeral 2 de la cláusula
+    PRIMERA del contrato (error: indicaba funciones de jefatura operativa,
+    siendo Ayudante de Cocina)."""
+    d = Document(); d.styles['Normal'].paragraph_format.space_after = Pt(0)
+    L = "______________________"
+
+    def cab(t):
+        p = d.add_paragraph(); p.alignment = AL.CENTER; p.add_run(t).bold = True
+
+    def vacio():
+        d.add_paragraph()
+
+    def cl(lead, resto=""):
+        p = d.add_paragraph(); p.alignment = AL.JUSTIFY
+        if lead:
+            p.add_run(lead).bold = True
+        if resto:
+            p.add_run(resto)
+
+    cab("ANEXO DE CONTRATO INDIVIDUAL DE TRABAJO")
+    cab("(Corrección Cláusula Primera)")
+    vacio()
+    cl("", 'En Quillota, a ____ de ' + L + ' de 2026, entre JEREZ DE LA FRONTERA SPA, RUT 78.269.062-0, representada legalmente por don Daniel Elías Améstica Hernández, RUT 13.635.853-7, ambos domiciliados en Avenida Freire 1551, Lote A, Depto. #L5, Quillota, Región de Valparaíso, correo electrónico danielamesticah@gmail.com, en adelante "el empleador", y doña Lesly Angélica Fernández Fierro, cédula de identidad N° 20.274.368-4, en adelante "la trabajadora", se ha convenido el siguiente anexo al contrato individual de trabajo suscrito con fecha 15 de mayo de 2026:')
+    vacio()
+    cl("PRIMERO. ", "Las partes acuerdan eliminar el numeral 2 de la cláusula PRIMERA del contrato individual de trabajo, el cual indicaba erróneamente que la trabajadora desempeñaría funciones de jefatura operativa, en circunstancias de que el cargo efectivo de la trabajadora es el de Ayudante de Cocina. En consecuencia, dicho numeral se tiene por no escrito y sin valor alguno.")
+    vacio()
+    cl("SEGUNDO. ", "En todo lo no modificado por el presente instrumento, se mantienen vigentes e inalteradas todas las demás estipulaciones del contrato individual de trabajo.")
+    vacio()
+    cl("TERCERO. ", "Se firma en dos ejemplares de igual tenor y fecha, quedando uno en poder de cada parte.")
+    vacio(); vacio()
+    tb = d.add_table(rows=5, cols=2); tb.alignment = WD_TABLE_ALIGNMENT.CENTER
+    filas = [
+        ("_______________________________", "_______________________________"),
+        ("JEREZ DE LA FRONTERA SPA", "Lesly Angélica Fernández Fierro"),
+        ("RUT 78.269.062-0", "RUT 20.274.368-4"),
+        ("p.p. Daniel Elías Améstica Hernández", ""),
+        ("EMPLEADOR", "TRABAJADORA"),
+    ]
+    for i, (a, b) in enumerate(filas):
+        c = tb.rows[i].cells
+        for cell, txt in ((c[0], a), (c[1], b)):
+            cell.paragraphs[0].alignment = AL.CENTER; cell.paragraphs[0].add_run(txt)
+    d.save(out_path)
+    print("Generado:", out_path, "| párrafos:", len(d.paragraphs))
+
+
 BASE = "plantillas/JEREZ 78269062-0/"
 build(False, BASE + "CONTRATO Ayudante Cocina PT - Plazo Fijo.docx")
 build(True, BASE + "CONTRATO Ayudante Cocina PT Extranjero - Plazo Fijo.docx")
 build_anexo(BASE + "ANEXO Jornada Laboral (form manual).docx")
+build_anexo(BASE + "ANEXO Jornada Laboral Extranjero (form manual).docx", extranjero=True)
+build_anexo_lesly(BASE + "ANEXO Correccion Lesly Fernandez.docx")
