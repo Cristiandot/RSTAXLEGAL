@@ -20,13 +20,13 @@ export type ResultadoGeneracion = {
 function textoGratificacion(tipo: string | undefined, monto: number): string {
   switch (tipo) {
     case "sin":
-      return "No se pacta gratificación convencional. El trabajador tendrá derecho a gratificación legal únicamente si concurren a su respecto los requisitos del Artículo 47 del Código del Trabajo";
+      return "No se pacta gratificación convencional. El trabajador tendrá derecho a gratificación legal únicamente si concurren a su respecto los requisitos legales";
     case "tope":
-      return "El Empleador pagará mensualmente, por concepto de gratificación legal del Artículo 50 del Código del Trabajo, el equivalente a un doceavo del tope legal de 4,75 Ingresos Mínimos Mensuales";
+      return "El Empleador pagará mensualmente, por concepto de gratificación legal, el equivalente a un doceavo del tope legal de 4,75 Ingresos Mínimos Mensuales";
     case "manual":
-      return `El Empleador pagará mensualmente la suma fija de $${montoCLP(monto)} (${montoEnPalabras(monto)}) por concepto de gratificación convencional garantizada, imputable a la gratificación legal de los Artículos 47 y 50 del Código del Trabajo`;
+      return `El Empleador pagará mensualmente la suma fija de $${montoCLP(monto)} (${montoEnPalabras(monto)}) por concepto de gratificación convencional garantizada, imputable a la gratificación legal`;
     default:
-      return "El Empleador pagará la gratificación legal mensual conforme al Artículo 50 del Código del Trabajo, equivalente al 25% de la remuneración mensual devengada, con el tope legal de 4,75 Ingresos Mínimos Mensuales (prorrateado mensualmente)";
+      return "El Empleador pagará la gratificación legal mensual equivalente al 25% de la remuneración mensual devengada, con el tope legal de 4,75 Ingresos Mínimos Mensuales, prorrateada mensualmente";
   }
 }
 
