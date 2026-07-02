@@ -11,7 +11,7 @@ export default async function FiniquitosPage() {
   const { data, error } = await supabase
     .from("solicitudes_rrhh")
     .select(
-      "id, trabajador_nombre, trabajador_rut, correo_contacto, datos, estado, observaciones, created_at, clientes(razon_social), trabajadores(correo, banco, tipo_cuenta, numero_cuenta)",
+      "id, trabajador_nombre, trabajador_rut, correo_contacto, datos, estado, observaciones, documento_path, created_at, clientes(razon_social), trabajadores(correo, banco, tipo_cuenta, numero_cuenta)",
     )
     .eq("tipo", "finiquito")
     .order("created_at", { ascending: false })
@@ -64,6 +64,7 @@ export default async function FiniquitosPage() {
         tipoCuenta: ((t?.tipo_cuenta as string) ?? str("tipo_cuenta")) ?? "",
         numeroCuenta: ((t?.numero_cuenta as string) ?? str("numero_cuenta")) ?? "",
       },
+      documentoPath: typeof g.documento_path === "string" ? g.documento_path : null,
       creada: g.created_at,
     };
   });

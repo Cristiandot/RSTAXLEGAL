@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AlertTriangle, Calculator, CheckCircle2, FileSpreadsheet, FileText, Landmark, Mail, Search, Send, Trash2 } from "lucide-react";
+import { AlertTriangle, Calculator, CheckCircle2, Download, FileSpreadsheet, FileText, Landmark, Mail, Search, Send, Trash2 } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import {
   diasParaLimite,
@@ -12,7 +12,7 @@ import {
   textoCorreoFiniquito,
   type ResumenCorreo,
 } from "@/lib/finiquito-correo";
-import { eliminarSolicitudFiniquito, exportarCsvDt, guardarDatosPago } from "./actions";
+import { descargarFiniquito, eliminarSolicitudFiniquito, exportarCsvDt, guardarDatosPago } from "./actions";
 import { BANCOS_DT, TIPOS_CUENTA_DT } from "@/lib/dt-finiquitos";
 import { cambiarEstadoGestion } from "../gestiones/actions";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -49,6 +49,7 @@ export type FiniquitoRow = {
   calculadoEn: string | null;
   resumen: ResumenCorreo | null;
   pago: { correo: string; banco: string; tipoCuenta: string; numeroCuenta: string };
+  documentoPath: string | null;
   creada: string;
 };
 
@@ -173,6 +174,21 @@ export function FiniquitosClient({
     });
   }
   const [exportando, startExportar] = useTransition();
+  const [descargando, startDescargar] = useTransition();
+
+  function descargarDoc(f: FiniquitoRow) {
+    startDescargar(async () => {
+      const res = await descargarFiniquito(f.id);
+      if (!res.ok || !res.downloadUrl) {
+        toast.error(res.error ?? "No se pudo descargar el documento.");
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = res.downloadUrl;
+      a.download = res.nombreArchivo ?? "finiquito.docx";
+      a.click();
+    });
+  }
 
   function alternarSeleccion(id: string) {
     setSeleccionados((prev) => {
@@ -408,6 +424,20 @@ export function FiniquitosClient({
                           Carta aviso
                         </Button>
                       ) : null}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!f.documentoPath || descargando}
+                        title={
+                          f.documentoPath
+                            ? "Descargar el documento escrito del finiquito (.docx)"
+                            : "Aún no hay documento escrito cargado para este finiquito"
+                        }
+                        onClick={() => descargarDoc(f)}
+                      >
+                        <Download className="size-3.5" />
+                        Documento
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"

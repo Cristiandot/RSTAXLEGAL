@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { nombreArchivo } from "@/lib/format";
 import type { EntradaFiniquito } from "@/lib/finiquito";
 import {
   generarYSubirCartaAviso,
@@ -21,6 +22,52 @@ export async function generarCartaAviso(
   const res = await generarYSubirCartaAviso(supabase, gestionId, parametros);
   if (res.ok) revalidatePath("/finiquitos");
   return res;
+}
+
+export type ResultadoDescarga = {
+  ok: boolean;
+  error?: string;
+  downloadUrl?: string;
+  nombreArchivo?: string;
+};
+
+/**
+ * Devuelve un link firmado (1 h) para descargar el documento escrito del
+ * finiquito, ya generado y guardado en Storage (bucket `contratos`, ruta en
+ * `documento_path`). Si aún no hay documento cargado, lo informa.
+ */
+export async function descargarFiniquito(
+  gestionId: string,
+): Promise<ResultadoDescarga> {
+  const supabase = await createClient();
+
+  const { data: g, error } = await supabase
+    .from("solicitudes_rrhh")
+    .select("id, trabajador_nombre, documento_path")
+    .eq("id", gestionId)
+    .eq("tipo", "finiquito")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!g) return { ok: false, error: "Solicitud no encontrada." };
+  if (!g.documento_path) {
+    return {
+      ok: false,
+      error: "Este finiquito todavía no tiene documento escrito cargado.",
+    };
+  }
+
+  const nombreDescarga = nombreArchivo(`Finiquito - ${g.trabajador_nombre}`) + ".docx";
+  const { data: firmado, error: errUrl } = await supabase.storage
+    .from("contratos")
+    .createSignedUrl(g.documento_path, 3600, { download: nombreDescarga });
+  if (errUrl || !firmado?.signedUrl) {
+    return {
+      ok: false,
+      error: errUrl?.message ?? "No se pudo generar el link de descarga.",
+    };
+  }
+
+  return { ok: true, downloadUrl: firmado.signedUrl, nombreArchivo: nombreDescarga };
 }
 
 export type ResumenCalculo = {
