@@ -16,11 +16,13 @@ import {
   Calculator,
   Link2,
   Receipt,
+  ClipboardCheck,
   Stethoscope,
   FileDown,
   HandCoins,
   HardHat,
   ScrollText,
+  Home,
   type LucideIcon,
 } from "lucide-react";
 
@@ -161,6 +163,15 @@ export const MODULOS: SeccionModulos[] = [
         icon: Calculator,
         estado: "activo",
       },
+      {
+        key: "casa-particular",
+        label: "Casa Particular",
+        descripcion:
+          "Generador de contratos de trabajador de casa particular puertas afuera (plazo fijo e indefinido) desde plantilla tipo, con empleador persona natural.",
+        href: "/casa-particular",
+        icon: Home,
+        estado: "activo",
+      },
     ],
   },
   {
@@ -212,6 +223,15 @@ export const MODULOS: SeccionModulos[] = [
   {
     seccion: "Cartera",
     modulos: [
+      {
+        key: "onboarding",
+        label: "Onboarding y datos",
+        descripcion:
+          "Completitud de datos de empresas y trabajadores por campo y por empresa, y cola de validación de lo que cargan los clientes.",
+        href: "/onboarding",
+        icon: ClipboardCheck,
+        estado: "activo",
+      },
       {
         key: "clientes",
         label: "Clientes",

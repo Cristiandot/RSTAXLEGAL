@@ -20,6 +20,8 @@ const nextConfig: NextConfig = {
     "/mutuo/**": ["./plantillas/**/*"],
     "/rihs": ["./plantillas/**/*"],
     "/rihs/**": ["./plantillas/**/*"],
+    "/casa-particular": ["./plantillas/**/*"],
+    "/casa-particular/**": ["./plantillas/**/*"],
     "/solicitud/**": ["./plantillas/**/*"],
   },
 };
