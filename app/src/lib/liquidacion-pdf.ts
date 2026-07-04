@@ -19,6 +19,8 @@ export type DatosLiquidacionPdf = {
     cargo: string | null;
     unidadNegocio: string | null;
     salud: string | null;
+    /** Plan isapre pactado (si tiene): valor en UF o $, y su total en pesos del período. */
+    planSalud?: { valor: number; unidad: "UF" | "$"; totalPesos: number } | null;
   };
   periodoLabel: string; // "JUNIO DE 2026"
   diasTrabajados: number;
@@ -112,6 +114,14 @@ function dibujar(page: PDFPage, font: PDFFont, bold: PDFFont, d: DatosLiquidacio
   text("DESCUENTOS", L, y, 9, bold); y -= 14;
   if (r.afpMonto > 0) { detalle(`${(r.afpNombre ?? "AFP").toUpperCase()} ${r.afpTasa ?? ""} %`, r.afpMonto, y); y -= 13; }
   if (r.saludMonto > 0) { detalle(`${(d.trabajador.salud ?? "SALUD").toUpperCase()} 7 %`, r.saludLegal, y); y -= 13; }
+  if (d.trabajador.planSalud) {
+    const p = d.trabajador.planSalud;
+    const valor =
+      p.unidad === "UF"
+        ? `PLAN UF ${p.valor.toLocaleString("es-CL", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`
+        : `PLAN $ ${fmt(p.valor)}`;
+    text(`(${valor} - TOTAL PLAN $ ${fmt(p.totalPesos)})`, L + 12, y, 8); y -= 12;
+  }
   if (r.saludAdicional > 0) { detalle("ADICIONAL SALUD", r.saludAdicional, y); y -= 13; }
   if (r.afcTrabajador > 0) { detalle("SEGURO CESANTIA", r.afcTrabajador, y); y -= 13; }
   if (r.impuestoUnico > 0) { detalle("IMPUESTO UNICO", r.impuestoUnico, y); y -= 13; }

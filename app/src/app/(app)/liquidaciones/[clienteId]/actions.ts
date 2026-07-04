@@ -422,6 +422,18 @@ export async function descargarLiquidaciones(
         periodo,
         diasTrabajados: dias.trab,
       });
+      const esIsapre =
+        !!t.salud && String(t.salud).toLowerCase() !== "fonasa" && String(t.salud).toLowerCase() !== "sin isapre";
+      const planValor = Number(t.salud_plan_valor ?? 0);
+      const uf = Number((indRes.data as IndicadoresRow).uf_ultimo_dia ?? 0);
+      const planSalud =
+        esIsapre && planValor > 0
+          ? {
+              valor: planValor,
+              unidad: (t.salud_plan_unidad === "$" ? "$" : "UF") as "UF" | "$",
+              totalPesos: Math.round((t.salud_plan_unidad === "$" ? planValor : planValor * uf) + 1e-6),
+            }
+          : null;
       return {
         empresa: { razonSocial: cliRes.data!.razon_social, rut: cliRes.data!.rut_empresa, direccion: cliRes.data!.domicilio },
         trabajador: {
@@ -433,6 +445,7 @@ export async function descargarLiquidaciones(
           cargo: t.cargo,
           unidadNegocio: t.sucursal,
           salud: t.salud,
+          planSalud,
         },
         periodoLabel,
         diasTrabajados: dias.trab,
