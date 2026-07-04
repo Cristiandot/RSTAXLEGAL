@@ -37,6 +37,8 @@ export type ClienteRow = {
 
 export type TrabajadorRow = {
   sueldo_base?: number | string | null;
+  gratificacion_tipo?: string | null;
+  gratificacion_monto?: number | string | null;
   afp?: string | null;
   salud?: string | null;
   salud_plan_valor?: number | string | null;
@@ -207,8 +209,10 @@ export function armarEntrada(p: ArmarParams): EntradaLiquidacion {
     mutualTasa: num(p.cliente.mutual_tasa),
     sueldoBase,
     diasTrabajados: p.diasTrabajados ?? 30,
-    gratificacionTipo: (rem?.gratificacion_tipo as GratificacionTipo) ?? "sin",
-    gratificacionMonto: rem?.gratificacion_monto ?? 0,
+    // Precedencia: contrato del panel > ficha del trabajador > sin gratificación.
+    gratificacionTipo:
+      ((rem?.gratificacion_tipo ?? p.trabajador.gratificacion_tipo) as GratificacionTipo) ?? "sin",
+    gratificacionMonto: rem?.gratificacion_monto ?? num(p.trabajador.gratificacion_monto),
     afp: p.trabajador.afp ?? null,
     regimenPrevisional: (p.trabajador.regimen_previsional as RegimenPrevisional) ?? "afp",
     tipoTrabajador: (p.trabajador.tipo_trabajador as TipoTrabajador) ?? "activo",

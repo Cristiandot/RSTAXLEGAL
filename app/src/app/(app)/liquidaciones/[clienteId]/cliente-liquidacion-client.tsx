@@ -767,6 +767,7 @@ function FichaDialog({
   const g = (k: string): string => str(trabajador?.[k]);
   const [salud, setSalud] = useState(g("salud") || "Fonasa");
   const esIsapre = salud !== "Fonasa" && salud !== "Sin Isapre" && salud !== "";
+  const [gratTipo, setGratTipo] = useState(g("gratificacion_tipo") || "sin");
 
   const fijosIni = (trabajador?.montos_fijos ?? {}) as { colacion?: number; movilizacion?: number; conceptos?: Record<string, number> };
   const [colacion, setColacion] = useState(fijosIni.colacion != null ? String(fijosIni.colacion) : "");
@@ -797,6 +798,8 @@ function FichaDialog({
       salud_plan_valor: esIsapre ? numOrNull(fd.get("salud_plan_valor")) : null,
       salud_plan_unidad: esIsapre ? String(fd.get("salud_plan_unidad") ?? "UF") : null,
       sueldo_base: numOrNull(fd.get("sueldo_base")),
+      gratificacion_tipo: gratTipo || null,
+      gratificacion_monto: gratTipo === "manual" ? numOrNull(fd.get("gratificacion_monto")) : null,
       mas_11_anios: false,
       sueldo_empresarial: fd.get("sueldo_empresarial") === "on",
       montos_fijos: {
@@ -898,6 +901,18 @@ function FichaDialog({
           </div>
           {campo("Horas semanales", "horas_semanales", { type: "number", step: "0.01", placeholder: "45" })}
           {campo("Sueldo base", "sueldo_base", { type: "number" })}
+          <div className="flex flex-col gap-1.5">
+            <Label>Gratificación (si no hay contrato en el panel)</Label>
+            <select name="gratificacion_tipo" className={selectCls} value={gratTipo} onChange={(e) => setGratTipo(e.target.value)}>
+              <option value="sin">Sin gratificación convencional</option>
+              <option value="25">25% mensual (tope 4,75 IMM/12)</option>
+              <option value="tope">Tope 4,75 IMM/12</option>
+              <option value="manual">Monto fijo mensual</option>
+            </select>
+          </div>
+          {gratTipo === "manual"
+            ? campo("Monto gratificación", "gratificacion_monto", { type: "number" })
+            : null}
           {campo("Cargas simples", "cargas_simples", { type: "number", defaultValue: g("cargas_simples") || "0" })}
           {campo("Cargas maternales", "cargas_maternales", { type: "number", defaultValue: g("cargas_maternales") || "0" })}
           {campo("Cargas inválidas", "cargas_invalidas", { type: "number", defaultValue: g("cargas_invalidas") || "0" })}

@@ -126,6 +126,8 @@ export type FichaTrabajadorInput = {
   salud_plan_valor: number | null;
   salud_plan_unidad: string | null;
   sueldo_base: number | null;
+  gratificacion_tipo: string | null;
+  gratificacion_monto: number | null;
   mas_11_anios: boolean;
   sueldo_empresarial: boolean;
   montos_fijos: { colacion: number; movilizacion: number; conceptos: Record<string, number> };
@@ -164,6 +166,8 @@ export async function guardarFichaTrabajador(
     salud_plan_valor: t.salud_plan_valor,
     salud_plan_unidad: t.salud_plan_unidad,
     sueldo_base: t.sueldo_base,
+    gratificacion_tipo: t.gratificacion_tipo,
+    gratificacion_monto: t.gratificacion_monto,
     mas_11_anios: t.mas_11_anios,
     sueldo_empresarial: t.sueldo_empresarial,
     montos_fijos: t.montos_fijos,
