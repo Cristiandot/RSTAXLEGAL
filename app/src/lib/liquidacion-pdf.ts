@@ -26,9 +26,12 @@ export type DatosLiquidacionPdf = {
   diasLicencia: number;
   sueldoBase: number;
   r: ResultadoLiquidacion;
+  /** Aviso destacado en ROJO bajo los datos del trabajador (ej.: faltan los días trabajados). */
+  alerta?: string;
 };
 
 const NEG = rgb(0, 0, 0);
+const ROJO = rgb(0.78, 0, 0);
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US"); // miles con coma (estilo KAME)
 
 function dibujar(page: PDFPage, font: PDFFont, bold: PDFFont, d: DatosLiquidacionPdf) {
@@ -80,6 +83,12 @@ function dibujar(page: PDFPage, font: PDFFont, bold: PDFFont, d: DatosLiquidacio
   text("Días vacaciones:", 220, y); text(String(d.diasVacaciones), 320, y);
   text("Días licencia médica:", 380, y); text(String(d.diasLicencia), 500, y); y -= 12;
   hline(y); y -= 16;
+
+  // Alerta en rojo (ej.: faltan los días trabajados del período)
+  if (d.alerta) {
+    page.drawText(d.alerta, { x: L, y, size: 10, font: bold, color: ROJO });
+    y -= 18;
+  }
 
   // HABERES
   const r = d.r;

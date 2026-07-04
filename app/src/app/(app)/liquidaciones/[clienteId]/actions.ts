@@ -436,6 +436,10 @@ export async function descargarLiquidaciones(
         diasLicencia: dias.lic,
         sueldoBase: entrada.sueldoBase,
         r: calcularLiquidacion(entrada),
+        alerta:
+          dias.trab === 0
+            ? "PENDIENTE: INFORMAR LOS DIAS TRABAJADOS DEL MES PARA CALCULAR ESTA LIQUIDACION."
+            : undefined,
       };
     });
 
