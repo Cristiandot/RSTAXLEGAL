@@ -1,47 +1,101 @@
 import { createClient } from "@/lib/supabase/server";
 import { EmpresasClient, type EmpresaFichaRow } from "./empresas-client";
-import type { GrupoClienteOpcion } from "@/lib/onboarding";
+import type { CampoDef, Catalogos, GrupoClienteOpcion } from "@/lib/onboarding";
 
 export const metadata = { title: "Empresas — RS Tax & Legal" };
+
+/** Campos de la ficha que se muestran/rellenan (excluye los del encabezado). */
+const CAMPOS_HEADER = new Set(["rut_empresa", "razon_social"]);
 
 export default async function EmpresasPage() {
   const supabase = await createClient();
 
-  const [empresasRes, gruposRes, trabsRes] = await Promise.all([
-    supabase
-      .from("clientes")
-      .select(
-        "id, razon_social, nombre_fantasia, rut_empresa, grupo_id, tipo_sociedad, regimen_tributario, giro, fecha_inicio_actividades, domicilio, comuna, ciudad, correo_empresa, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono, banco, tipo_cuenta, numero_cuenta, hace_f29, hace_liquidaciones, n_trabajadores_esperados, activo",
-      )
-      .order("razon_social"),
-    supabase
-      .from("grupos_cliente")
-      .select("id, codigo, nombre")
-      .order("codigo"),
-    supabase.from("trabajadores").select("cliente_id, activo"),
-  ]);
+  const [empresasRes, gruposRes, pctRes, camposRes, catRes] =
+    await Promise.all([
+      supabase
+        .from("clientes")
+        .select(
+          "id, razon_social, rut_empresa, grupo_id, nombre_fantasia, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono, banco, tipo_cuenta, numero_cuenta",
+        )
+        .order("razon_social"),
+      supabase
+        .from("grupos_cliente")
+        .select("id, codigo, nombre")
+        .order("codigo"),
+      supabase
+        .from("v_onboarding_empresas")
+        .select("cliente_id, pct_empresa, faltan_empresa"),
+      supabase
+        .from("onboarding_campos")
+        .select("campo, etiqueta, grupo, fuente, selector, obligatorio")
+        .eq("entidad", "cliente")
+        .eq("activo", true)
+        .order("orden"),
+      supabase
+        .from("catalogo_valores")
+        .select("tipo, codigo, etiqueta")
+        .eq("activo", true)
+        .order("orden")
+        .order("etiqueta"),
+    ]);
 
   const grupos: GrupoClienteOpcion[] = gruposRes.data ?? [];
   const grupoPorId = new Map(grupos.map((g) => [g.id, g]));
 
-  // Trabajadores activos por empresa.
-  const trabPorEmpresa = new Map<string, number>();
-  for (const t of trabsRes.data ?? []) {
-    if (!t.cliente_id || t.activo === false) continue;
-    trabPorEmpresa.set(t.cliente_id, (trabPorEmpresa.get(t.cliente_id) ?? 0) + 1);
+  const pctPorEmpresa = new Map<string, { pct: number | null; faltan: number }>();
+  for (const p of pctRes.data ?? []) {
+    pctPorEmpresa.set(p.cliente_id, {
+      pct: p.pct_empresa === null ? null : Number(p.pct_empresa),
+      faltan: Number(p.faltan_empresa) || 0,
+    });
+  }
+
+  const fichaCampos: CampoDef[] = (camposRes.data ?? []).filter(
+    (c) => !CAMPOS_HEADER.has(c.campo),
+  );
+
+  const catalogos: Catalogos = {};
+  for (const c of catRes.data ?? []) {
+    (catalogos[c.tipo] ??= []).push({ codigo: c.codigo, etiqueta: c.etiqueta });
+  }
+
+  // Valor de cada campo como texto mostrable (null = falta → editable).
+  function aTexto(campo: string, raw: unknown): string | null {
+    if (raw === null || raw === undefined || raw === "") return null;
+    if (campo === "socios" && Array.isArray(raw)) {
+      const partes = raw.map((s) => {
+        const o = s as { nombre?: string; rut?: string; participacion?: number };
+        return [o.nombre, o.rut, o.participacion != null ? `${o.participacion}%` : null]
+          .filter(Boolean)
+          .join(" ");
+      });
+      return partes.join(" · ") || null;
+    }
+    if (campo === "actividades_sii" && Array.isArray(raw)) {
+      return raw.map(String).join(" · ") || null;
+    }
+    return String(raw);
   }
 
   const empresas: EmpresaFichaRow[] = (empresasRes.data ?? []).map((e) => {
     const g = e.grupo_id ? grupoPorId.get(e.grupo_id) : undefined;
+    const valores: Record<string, string | null> = {};
+    for (const def of fichaCampos) {
+      valores[def.campo] = aTexto(
+        def.campo,
+        (e as Record<string, unknown>)[def.campo],
+      );
+    }
     return {
-      ...e,
-      n_trabajadores_esperados:
-        e.n_trabajadores_esperados === null
-          ? null
-          : Number(e.n_trabajadores_esperados),
+      id: e.id,
+      razon_social: e.razon_social,
+      rut_empresa: e.rut_empresa,
+      grupo_id: e.grupo_id,
       grupo_codigo: g?.codigo ?? null,
       grupo_nombre: g?.nombre ?? null,
-      n_trab_activos: trabPorEmpresa.get(e.id) ?? 0,
+      pct: pctPorEmpresa.get(e.id)?.pct ?? null,
+      faltan: pctPorEmpresa.get(e.id)?.faltan ?? 0,
+      valores,
     };
   });
 
@@ -50,6 +104,8 @@ export default async function EmpresasPage() {
       <EmpresasClient
         empresas={empresas}
         grupos={grupos}
+        fichaCampos={fichaCampos}
+        catalogos={catalogos}
         errorCarga={empresasRes.error?.message ?? null}
       />
     </main>

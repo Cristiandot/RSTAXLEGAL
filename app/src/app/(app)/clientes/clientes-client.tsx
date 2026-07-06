@@ -26,10 +26,10 @@ import {
 import { ThSort } from "@/components/th-sort";
 import { TextoCopiable } from "@/components/texto-copiable";
 import { RutCopiable } from "@/components/rut-copiable";
+import { Progreso } from "@/components/progreso";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { EditorCampo } from "@/components/campos-editables";
 import {
-  claseCompletitud,
   claseFuente,
   type Catalogos,
   type ClienteResumenRow,
@@ -52,24 +52,6 @@ function StatCard({ label, valor }: { label: string; valor: string | number }) {
     <div className="card-soft rounded-xl bg-card px-4 py-3">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-0.5 text-2xl font-semibold">{valor}</div>
-    </div>
-  );
-}
-
-/** Barra de progreso simple del checklist. */
-function Progreso({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-muted-foreground">—</span>;
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-2 w-20 overflow-hidden rounded-full bg-muted">
-        <div
-          className={`h-full rounded-full ${
-            pct >= 90 ? "bg-emerald-500" : pct >= 60 ? "bg-amber-500" : "bg-red-500"
-          }`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span className={`text-sm ${claseCompletitud(pct)}`}>{pct}%</span>
     </div>
   );
 }

@@ -104,6 +104,16 @@ export const PLACEHOLDER_LINEAS: Record<string, string> = {
   actividades_sii: "Un código o glosa de actividad por línea",
 };
 
+/** Definición de un campo del catálogo `onboarding_campos` (para formularios). */
+export type CampoDef = {
+  campo: string;
+  etiqueta: string;
+  grupo: string;
+  fuente: string;
+  selector: string | null;
+  obligatorio: boolean;
+};
+
 /** Fila de la grilla de altas de /onboarding (empresa recién incorporada). */
 export type AltaEmpresaRow = {
   id: string;

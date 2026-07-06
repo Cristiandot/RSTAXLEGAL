@@ -122,6 +122,7 @@ export async function guardarCampo(
 
   revalidatePath("/onboarding");
   revalidatePath("/clientes");
+  revalidatePath("/empresas");
   return { ok: true };
 }
 
