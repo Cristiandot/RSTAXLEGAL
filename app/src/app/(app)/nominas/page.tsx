@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NominasClient, type NominaEmpresaRow } from "./nominas-client";
-import type { Catalogos, GrupoClienteOpcion } from "@/lib/onboarding";
+import type { CampoDef, Catalogos, GrupoClienteOpcion } from "@/lib/onboarding";
 
 export const metadata = { title: "Nóminas — RS Tax & Legal" };
 
@@ -31,8 +31,9 @@ export default async function NominasPage() {
         .order("etiqueta"),
       supabase
         .from("onboarding_campos")
-        .select("entidad, campo, selector")
-        .eq("activo", true),
+        .select("entidad, campo, etiqueta, grupo, fuente, selector, obligatorio")
+        .eq("activo", true)
+        .order("orden"),
     ]);
 
   const grupos: GrupoClienteOpcion[] = gruposRes.data ?? [];
@@ -82,10 +83,10 @@ export default async function NominasPage() {
   for (const c of catRes.data ?? []) {
     (catalogos[c.tipo] ??= []).push({ codigo: c.codigo, etiqueta: c.etiqueta });
   }
-  const selectores: Record<string, string | null> = {};
-  for (const d of defsRes.data ?? []) {
-    selectores[`${d.entidad}:${d.campo}`] = d.selector;
-  }
+  // Definición de la ficha del trabajador (el RUT va en el encabezado).
+  const fichaCampos: CampoDef[] = (defsRes.data ?? []).filter(
+    (d) => d.entidad === "trabajador" && d.campo !== "rut",
+  );
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
@@ -93,7 +94,7 @@ export default async function NominasPage() {
         empresas={empresas}
         grupos={grupos}
         catalogos={catalogos}
-        selectores={selectores}
+        fichaCampos={fichaCampos}
         errorCarga={empresasRes.error?.message ?? null}
       />
     </main>
