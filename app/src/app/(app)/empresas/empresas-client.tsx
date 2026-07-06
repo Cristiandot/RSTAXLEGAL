@@ -1,14 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
+import { Search, ChevronRight, Plus, X } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
 import { ThSort } from "@/components/th-sort";
 import { Progreso } from "@/components/progreso";
 import { EditorCampo } from "@/components/campos-editables";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { formatFecha } from "@/lib/format";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -32,6 +34,7 @@ import {
   type FaltanteRow,
   type GrupoClienteOpcion,
 } from "@/lib/onboarding";
+import { agregarSocio, quitarSocio, type Socio } from "./actions";
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -48,7 +51,126 @@ export type EmpresaFichaRow = {
   faltan: number;
   /** Valor mostrable de cada campo de la ficha; null = falta (editable). */
   valores: Record<string, string | null>;
+  socios: Socio[];
 };
+
+/** Sección dedicada: socios con RUT y % de participación, agregables. */
+function SociosCard({ empresa }: { empresa: EmpresaFichaRow }) {
+  const router = useRouter();
+  const [nombre, setNombre] = useState("");
+  const [rut, setRut] = useState("");
+  const [part, setPart] = useState("");
+  const [trabajando, start] = useTransition();
+
+  function agregar() {
+    if (!rut.trim() || trabajando) return;
+    start(async () => {
+      const res = await agregarSocio(empresa.id, nombre, rut, part);
+      if (res.ok) {
+        toast.success("Socio agregado");
+        setNombre("");
+        setRut("");
+        setPart("");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al agregar el socio");
+    });
+  }
+
+  function quitar(i: number) {
+    start(async () => {
+      const res = await quitarSocio(empresa.id, i);
+      if (res.ok) {
+        toast.success("Socio quitado");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al quitar el socio");
+    });
+  }
+
+  const totalPart = empresa.socios.reduce(
+    (a, s) => a + (s.participacion ?? 0),
+    0,
+  );
+
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="mb-2 flex items-center justify-between text-sm font-semibold">
+        <span>Socios y participación</span>
+        {empresa.socios.length ? (
+          <span className="font-normal text-muted-foreground">
+            {empresa.socios.length}{" "}
+            {empresa.socios.length === 1 ? "socio" : "socios"}
+            {totalPart ? ` · ${totalPart}%` : ""}
+          </span>
+        ) : null}
+      </div>
+
+      {empresa.socios.length ? (
+        <div className="mb-3 space-y-1">
+          {empresa.socios.map((s, i) => (
+            <div
+              key={`${s.rut ?? "s"}-${i}`}
+              className="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm"
+            >
+              <span className="min-w-0 flex-1 truncate font-medium">
+                {s.nombre ?? "—"}
+              </span>
+              <RutCopiable rut={s.rut} />
+              <span className="w-14 text-right text-muted-foreground">
+                {s.participacion != null ? `${s.participacion}%` : "—"}
+              </span>
+              <button
+                type="button"
+                className="rounded p-0.5 text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                title="Quitar socio"
+                disabled={trabajando}
+                onClick={() => quitar(i)}
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mb-3 text-sm text-muted-foreground">
+          Sin socios registrados.
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_9rem_5.5rem_auto]">
+        <Input
+          className="h-8 bg-card text-sm"
+          placeholder="Nombre del socio"
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+        />
+        <Input
+          className="h-8 bg-card text-sm"
+          placeholder="12.345.678-9"
+          value={rut}
+          onChange={(e) => setRut(e.target.value)}
+        />
+        <Input
+          className="h-8 bg-card text-sm"
+          type="number"
+          min={0}
+          max={100}
+          placeholder="%"
+          value={part}
+          onChange={(e) => setPart(e.target.value)}
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8"
+          disabled={trabajando || !rut.trim()}
+          onClick={agregar}
+        >
+          <Plus className="size-4" /> Agregar
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function EmpresasClient({
   empresas,
@@ -283,9 +405,10 @@ export function EmpresasClient({
             </DialogHeader>
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
               {camposPorGrupo.map(([grupo, defs]) => (
-                <div key={grupo} className="rounded-lg border p-3">
-                  <div className="mb-2 text-sm font-semibold">{grupo}</div>
-                  <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                <div key={grupo} className="contents">
+                  <div className="rounded-lg border p-3">
+                    <div className="mb-2 text-sm font-semibold">{grupo}</div>
+                    <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                     {defs.map((def) => {
                       const v = empSel.valores[def.campo];
                       if (v !== null && v !== undefined) {
@@ -326,7 +449,11 @@ export function EmpresasClient({
                         </div>
                       );
                     })}
+                    </div>
                   </div>
+                  {grupo === "Identificación" ? (
+                    <SociosCard empresa={empSel} />
+                  ) : null}
                 </div>
               ))}
             </div>

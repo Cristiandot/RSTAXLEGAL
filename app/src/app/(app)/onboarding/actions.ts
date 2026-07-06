@@ -207,7 +207,6 @@ export type NuevaEmpresaInput = {
   nuevo_cliente_telefono?: string;
   rut_empresa: string;
   razon_social: string;
-  nombre_fantasia?: string;
   tipo_sociedad?: string;
   regimen_tributario?: string;
   giro?: string;
@@ -309,7 +308,6 @@ export async function crearEmpresa(
       razon_social: razon,
       rut_empresa: rut,
       grupo_id: grupoId,
-      nombre_fantasia: input.nombre_fantasia?.trim() || null,
       tipo_sociedad: input.tipo_sociedad || null,
       regimen_tributario: input.regimen_tributario || null,
       giro: input.giro?.trim() || null,

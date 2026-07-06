@@ -703,14 +703,6 @@ export function OnboardingClient({
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ne-fantasia">Nombre de fantasía</Label>
-              <Input
-                id="ne-fantasia"
-                value={nueva.nombre_fantasia ?? ""}
-                onChange={(e) => setN("nombre_fantasia", e.target.value)}
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
               <Label htmlFor="ne-tipo">Tipo de sociedad</Label>
               <select
                 id="ne-tipo"

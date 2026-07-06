@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { EmpresasClient, type EmpresaFichaRow } from "./empresas-client";
+import type { Socio } from "./actions";
 import type { CampoDef, Catalogos, GrupoClienteOpcion } from "@/lib/onboarding";
 
 export const metadata = { title: "Empresas — RS Tax & Legal" };
 
-/** Campos de la ficha que se muestran/rellenan (excluye los del encabezado). */
-const CAMPOS_HEADER = new Set(["rut_empresa", "razon_social"]);
+/** Campos con render propio (encabezado del diálogo o sección dedicada). */
+const CAMPOS_ESPECIALES = new Set(["rut_empresa", "razon_social", "socios"]);
 
 export default async function EmpresasPage() {
   const supabase = await createClient();
@@ -15,7 +16,7 @@ export default async function EmpresasPage() {
       supabase
         .from("clientes")
         .select(
-          "id, razon_social, rut_empresa, grupo_id, nombre_fantasia, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono, banco, tipo_cuenta, numero_cuenta",
+          "id, razon_social, rut_empresa, grupo_id, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono",
         )
         .order("razon_social"),
       supabase
@@ -51,7 +52,7 @@ export default async function EmpresasPage() {
   }
 
   const fichaCampos: CampoDef[] = (camposRes.data ?? []).filter(
-    (c) => !CAMPOS_HEADER.has(c.campo),
+    (c) => !CAMPOS_ESPECIALES.has(c.campo),
   );
 
   const catalogos: Catalogos = {};
@@ -96,6 +97,7 @@ export default async function EmpresasPage() {
       pct: pctPorEmpresa.get(e.id)?.pct ?? null,
       faltan: pctPorEmpresa.get(e.id)?.faltan ?? 0,
       valores,
+      socios: Array.isArray(e.socios) ? (e.socios as Socio[]) : [],
     };
   });
 
