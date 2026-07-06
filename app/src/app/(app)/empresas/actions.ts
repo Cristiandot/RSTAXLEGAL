@@ -106,6 +106,8 @@ export type TrabajadorNominaRow = {
   afp: string | null;
   salud: string | null;
   plan_isapre: string | null;
+  /** Centro de costo (columna `sucursal`). */
+  sucursal: string | null;
   activo: boolean | null;
 };
 
@@ -117,7 +119,7 @@ export async function nominaDeEmpresa(
   const { data } = await supabase
     .from("trabajadores")
     .select(
-      "id, nombres, apellidos, apellido_paterno, apellido_materno, rut, cargo, tipo_contrato, jornada_tipo, horas_semanales, fecha_ingreso, sueldo_base, afp, salud, plan_isapre, activo",
+      "id, nombres, apellidos, apellido_paterno, apellido_materno, rut, cargo, tipo_contrato, jornada_tipo, horas_semanales, fecha_ingreso, sueldo_base, afp, salud, plan_isapre, sucursal, activo",
     )
     .eq("cliente_id", clienteId)
     .order("activo", { ascending: false })
@@ -139,6 +141,7 @@ export async function nominaDeEmpresa(
     afp: t.afp,
     salud: t.salud,
     plan_isapre: t.plan_isapre,
+    sucursal: t.sucursal,
     activo: t.activo,
   }));
 }

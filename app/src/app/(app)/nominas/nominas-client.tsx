@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Search, ChevronRight, Users } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
 import { ThSort } from "@/components/th-sort";
+import { Progreso } from "@/components/progreso";
+import { CamposEditables } from "@/components/campos-editables";
 import { comparar, type Orden } from "@/lib/ordenar";
-import { formatFecha, formatMonto } from "@/lib/format";
+import { formatMonto } from "@/lib/format";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -23,8 +25,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { GrupoClienteOpcion } from "@/lib/onboarding";
+import type {
+  Catalogos,
+  FaltanteRow,
+  GrupoClienteOpcion,
+} from "@/lib/onboarding";
 import { nominaDeEmpresa, type TrabajadorNominaRow } from "../empresas/actions";
+import { faltantesDeEmpresa } from "../onboarding/actions";
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -36,10 +43,12 @@ export type NominaEmpresaRow = {
   grupo_id: string | null;
   grupo_codigo: string | null;
   grupo_nombre: string | null;
-  hace_liquidaciones: boolean | null;
   n_trabajadores_esperados: number | null;
   n_trab_activos: number;
   n_trab_total: number;
+  /** % de completitud de los datos de los trabajadores. */
+  pct_trab: number | null;
+  faltan_trab: number;
 };
 
 function StatCard({ label, valor }: { label: string; valor: string | number }) {
@@ -66,30 +75,36 @@ function Dotacion({ e }: { e: NominaEmpresaRow }) {
   );
 }
 
+const SIN_CENTRO = "__sin__";
+
 export function NominasClient({
   empresas,
   grupos,
+  catalogos,
+  selectores,
   errorCarga,
 }: {
   empresas: NominaEmpresaRow[];
   grupos: GrupoClienteOpcion[];
+  catalogos: Catalogos;
+  selectores: Record<string, string | null>;
   errorCarga: string | null;
 }) {
+  const router = useRouter();
   const [buscar, setBuscar] = useState("");
   const [clienteF, setClienteF] = useState("");
-  const [soloConNomina, setSoloConNomina] = useState(true);
   const [orden, setOrden] = useState<Orden>(null);
 
-  // Detalle: nómina de la empresa
+  // Detalle: nómina editable de la empresa
   const [empSel, setEmpSel] = useState<NominaEmpresaRow | null>(null);
   const [nomina, setNomina] = useState<TrabajadorNominaRow[]>([]);
+  const [faltantes, setFaltantes] = useState<FaltanteRow[]>([]);
+  const [centro, setCentro] = useState("");
   const [cargando, startCargar] = useTransition();
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
     const out = empresas.filter((e) => {
-      if (soloConNomina && !e.hace_liquidaciones && e.n_trab_total === 0)
-        return false;
       if (q) {
         const t =
           `${e.razon_social} ${e.rut_empresa ?? ""} ${e.grupo_codigo ?? ""} ${e.grupo_nombre ?? ""}`.toLowerCase();
@@ -109,14 +124,16 @@ export function NominasClient({
           return e.razon_social;
         case "activos":
           return e.n_trab_activos;
-        case "declarados":
-          return e.n_trabajadores_esperados;
+        case "pct":
+          return e.pct_trab;
+        case "faltan":
+          return e.faltan_trab;
         default:
           return null;
       }
     };
     return [...out].sort((a, b) => comparar(val(a), val(b), orden.dir));
-  }, [empresas, buscar, clienteF, soloConNomina, orden]);
+  }, [empresas, buscar, clienteF, orden]);
 
   const totalActivos = useMemo(
     () => filtradas.reduce((a, e) => a + e.n_trab_activos, 0),
@@ -135,10 +152,50 @@ export function NominasClient({
   function abrir(e: NominaEmpresaRow) {
     setEmpSel(e);
     setNomina([]);
+    setFaltantes([]);
+    setCentro("");
     startCargar(async () => {
-      setNomina(await nominaDeEmpresa(e.id));
+      const [n, f] = await Promise.all([
+        nominaDeEmpresa(e.id),
+        faltantesDeEmpresa(e.id),
+      ]);
+      setNomina(n);
+      setFaltantes(f.filter((x) => x.entidad === "trabajador"));
     });
   }
+
+  function quitarFaltante(f: FaltanteRow) {
+    setFaltantes((prev) =>
+      prev.filter((x) => !(x.registro_id === f.registro_id && x.campo === f.campo)),
+    );
+    router.refresh();
+  }
+
+  // Centros de costo (columna sucursal) presentes en la nómina activa.
+  const centros = useMemo(() => {
+    const s = new Set<string>();
+    let sinCentro = false;
+    for (const t of nomina) {
+      if (t.activo === false) continue;
+      if (t.sucursal?.trim()) s.add(t.sucursal.trim());
+      else sinCentro = true;
+    }
+    return { lista: [...s].sort(), sinCentro };
+  }, [nomina]);
+
+  const trabajadoresVisibles = useMemo(() => {
+    return nomina.filter((t) => {
+      if (t.activo === false) return false;
+      if (!centro) return true;
+      if (centro === SIN_CENTRO) return !t.sucursal?.trim();
+      return t.sucursal?.trim() === centro;
+    });
+  }, [nomina, centro]);
+
+  const desvinculados = useMemo(
+    () => nomina.filter((t) => t.activo === false).length,
+    [nomina],
+  );
 
   return (
     <div className="space-y-5">
@@ -147,8 +204,9 @@ export function NominasClient({
           Empresas — Nómina de trabajadores
         </h1>
         <p className="text-sm text-muted-foreground">
-          Revisión de la nómina de cada empresa: dotación activa vs. declarada
-          y el detalle contractual y previsional de cada trabajador.
+          Solo empresas con liquidaciones de sueldo. Este es el lugar para
+          rellenar los datos de los trabajadores, con filtro por centro de
+          costo.
         </p>
       </div>
 
@@ -159,7 +217,7 @@ export function NominasClient({
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatCard label="Empresas con nómina" valor={filtradas.length} />
+        <StatCard label="Empresas con liquidaciones" valor={filtradas.length} />
         <StatCard label="Trabajadores activos" valor={totalActivos} />
         <StatCard label="Con dotación incompleta" valor={conDeficit} />
       </div>
@@ -188,14 +246,6 @@ export function NominasClient({
             </option>
           ))}
         </select>
-        <label className="flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={soloConNomina}
-            onChange={(e) => setSoloConNomina(e.target.checked)}
-          />
-          Solo con nómina
-        </label>
         <span className="ml-auto text-sm text-muted-foreground">
           {filtradas.length} empresas
         </span>
@@ -212,9 +262,14 @@ export function NominasClient({
                 Empresa
               </ThSort>
               <TableHead>RUT</TableHead>
-              <TableHead className="text-center">Previred</TableHead>
               <ThSort col="activos" orden={orden} setOrden={setOrden} className="text-center">
                 Activos / Declarados
+              </ThSort>
+              <ThSort col="pct" orden={orden} setOrden={setOrden}>
+                % Datos trab.
+              </ThSort>
+              <ThSort col="faltan" orden={orden} setOrden={setOrden} className="text-center">
+                Faltan
               </ThSort>
               <TableHead className="w-8" />
             </TableRow>
@@ -223,7 +278,7 @@ export function NominasClient({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados.
@@ -267,19 +322,19 @@ export function NominasClient({
                     <RutCopiable rut={e.rut_empresa} />
                   </TableCell>
                   <TableCell className="text-center">
-                    {e.hace_liquidaciones ? (
-                      <Badge
-                        variant="outline"
-                        className="border-emerald-200 bg-emerald-50 text-emerald-700"
-                      >
-                        Sí
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
+                    <Dotacion e={e} />
+                  </TableCell>
+                  <TableCell>
+                    <Progreso pct={e.pct_trab} />
                   </TableCell>
                   <TableCell className="text-center">
-                    <Dotacion e={e} />
+                    {e.faltan_trab === 0 ? (
+                      <span className="text-emerald-600">0</span>
+                    ) : (
+                      <span className="font-semibold text-red-600">
+                        {e.faltan_trab}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     <ChevronRight className="size-4" />
@@ -291,7 +346,7 @@ export function NominasClient({
         </Table>
       </div>
 
-      {/* ============ Diálogo: nómina de la empresa ============ */}
+      {/* ============ Diálogo: rellenar datos de la nómina ============ */}
       <Dialog
         open={empSel !== null}
         onOpenChange={(o) => {
@@ -299,7 +354,7 @@ export function NominasClient({
         }}
       >
         {empSel ? (
-          <DialogContent className="sm:max-w-4xl">
+          <DialogContent className="sm:max-w-3xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 font-heading">
                 <Users className="size-5" />
@@ -312,79 +367,83 @@ export function NominasClient({
                 {empSel.n_trabajadores_esperados !== null
                   ? ` de ${empSel.n_trabajadores_esperados} declarados`
                   : ""}
-                {empSel.n_trab_total > empSel.n_trab_activos
-                  ? ` · ${empSel.n_trab_total - empSel.n_trab_activos} desvinculados`
-                  : ""}
+                {desvinculados ? ` · ${desvinculados} desvinculados` : ""} ·
+                complete y guarde campo a campo
               </DialogDescription>
             </DialogHeader>
-            <div className="max-h-[70vh] overflow-y-auto pr-1">
+
+            {/* Filtro por centro de costo */}
+            {centros.lista.length || centros.sinCentro ? (
+              <select
+                aria-label="Centro de costo"
+                className={`${selectCls} max-w-[280px]`}
+                value={centro}
+                onChange={(e) => setCentro(e.target.value)}
+              >
+                <option value="">Todos los centros de costo</option>
+                {centros.lista.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                {centros.sinCentro ? (
+                  <option value={SIN_CENTRO}>Sin centro de costo</option>
+                ) : null}
+              </select>
+            ) : null}
+
+            <div className="max-h-[62vh] space-y-3 overflow-y-auto pr-1">
               {cargando ? (
                 <p className="text-sm text-muted-foreground">Cargando…</p>
-              ) : nomina.length === 0 ? (
+              ) : trabajadoresVisibles.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Sin trabajadores cargados.
+                  Sin trabajadores activos
+                  {centro ? " en este centro de costo" : " cargados"}.
                 </p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead>Trabajador</TableHead>
-                      <TableHead>RUT</TableHead>
-                      <TableHead>Cargo</TableHead>
-                      <TableHead>Contrato</TableHead>
-                      <TableHead>Jornada</TableHead>
-                      <TableHead>Ingreso</TableHead>
-                      <TableHead className="text-right">Sueldo base</TableHead>
-                      <TableHead>AFP</TableHead>
-                      <TableHead>Salud</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {nomina.map((t) => (
-                      <TableRow
-                        key={t.id}
-                        className={`hover:bg-transparent ${t.activo === false ? "opacity-50" : ""}`}
-                      >
-                        <TableCell className="font-medium">
+                trabajadoresVisibles.map((t) => {
+                  const deTrab = faltantes.filter(
+                    (f) => f.registro_id === t.id,
+                  );
+                  return (
+                    <div key={t.id} className="rounded-lg border p-3">
+                      <div className="mb-1 flex flex-wrap items-baseline gap-x-2">
+                        <span className="text-sm font-semibold">
                           {t.nombre}
-                          {t.activo === false ? (
-                            <span className="ml-1.5 text-xs text-muted-foreground">
-                              (desvinculado)
-                            </span>
-                          ) : null}
-                        </TableCell>
-                        <TableCell>
-                          <RutCopiable rut={t.rut} />
-                        </TableCell>
-                        <TableCell>{t.cargo ?? "—"}</TableCell>
-                        <TableCell>{t.tipo_contrato ?? "—"}</TableCell>
-                        <TableCell>
-                          {t.jornada_tipo ?? "—"}
-                          {t.horas_semanales !== null
-                            ? ` · ${t.horas_semanales}h`
-                            : ""}
-                        </TableCell>
-                        <TableCell>
-                          {t.fecha_ingreso ? formatFecha(t.fecha_ingreso) : "—"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {t.sueldo_base === null
-                            ? "—"
-                            : `$${formatMonto(t.sueldo_base)}`}
-                        </TableCell>
-                        <TableCell>{t.afp ?? "—"}</TableCell>
-                        <TableCell>
-                          {t.salud ?? "—"}
-                          {t.plan_isapre ? (
-                            <span className="block text-xs text-muted-foreground">
-                              {t.plan_isapre}
-                            </span>
-                          ) : null}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </span>
+                        <RutCopiable rut={t.rut} />
+                        {t.sucursal ? (
+                          <span className="rounded bg-muted px-1.5 text-xs text-muted-foreground">
+                            {t.sucursal}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mb-2 text-xs text-muted-foreground">
+                        {[
+                          t.cargo,
+                          t.tipo_contrato,
+                          t.sueldo_base !== null
+                            ? `$${formatMonto(t.sueldo_base)}`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "Sin datos contractuales"}
+                      </p>
+                      {deTrab.length === 0 ? (
+                        <p className="text-sm text-emerald-600">
+                          Ficha completa. ✓
+                        </p>
+                      ) : (
+                        <CamposEditables
+                          items={deTrab}
+                          catalogos={catalogos}
+                          selectores={selectores}
+                          onSaved={quitarFaltante}
+                        />
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </DialogContent>
