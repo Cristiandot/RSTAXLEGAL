@@ -12,13 +12,18 @@ export const metadata = { title: "Clientes — RS Tax & Legal" };
 export default async function ClientesPage() {
   const supabase = await createClient();
 
-  const [gruposRes, vinculosRes, empresasRes, porCampoRes, catRes, defsRes] =
+  const [gruposRes, vinculosRes, trabsRes, empresasRes, porCampoRes, catRes, defsRes] =
     await Promise.all([
       supabase
         .from("grupos_cliente")
         .select("id, codigo, nombre, correo, carpeta_onedrive")
         .order("codigo"),
-      supabase.from("clientes").select("id, grupo_id, razon_social, rut_empresa"),
+      supabase
+        .from("clientes")
+        .select(
+          "id, grupo_id, razon_social, rut_empresa, hace_f29, hace_liquidaciones",
+        ),
+      supabase.from("trabajadores").select("cliente_id, activo"),
       supabase.from("v_onboarding_empresas").select("*"),
       supabase.from("v_onboarding_por_campo").select("*"),
       supabase
@@ -47,6 +52,13 @@ export default async function ClientesPage() {
     });
   }
 
+  // Trabajadores activos por empresa (dotación Previred).
+  const trabPorEmpresa = new Map<string, number>();
+  for (const t of trabsRes.data ?? []) {
+    if (!t.cliente_id || t.activo === false) continue;
+    trabPorEmpresa.set(t.cliente_id, (trabPorEmpresa.get(t.cliente_id) ?? 0) + 1);
+  }
+
   // Empresas de cada cliente (datos básicos para el detalle).
   const empresasPorGrupo = new Map<string, EmpresaDeGrupo[]>();
   for (const v of vinculosRes.data ?? []) {
@@ -58,6 +70,9 @@ export default async function ClientesPage() {
       rut_empresa: v.rut_empresa,
       pct: pctPorEmpresa.get(v.id)?.pct ?? null,
       faltan: pctPorEmpresa.get(v.id)?.faltan ?? 0,
+      hace_f29: v.hace_f29,
+      hace_liquidaciones: v.hace_liquidaciones,
+      n_trab_activos: trabPorEmpresa.get(v.id) ?? 0,
     });
     empresasPorGrupo.set(v.grupo_id, arr);
   }

@@ -467,12 +467,21 @@ export function ClientesClient({
                   </p>
                 ) : (
                   <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead>Empresa</TableHead>
+                        <TableHead>RUT</TableHead>
+                        <TableHead className="text-center">F29</TableHead>
+                        <TableHead className="text-center">Previred</TableHead>
+                        <TableHead>% Completado</TableHead>
+                      </TableRow>
+                    </TableHeader>
                     <TableBody>
                       {(empresasDeGrupo[cliSel.grupo_id] ?? []).map((emp) => (
                         <TableRow key={emp.id} className="hover:bg-transparent">
                           <TableCell className="font-medium">
                             <span
-                              className="block max-w-[240px] truncate"
+                              className="block max-w-[200px] truncate"
                               title={emp.razon_social}
                             >
                               {emp.razon_social}
@@ -481,17 +490,29 @@ export function ClientesClient({
                           <TableCell>
                             <RutCopiable rut={emp.rut_empresa} />
                           </TableCell>
-                          <TableCell>
-                            <Progreso pct={emp.pct} />
+                          <TableCell className="text-center text-sm">
+                            {emp.hace_f29 ? (
+                              <span className="font-medium text-emerald-600">
+                                Sí
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">No</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-center text-sm">
-                            {emp.faltan === 0 ? (
-                              <span className="text-emerald-600">✓</span>
-                            ) : (
-                              <span className="text-muted-foreground">
-                                faltan {emp.faltan}
+                            {emp.hace_liquidaciones ? (
+                              <span
+                                className="font-medium text-emerald-600"
+                                title="Trabajadores activos de la sociedad"
+                              >
+                                Sí · {emp.n_trab_activos} trab.
                               </span>
+                            ) : (
+                              <span className="text-muted-foreground">No</span>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <Progreso pct={emp.pct} />
                           </TableCell>
                         </TableRow>
                       ))}

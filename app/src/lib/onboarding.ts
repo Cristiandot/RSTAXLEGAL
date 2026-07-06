@@ -141,6 +141,10 @@ export type EmpresaDeGrupo = {
   rut_empresa: string | null;
   pct: number | null;
   faltan: number;
+  hace_f29: boolean | null;
+  hace_liquidaciones: boolean | null;
+  /** Trabajadores activos (dotación Previred de la sociedad). */
+  n_trab_activos: number;
 };
 
 /** Fila de `v_onboarding_empresas` (+ el cliente/grupo al que pertenece). */
