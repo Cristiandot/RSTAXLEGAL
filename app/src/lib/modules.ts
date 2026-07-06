@@ -245,9 +245,18 @@ export const MODULOS: SeccionModulos[] = [
         key: "empresas",
         label: "Empresas",
         descripcion:
-          "Ficha de cada empresa (datos tributarios, contacto, servicios) y su nómina de recursos humanos.",
+          "Ficha de cada empresa: datos tributarios, contacto, cuenta bancaria y servicios.",
         href: "/empresas",
         icon: Building2,
+        estado: "activo",
+      },
+      {
+        key: "nominas",
+        label: "Empresas — Nómina",
+        descripcion:
+          "Nómina de trabajadores de cada empresa: dotación activa vs. declarada y detalle contractual y previsional.",
+        href: "/nominas",
+        icon: Users,
         estado: "activo",
       },
       {

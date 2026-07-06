@@ -9,10 +9,12 @@ export type TrabajadorNominaRow = {
   cargo: string | null;
   tipo_contrato: string | null;
   jornada_tipo: string | null;
+  horas_semanales: number | null;
   fecha_ingreso: string | null;
   sueldo_base: number | null;
   afp: string | null;
   salud: string | null;
+  plan_isapre: string | null;
   activo: boolean | null;
 };
 
@@ -24,7 +26,7 @@ export async function nominaDeEmpresa(
   const { data } = await supabase
     .from("trabajadores")
     .select(
-      "id, nombres, apellidos, apellido_paterno, apellido_materno, rut, cargo, tipo_contrato, jornada_tipo, fecha_ingreso, sueldo_base, afp, salud, activo",
+      "id, nombres, apellidos, apellido_paterno, apellido_materno, rut, cargo, tipo_contrato, jornada_tipo, horas_semanales, fecha_ingreso, sueldo_base, afp, salud, plan_isapre, activo",
     )
     .eq("cliente_id", clienteId)
     .order("activo", { ascending: false })
@@ -39,10 +41,13 @@ export async function nominaDeEmpresa(
     cargo: t.cargo,
     tipo_contrato: t.tipo_contrato,
     jornada_tipo: t.jornada_tipo,
+    horas_semanales:
+      t.horas_semanales === null ? null : Number(t.horas_semanales),
     fecha_ingreso: t.fecha_ingreso,
     sueldo_base: t.sueldo_base === null ? null : Number(t.sueldo_base),
     afp: t.afp,
     salud: t.salud,
+    plan_isapre: t.plan_isapre,
     activo: t.activo,
   }));
 }

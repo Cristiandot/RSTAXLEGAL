@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { Search, ChevronRight, Users } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Search, ChevronRight } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
 import { ThSort } from "@/components/th-sort";
 import { comparar, type Orden } from "@/lib/ordenar";
-import { formatFecha, formatMonto } from "@/lib/format";
+import { formatFecha } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -24,7 +24,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { GrupoClienteOpcion } from "@/lib/onboarding";
-import { nominaDeEmpresa, type TrabajadorNominaRow } from "./actions";
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -94,10 +93,8 @@ export function EmpresasClient({
   const [clienteF, setClienteF] = useState("");
   const [orden, setOrden] = useState<Orden>(null);
 
-  // Detalle: ficha + nómina
+  // Detalle: ficha de la empresa
   const [empSel, setEmpSel] = useState<EmpresaFichaRow | null>(null);
-  const [nomina, setNomina] = useState<TrabajadorNominaRow[]>([]);
-  const [cargando, startCargar] = useTransition();
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
@@ -132,10 +129,6 @@ export function EmpresasClient({
 
   function abrir(e: EmpresaFichaRow) {
     setEmpSel(e);
-    setNomina([]);
-    startCargar(async () => {
-      setNomina(await nominaDeEmpresa(e.id));
-    });
   }
 
   return (
@@ -307,7 +300,7 @@ export function EmpresasClient({
               </DialogDescription>
             </DialogHeader>
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {/* Datos de la empresa */}
+              {/* Datos de la empresa (la nómina vive en Empresas — Nómina) */}
               <div className="rounded-lg border p-3">
                 <div className="mb-2 text-sm font-semibold">
                   Datos de la empresa
@@ -349,71 +342,6 @@ export function EmpresasClient({
                 </div>
               </div>
 
-              {/* Nómina RRHH */}
-              <div className="rounded-lg border p-3">
-                <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                  <Users className="size-4" /> Nómina de recursos humanos
-                  {empSel.n_trabajadores_esperados !== null ? (
-                    <span className="font-normal text-muted-foreground">
-                      · declarados {empSel.n_trabajadores_esperados}
-                    </span>
-                  ) : null}
-                </div>
-                {cargando ? (
-                  <p className="text-sm text-muted-foreground">Cargando…</p>
-                ) : nomina.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Sin trabajadores cargados.
-                  </p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead>Trabajador</TableHead>
-                        <TableHead>RUT</TableHead>
-                        <TableHead>Cargo</TableHead>
-                        <TableHead>Contrato</TableHead>
-                        <TableHead>Ingreso</TableHead>
-                        <TableHead className="text-right">Sueldo base</TableHead>
-                        <TableHead>AFP</TableHead>
-                        <TableHead>Salud</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {nomina.map((t) => (
-                        <TableRow
-                          key={t.id}
-                          className={`hover:bg-transparent ${t.activo === false ? "opacity-50" : ""}`}
-                        >
-                          <TableCell className="font-medium">
-                            {t.nombre}
-                            {t.activo === false ? (
-                              <span className="ml-1.5 text-xs text-muted-foreground">
-                                (desvinculado)
-                              </span>
-                            ) : null}
-                          </TableCell>
-                          <TableCell>
-                            <RutCopiable rut={t.rut} />
-                          </TableCell>
-                          <TableCell>{t.cargo ?? "—"}</TableCell>
-                          <TableCell>{t.tipo_contrato ?? "—"}</TableCell>
-                          <TableCell>
-                            {t.fecha_ingreso ? formatFecha(t.fecha_ingreso) : "—"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {t.sueldo_base === null
-                              ? "—"
-                              : `$${formatMonto(t.sueldo_base)}`}
-                          </TableCell>
-                          <TableCell>{t.afp ?? "—"}</TableCell>
-                          <TableCell>{t.salud ?? "—"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </div>
             </div>
           </DialogContent>
         ) : null}
