@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { OnboardingClient } from "./onboarding-client";
 import type {
+  Catalogos,
   EmpresaOnboardingRow,
   PorCampoRow,
   CambioPropuestoRow,
@@ -11,18 +12,39 @@ export const metadata = { title: "Onboarding — RS Tax & Legal" };
 export default async function OnboardingPage() {
   const supabase = await createClient();
 
-  const [empresasRes, porCampoRes, cambiosRes] = await Promise.all([
-    supabase
-      .from("v_onboarding_empresas")
-      .select("*")
-      .order("pct_empresa", { ascending: true, nullsFirst: true }),
-    supabase.from("v_onboarding_por_campo").select("*"),
-    supabase
-      .from("cambios_propuestos")
-      .select("*")
-      .eq("estado", "pendiente")
-      .order("created_at", { ascending: true }),
-  ]);
+  const [empresasRes, porCampoRes, cambiosRes, catRes, defsRes] =
+    await Promise.all([
+      supabase
+        .from("v_onboarding_empresas")
+        .select("*")
+        .order("pct_empresa", { ascending: true, nullsFirst: true }),
+      supabase.from("v_onboarding_por_campo").select("*"),
+      supabase
+        .from("cambios_propuestos")
+        .select("*")
+        .eq("estado", "pendiente")
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("catalogo_valores")
+        .select("tipo, codigo, etiqueta")
+        .eq("activo", true)
+        .order("orden")
+        .order("etiqueta"),
+      supabase
+        .from("onboarding_campos")
+        .select("entidad, campo, selector")
+        .eq("activo", true),
+    ]);
+
+  // Opciones de selectores cerrados + qué selector usa cada campo.
+  const catalogos: Catalogos = {};
+  for (const c of catRes.data ?? []) {
+    (catalogos[c.tipo] ??= []).push({ codigo: c.codigo, etiqueta: c.etiqueta });
+  }
+  const selectores: Record<string, string | null> = {};
+  for (const d of defsRes.data ?? []) {
+    selectores[`${d.entidad}:${d.campo}`] = d.selector;
+  }
 
   // PostgREST devuelve numeric/bigint como string → coerción explícita.
   const empresas: EmpresaOnboardingRow[] = (empresasRes.data ?? []).map((e) => ({
@@ -90,6 +112,8 @@ export default async function OnboardingPage() {
         empresas={empresas}
         porCampo={porCampo}
         cambios={cambios}
+        catalogos={catalogos}
+        selectores={selectores}
         errorCarga={empresasRes.error?.message ?? null}
       />
     </main>

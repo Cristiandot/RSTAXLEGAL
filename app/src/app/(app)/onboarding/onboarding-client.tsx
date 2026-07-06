@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Check, Undo2, ChevronRight } from "lucide-react";
+import { Search, Check, Undo2, ChevronRight, Plus } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,9 +29,14 @@ import {
 import {
   LABEL_ESTADO,
   ESTADOS_ONBOARDING,
+  GRUPOS_CARTERA,
+  PLACEHOLDER_LINEAS,
   claseEstadoOnboarding,
   claseFuente,
   claseCompletitud,
+  tipoCampo,
+  type Catalogos,
+  type CatalogoOpcion,
   type EmpresaOnboardingRow,
   type PorCampoRow,
   type CambioPropuestoRow,
@@ -43,6 +48,9 @@ import {
   setOnboardingEstado,
   aprobarCambio,
   devolverCambio,
+  guardarCampo,
+  crearEmpresa,
+  type NuevaEmpresaInput,
 } from "./actions";
 
 const selectCls =
@@ -67,8 +75,108 @@ function Pct({ valor }: { valor: number | null }) {
   );
 }
 
-/** Lista de campos faltantes agrupada por grupo, con su badge de fuente. */
-function CamposFaltantes({ items }: { items: FaltanteRow[] }) {
+/** Input inline para llenar un campo faltante y guardarlo directo a la ficha. */
+function EditorCampo({
+  item,
+  selector,
+  opciones,
+  onSaved,
+}: {
+  item: FaltanteRow;
+  selector: string | null;
+  opciones?: CatalogoOpcion[];
+  onSaved: () => void;
+}) {
+  const [valor, setValor] = useState("");
+  const [saving, startSave] = useTransition();
+  const tipo = tipoCampo(item.campo);
+
+  function guardar() {
+    if (!valor.trim() || saving) return;
+    startSave(async () => {
+      const res = await guardarCampo(
+        item.entidad,
+        item.registro_id,
+        item.campo,
+        valor,
+      );
+      if (res.ok) {
+        toast.success(`${item.etiqueta}: guardado`);
+        onSaved();
+      } else toast.error(res.error ?? "Error al guardar");
+    });
+  }
+
+  return (
+    <div className="flex w-full items-start gap-1.5">
+      {selector ? (
+        <select
+          aria-label={item.etiqueta}
+          className={`${selectCls} h-8 w-full min-w-0`}
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+        >
+          <option value="">— Elegir —</option>
+          {(opciones ?? []).map((o) => (
+            <option key={o.codigo} value={o.codigo}>
+              {o.etiqueta}
+            </option>
+          ))}
+        </select>
+      ) : tipo === "lineas" ? (
+        <Textarea
+          rows={2}
+          className="min-w-0 flex-1 bg-card text-sm"
+          placeholder={PLACEHOLDER_LINEAS[item.campo] ?? ""}
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+        />
+      ) : (
+        <Input
+          type={
+            tipo === "fecha" ? "date" : tipo === "numero" ? "number" : "text"
+          }
+          className="h-8 w-full min-w-0 bg-card text-sm"
+          placeholder={
+            tipo === "rut"
+              ? "12.345.678-9"
+              : tipo === "correo"
+                ? "correo@dominio.cl"
+                : item.etiqueta
+          }
+          value={valor}
+          onChange={(e) => setValor(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") guardar();
+          }}
+        />
+      )}
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-8 shrink-0 px-2"
+        title="Guardar"
+        disabled={saving || !valor.trim()}
+        onClick={guardar}
+      >
+        <Check className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
+/** Campos faltantes agrupados, cada uno editable en línea. */
+function CamposEditables({
+  items,
+  catalogos,
+  selectores,
+  onSaved,
+}: {
+  items: FaltanteRow[];
+  catalogos: Catalogos;
+  selectores: Record<string, string | null>;
+  onSaved: (f: FaltanteRow) => void;
+}) {
   const porGrupo = useMemo(() => {
     const m = new Map<string, FaltanteRow[]>();
     for (const it of items) {
@@ -85,23 +193,36 @@ function CamposFaltantes({ items }: { items: FaltanteRow[] }) {
     );
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {porGrupo.map(([grupo, arr]) => (
         <div key={grupo}>
           <div className="text-xs font-medium text-muted-foreground">
             {grupo}
           </div>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {arr.map((c) => (
-              <Badge
-                key={c.campo}
-                variant="outline"
-                className={claseFuente(c.fuente)}
-                title={`Fuente: ${c.fuente}`}
-              >
-                {c.etiqueta}
-              </Badge>
-            ))}
+          <div className="mt-1.5 space-y-1.5">
+            {arr.map((c) => {
+              const sel = selectores[`${c.entidad}:${c.campo}`] ?? null;
+              return (
+                <div
+                  key={`${c.registro_id}:${c.campo}`}
+                  className="grid grid-cols-[10rem_minmax(0,1fr)] items-start gap-2"
+                >
+                  <Badge
+                    variant="outline"
+                    className={`${claseFuente(c.fuente)} mt-1 max-w-full justify-start`}
+                    title={`${c.etiqueta} · Fuente: ${c.fuente}`}
+                  >
+                    <span className="truncate">{c.etiqueta}</span>
+                  </Badge>
+                  <EditorCampo
+                    item={c}
+                    selector={sel}
+                    opciones={sel ? catalogos[sel] : undefined}
+                    onSaved={() => onSaved(c)}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}
@@ -113,11 +234,15 @@ export function OnboardingClient({
   empresas,
   porCampo,
   cambios,
+  catalogos,
+  selectores,
   errorCarga,
 }: {
   empresas: EmpresaOnboardingRow[];
   porCampo: PorCampoRow[];
   cambios: CambioPropuestoRow[];
+  catalogos: Catalogos;
+  selectores: Record<string, string | null>;
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -143,6 +268,48 @@ export function OnboardingClient({
     null,
   );
   const [obs, setObs] = useState("");
+
+  // Nueva empresa
+  const NUEVA_VACIA: NuevaEmpresaInput = {
+    grupo_cartera: "D",
+    rut_empresa: "",
+    razon_social: "",
+  };
+  const [nuevaOpen, setNuevaOpen] = useState(false);
+  const [nueva, setNueva] = useState<NuevaEmpresaInput>(NUEVA_VACIA);
+  const [creando, startCrear] = useTransition();
+
+  function setN(k: keyof NuevaEmpresaInput, v: string) {
+    setNueva((p) => ({ ...p, [k]: v }));
+  }
+
+  function crear() {
+    startCrear(async () => {
+      const res = await crearEmpresa(nueva);
+      if (res.ok) {
+        toast.success(
+          "Empresa creada. La carpeta OneDrive se creará automáticamente en unos minutos.",
+        );
+        setNuevaOpen(false);
+        setNueva(NUEVA_VACIA);
+        router.refresh();
+      } else toast.error(res.error ?? "Error al crear la empresa");
+    });
+  }
+
+  /** Al guardar un campo desde un diálogo: sacarlo de la lista local y refrescar contadores. */
+  function guardadoEnEmpresa(f: FaltanteRow) {
+    setEmpFaltantes((prev) =>
+      prev.filter((x) => !(x.registro_id === f.registro_id && x.campo === f.campo)),
+    );
+    router.refresh();
+  }
+  function guardadoEnCampo(f: FaltanteRow) {
+    setCampoFaltantes((prev) =>
+      prev.filter((x) => x.registro_id !== f.registro_id),
+    );
+    router.refresh();
+  }
 
   const empresasFiltradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
@@ -315,6 +482,9 @@ export function OnboardingClient({
                 </option>
               ))}
             </select>
+            <Button size="sm" className="h-9" onClick={() => setNuevaOpen(true)}>
+              <Plus className="size-4" /> Nueva empresa
+            </Button>
             <span className="ml-auto text-sm text-muted-foreground">
               {empresasFiltradas.length} de {empresas.length} empresas
             </span>
@@ -557,7 +727,7 @@ export function OnboardingClient({
         }}
       >
         {empSel ? (
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle className="font-heading">
                 {empSel.razon_social}
@@ -571,11 +741,11 @@ export function OnboardingClient({
                 </Badge>
                 <span className="ml-2">
                   Ficha <Pct valor={empSel.pct_empresa} /> · {empSel.n_trab}{" "}
-                  trabajadores
+                  trabajadores · complete y guarde campo a campo
                 </span>
               </DialogDescription>
             </DialogHeader>
-            <div className="max-h-[60vh] space-y-4 overflow-y-auto">
+            <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
               {cargandoEmp ? (
                 <p className="text-sm text-muted-foreground">Cargando…</p>
               ) : (
@@ -598,7 +768,12 @@ export function OnboardingClient({
                         <div className="mb-1 text-sm font-semibold">
                           Ficha de la empresa
                         </div>
-                        <CamposFaltantes items={ficha} />
+                        <CamposEditables
+                          items={ficha}
+                          catalogos={catalogos}
+                          selectores={selectores}
+                          onSaved={guardadoEnEmpresa}
+                        />
                       </div>
                       {[...porTrab.values()].map((arr) => (
                         <div key={arr[0].registro_id}>
@@ -608,7 +783,12 @@ export function OnboardingClient({
                               {arr[0].registro_rut ?? ""}
                             </span>
                           </div>
-                          <CamposFaltantes items={arr} />
+                          <CamposEditables
+                            items={arr}
+                            catalogos={catalogos}
+                            selectores={selectores}
+                            onSaved={guardadoEnEmpresa}
+                          />
                         </div>
                       ))}
                       {ficha.length === 0 && trabs.length === 0 ? (
@@ -633,34 +813,55 @@ export function OnboardingClient({
         }}
       >
         {campoSel ? (
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle className="font-heading">
                 {campoSel.etiqueta}
               </DialogTitle>
               <DialogDescription>
-                {campoSel.faltan} {campoSel.entidad === "cliente" ? "empresas" : "trabajadores"}{" "}
-                sin este dato · fuente {campoSel.fuente}
+                {campoFaltantes.length || campoSel.faltan}{" "}
+                {campoSel.entidad === "cliente" ? "empresas" : "trabajadores"}{" "}
+                sin este dato · fuente {campoSel.fuente} · llene y guarde uno a
+                uno
               </DialogDescription>
             </DialogHeader>
-            <div className="max-h-[60vh] overflow-y-auto">
+            <div className="max-h-[60vh] overflow-y-auto pr-1">
               {cargandoCampo ? (
                 <p className="text-sm text-muted-foreground">Cargando…</p>
+              ) : campoFaltantes.length === 0 ? (
+                <p className="text-sm text-emerald-600">
+                  Todos los registros tienen este dato. ✓
+                </p>
               ) : (
-                <Table>
-                  <TableBody>
-                    {campoFaltantes.map((f) => (
-                      <TableRow key={f.registro_id}>
-                        <TableCell className="font-medium">
-                          {f.registro_nombre}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {f.registro_rut ?? "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="space-y-2">
+                  {campoFaltantes.map((f) => {
+                    const sel = selectores[`${f.entidad}:${f.campo}`] ?? null;
+                    return (
+                      <div
+                        key={f.registro_id}
+                        className="grid grid-cols-[minmax(0,14rem)_minmax(0,1fr)] items-start gap-2"
+                      >
+                        <div className="pt-1">
+                          <div
+                            className="truncate text-sm font-medium"
+                            title={f.registro_nombre}
+                          >
+                            {f.registro_nombre}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {f.registro_rut ?? "—"}
+                          </div>
+                        </div>
+                        <EditorCampo
+                          item={f}
+                          selector={sel}
+                          opciones={sel ? catalogos[sel] : undefined}
+                          onSaved={() => guardadoEnCampo(f)}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </DialogContent>
@@ -707,6 +908,167 @@ export function OnboardingClient({
             </DialogFooter>
           </DialogContent>
         ) : null}
+      </Dialog>
+
+      {/* ============ Diálogo: nueva empresa ============ */}
+      <Dialog open={nuevaOpen} onOpenChange={setNuevaOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Nueva empresa</DialogTitle>
+            <DialogDescription>
+              Datos de primera necesidad. Queda en{" "}
+              <span className="font-medium">pendiente de contacto</span> y la
+              carpeta OneDrive se crea automáticamente con el correlativo del
+              grupo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid max-h-[60vh] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ne-grupo">Grupo de cartera *</Label>
+              <select
+                id="ne-grupo"
+                className={selectCls}
+                value={nueva.grupo_cartera}
+                onChange={(e) => setN("grupo_cartera", e.target.value)}
+              >
+                {GRUPOS_CARTERA.map((g) => (
+                  <option key={g.codigo} value={g.codigo}>
+                    {g.etiqueta}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ne-rut">RUT empresa *</Label>
+              <Input
+                id="ne-rut"
+                placeholder="76.123.456-7"
+                value={nueva.rut_empresa}
+                onChange={(e) => setN("rut_empresa", e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="ne-razon">Razón social *</Label>
+              <Input
+                id="ne-razon"
+                value={nueva.razon_social}
+                onChange={(e) => setN("razon_social", e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ne-fantasia">Nombre de fantasía</Label>
+              <Input
+                id="ne-fantasia"
+                value={nueva.nombre_fantasia ?? ""}
+                onChange={(e) => setN("nombre_fantasia", e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ne-tipo">Tipo de sociedad</Label>
+              <select
+                id="ne-tipo"
+                className={selectCls}
+                value={nueva.tipo_sociedad ?? ""}
+                onChange={(e) => setN("tipo_sociedad", e.target.value)}
+              >
+                <option value="">— Elegir —</option>
+                {(catalogos.tipo_sociedad ?? []).map((o) => (
+                  <option key={o.codigo} value={o.codigo}>
+                    {o.etiqueta}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ne-regimen">Régimen tributario</Label>
+              <select
+                id="ne-regimen"
+                className={selectCls}
+                value={nueva.regimen_tributario ?? ""}
+                onChange={(e) => setN("regimen_tributario", e.target.value)}
+              >
+                <option value="">— Elegir —</option>
+                {(catalogos.regimen_tributario ?? []).map((o) => (
+                  <option key={o.codigo} value={o.codigo}>
+                    {o.etiqueta}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ne-giro">Giro</Label>
+              <Input
+                id="ne-giro"
+                value={nueva.giro ?? ""}
+                onChange={(e) => setN("giro", e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ne-comuna">Comuna</Label>
+              <select
+                id="ne-comuna"
+                className={selectCls}
+                value={nueva.comuna ?? ""}
+                onChange={(e) => setN("comuna", e.target.value)}
+              >
+                <option value="">— Elegir —</option>
+                {(catalogos.comuna ?? []).map((o) => (
+                  <option key={o.codigo} value={o.codigo}>
+                    {o.etiqueta}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ne-domicilio">Domicilio</Label>
+              <Input
+                id="ne-domicilio"
+                value={nueva.domicilio ?? ""}
+                onChange={(e) => setN("domicilio", e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ne-contacto">Persona de contacto</Label>
+              <Input
+                id="ne-contacto"
+                value={nueva.contacto_nombre ?? ""}
+                onChange={(e) => setN("contacto_nombre", e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ne-correo">Correo de contacto</Label>
+              <Input
+                id="ne-correo"
+                type="email"
+                value={nueva.contacto_correo ?? ""}
+                onChange={(e) => setN("contacto_correo", e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ne-fono">Teléfono de contacto</Label>
+              <Input
+                id="ne-fono"
+                value={nueva.contacto_telefono ?? ""}
+                onChange={(e) => setN("contacto_telefono", e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNuevaOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={
+                creando ||
+                !nueva.razon_social.trim() ||
+                !nueva.rut_empresa.trim()
+              }
+              onClick={crear}
+            >
+              {creando ? "Creando…" : "Crear empresa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );

@@ -64,6 +64,39 @@ export function claseCompletitud(pct: number | null): string {
   return "font-semibold text-red-600";
 }
 
+/** Opción de un selector cerrado (fila de `catalogo_valores`). */
+export type CatalogoOpcion = { codigo: string; etiqueta: string };
+/** Opciones por tipo de selector (afp, comuna, banco, …). */
+export type Catalogos = Record<string, CatalogoOpcion[]>;
+
+/** Grupos de cartera OneDrive/ClickUp para clientes nuevos. */
+export const GRUPOS_CARTERA = [
+  { codigo: "A", etiqueta: "A — Cartera histórica" },
+  { codigo: "B", etiqueta: "B — Grupo abril 2026 (1)" },
+  { codigo: "C", etiqueta: "C — Grupo abril 2026 (2)" },
+  { codigo: "D", etiqueta: "D — Cartera ligera" },
+  { codigo: "Z", etiqueta: "Z — Otros" },
+] as const;
+
+/** Tipo de input para editar un campo, inferido por convención de nombre. */
+export type TipoCampo = "texto" | "fecha" | "numero" | "rut" | "correo" | "lineas";
+
+export function tipoCampo(campo: string): TipoCampo {
+  if (campo.startsWith("fecha_")) return "fecha";
+  if (campo === "sueldo_base" || campo === "horas_semanales") return "numero";
+  if (campo === "rut" || campo === "rut_empresa" || campo.endsWith("_rut"))
+    return "rut";
+  if (campo.startsWith("correo") || campo.endsWith("_correo")) return "correo";
+  if (campo === "socios" || campo === "actividades_sii") return "lineas";
+  return "texto";
+}
+
+/** Placeholder de ayuda para los campos jsonb que se editan por líneas. */
+export const PLACEHOLDER_LINEAS: Record<string, string> = {
+  socios: "Una línea por socio: Nombre; RUT; % participación\nEj.: Juan Pérez; 12.345.678-5; 50",
+  actividades_sii: "Un código o glosa de actividad por línea",
+};
+
 /** Fila de `v_onboarding_empresas`. */
 export type EmpresaOnboardingRow = {
   cliente_id: string;

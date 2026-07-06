@@ -2,13 +2,214 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { validarRut, formatearRut } from "@/lib/rut";
 import {
   ESTADOS_ONBOARDING,
+  GRUPOS_CARTERA,
   HITO_ESTADO,
+  tipoCampo,
   type FaltanteRow,
 } from "@/lib/onboarding";
 
 type Resp = { ok: boolean; error?: string };
+
+/** Convierte el texto del input al valor a guardar, validando por tipo. */
+function coercerValor(
+  campo: string,
+  v: string,
+): { ok: true; valor: unknown } | { ok: false; error: string } {
+  switch (tipoCampo(campo)) {
+    case "rut":
+      if (!validarRut(v))
+        return { ok: false, error: "RUT inválido (dígito verificador)" };
+      return { ok: true, valor: formatearRut(v) };
+    case "fecha":
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(v))
+        return { ok: false, error: "Fecha inválida" };
+      return { ok: true, valor: v };
+    case "numero": {
+      const n = Number(v.replace(/\./g, "").replace(",", "."));
+      if (!Number.isFinite(n)) return { ok: false, error: "Número inválido" };
+      return { ok: true, valor: n };
+    }
+    case "correo":
+      if (!/^\S+@\S+\.\S+$/.test(v))
+        return { ok: false, error: "Correo inválido" };
+      return { ok: true, valor: v };
+    case "lineas": {
+      const lineas = v.split("\n").map((l) => l.trim()).filter(Boolean);
+      if (campo !== "socios") return { ok: true, valor: lineas };
+      const socios: unknown[] = [];
+      for (const l of lineas) {
+        const [nombre, rut, part] = l.split(";").map((s) => s.trim());
+        if (!nombre) return { ok: false, error: `Línea sin nombre: "${l}"` };
+        if (rut && !validarRut(rut))
+          return { ok: false, error: `RUT inválido en "${l}"` };
+        socios.push({
+          nombre,
+          rut: rut ? formatearRut(rut) : null,
+          participacion: part
+            ? Number(part.replace("%", "").replace(",", "."))
+            : null,
+        });
+      }
+      return { ok: true, valor: socios };
+    }
+    default:
+      return { ok: true, valor: v };
+  }
+}
+
+/**
+ * Guarda directamente el valor de un campo faltante (edición del equipo:
+ * ustedes son los validadores, no pasa por `cambios_propuestos`).
+ */
+export async function guardarCampo(
+  entidad: "cliente" | "trabajador",
+  registroId: string,
+  campo: string,
+  valor: string,
+): Promise<Resp> {
+  const v = valor.trim();
+  if (!v) return { ok: false, error: "Valor vacío" };
+  const supabase = await createClient();
+
+  // El campo debe existir en el catálogo (anti escritura arbitraria).
+  const { data: def } = await supabase
+    .from("onboarding_campos")
+    .select("campo, selector, inmutable")
+    .eq("entidad", entidad)
+    .eq("campo", campo)
+    .eq("activo", true)
+    .maybeSingle();
+  if (!def) return { ok: false, error: `Campo "${campo}" no permitido` };
+
+  let guardar: unknown = v;
+  if (def.selector) {
+    const { data: op } = await supabase
+      .from("catalogo_valores")
+      .select("codigo")
+      .eq("tipo", def.selector)
+      .eq("codigo", v)
+      .eq("activo", true)
+      .maybeSingle();
+    if (!op) return { ok: false, error: "Valor fuera del selector" };
+  } else {
+    const c = coercerValor(campo, v);
+    if (!c.ok) return { ok: false, error: c.error };
+    guardar = c.valor;
+  }
+
+  const tabla = entidad === "cliente" ? "clientes" : "trabajadores";
+
+  // Los inmutables solo se pueden llenar mientras están vacíos.
+  if (def.inmutable) {
+    const { data: fila } = await supabase
+      .from(tabla)
+      .select(campo)
+      .eq("id", registroId)
+      .maybeSingle();
+    const actual = (fila as Record<string, unknown> | null)?.[campo];
+    if (actual !== null && actual !== undefined && actual !== "")
+      return { ok: false, error: "Campo inmutable: ya tiene valor" };
+  }
+
+  const { error } = await supabase
+    .from(tabla)
+    .update({ [campo]: guardar })
+    .eq("id", registroId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/onboarding");
+  return { ok: true };
+}
+
+export type NuevaEmpresaInput = {
+  grupo_cartera: string;
+  rut_empresa: string;
+  razon_social: string;
+  nombre_fantasia?: string;
+  tipo_sociedad?: string;
+  regimen_tributario?: string;
+  giro?: string;
+  contacto_nombre?: string;
+  contacto_correo?: string;
+  contacto_telefono?: string;
+  comuna?: string;
+  domicilio?: string;
+};
+
+/**
+ * Crea una empresa nueva: queda en `pendiente_contacto` y con la carpeta
+ * OneDrive solicitada (la crea el proceso local con el correlativo del grupo).
+ */
+export async function crearEmpresa(
+  input: NuevaEmpresaInput,
+): Promise<Resp & { id?: string }> {
+  const razon = input.razon_social?.trim();
+  if (!razon) return { ok: false, error: "La razón social es obligatoria" };
+  if (!GRUPOS_CARTERA.some((g) => g.codigo === input.grupo_cartera))
+    return { ok: false, error: "Grupo de cartera no válido" };
+  if (!validarRut(input.rut_empresa))
+    return { ok: false, error: "RUT inválido (dígito verificador)" };
+  const rut = formatearRut(input.rut_empresa);
+
+  const supabase = await createClient();
+  const { data: dup } = await supabase
+    .from("clientes")
+    .select("id, razon_social")
+    .eq("rut_empresa", rut)
+    .maybeSingle();
+  if (dup)
+    return { ok: false, error: `Ese RUT ya existe: ${dup.razon_social}` };
+
+  // Selectores opcionales: si vienen, deben estar en catálogo.
+  const selectores: Array<[string, string | undefined]> = [
+    ["tipo_sociedad", input.tipo_sociedad],
+    ["regimen_tributario", input.regimen_tributario],
+    ["comuna", input.comuna],
+  ];
+  for (const [tipo, val] of selectores) {
+    if (!val) continue;
+    const { data: op } = await supabase
+      .from("catalogo_valores")
+      .select("codigo")
+      .eq("tipo", tipo)
+      .eq("codigo", val)
+      .eq("activo", true)
+      .maybeSingle();
+    if (!op)
+      return { ok: false, error: `Valor fuera del selector (${tipo})` };
+  }
+  if (input.contacto_correo && !/^\S+@\S+\.\S+$/.test(input.contacto_correo))
+    return { ok: false, error: "Correo de contacto inválido" };
+
+  const { data, error } = await supabase
+    .from("clientes")
+    .insert({
+      razon_social: razon,
+      rut_empresa: rut,
+      grupo_cartera: input.grupo_cartera,
+      nombre_fantasia: input.nombre_fantasia?.trim() || null,
+      tipo_sociedad: input.tipo_sociedad || null,
+      regimen_tributario: input.regimen_tributario || null,
+      giro: input.giro?.trim() || null,
+      contacto_nombre: input.contacto_nombre?.trim() || null,
+      contacto_correo: input.contacto_correo?.trim() || null,
+      contacto_telefono: input.contacto_telefono?.trim() || null,
+      comuna: input.comuna || null,
+      domicilio: input.domicilio?.trim() || null,
+      activo: true,
+      onboarding_estado: "pendiente_contacto",
+      carpeta_solicitada_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/onboarding");
+  return { ok: true, id: data.id };
+}
 
 /** Campos faltantes de una empresa: su ficha + la de cada uno de sus trabajadores. */
 export async function faltantesDeEmpresa(
