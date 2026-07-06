@@ -8,7 +8,6 @@ import { RutCopiable } from "@/components/rut-copiable";
 import { TextoCopiable } from "@/components/texto-copiable";
 import { ThSort } from "@/components/th-sort";
 import { comparar, type Orden } from "@/lib/ordenar";
-import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -166,8 +165,6 @@ export function OnboardingClient({
             : (e.grupo_nombre ?? null);
         case "empresa":
           return e.razon_social;
-        case "alta":
-          return e.created_at;
         default:
           return null;
       }
@@ -348,16 +345,13 @@ export function OnboardingClient({
                   <TableHead>RUT</TableHead>
                   <TableHead>Carpeta OneDrive</TableHead>
                   <TableHead>Correo contacto</TableHead>
-                  <ThSort col="alta" orden={orden} setOrden={setOrden}>
-                    Alta
-                  </ThSort>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {empresasFiltradas.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={5}
                       className="py-10 text-center text-muted-foreground"
                     >
                       Sin resultados.
@@ -407,9 +401,6 @@ export function OnboardingClient({
                           etiqueta="Correo"
                           className="max-w-[220px]"
                         />
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatFecha(e.created_at)}
                       </TableCell>
                     </TableRow>
                   ))
