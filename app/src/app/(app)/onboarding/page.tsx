@@ -16,12 +16,12 @@ export default async function OnboardingPage() {
     supabase
       .from("clientes")
       .select(
-        "id, razon_social, rut_empresa, grupo_id, carpeta_onedrive, carpeta_solicitada_at, created_at",
+        "id, razon_social, rut_empresa, grupo_id, contacto_correo, correo_empresa, carpeta_onedrive, carpeta_solicitada_at, created_at",
       )
       .order("created_at", { ascending: false }),
     supabase
       .from("grupos_cliente")
-      .select("id, codigo, nombre, carpeta_onedrive")
+      .select("id, codigo, nombre, correo, carpeta_onedrive")
       .order("codigo"),
     supabase
       .from("cambios_propuestos")
@@ -56,6 +56,7 @@ export default async function OnboardingPage() {
       carpeta_onedrive: e.carpeta_onedrive,
       carpeta_solicitada_at: e.carpeta_solicitada_at,
       grupo_carpeta: g?.carpeta_onedrive ?? null,
+      correo: e.contacto_correo ?? e.correo_empresa ?? g?.correo ?? null,
       created_at: e.created_at,
     };
   });

@@ -116,6 +116,8 @@ export type AltaEmpresaRow = {
   carpeta_solicitada_at: string | null;
   /** Carpeta raíz del cliente (fallback si la subcarpeta de la empresa no está identificada). */
   grupo_carpeta: string | null;
+  /** Correo de contacto (de la empresa, o de la empresa misma, o del cliente). */
+  correo: string | null;
   created_at: string;
 };
 

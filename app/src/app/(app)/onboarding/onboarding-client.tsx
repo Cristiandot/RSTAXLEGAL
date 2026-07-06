@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Search, Check, Undo2, Plus, UserPlus, FolderCheck, FolderClock } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
+import { TextoCopiable } from "@/components/texto-copiable";
 import { ThSort } from "@/components/th-sort";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { formatFecha } from "@/lib/format";
@@ -148,7 +149,7 @@ export function OnboardingClient({
     const filtradas = empresas.filter((e) => {
       if (q) {
         const t =
-          `${e.razon_social} ${e.rut_empresa ?? ""} ${e.grupo_codigo ?? ""} ${e.grupo_nombre ?? ""}`.toLowerCase();
+          `${e.razon_social} ${e.rut_empresa ?? ""} ${e.grupo_codigo ?? ""} ${e.grupo_nombre ?? ""} ${e.correo ?? ""}`.toLowerCase();
         if (!t.includes(q)) return false;
       }
       if (clienteF === "__sin__" && e.grupo_id) return false;
@@ -346,6 +347,7 @@ export function OnboardingClient({
                   </ThSort>
                   <TableHead>RUT</TableHead>
                   <TableHead>Carpeta OneDrive</TableHead>
+                  <TableHead>Correo contacto</TableHead>
                   <ThSort col="alta" orden={orden} setOrden={setOrden}>
                     Alta
                   </ThSort>
@@ -355,7 +357,7 @@ export function OnboardingClient({
                 {empresasFiltradas.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={5}
+                      colSpan={6}
                       className="py-10 text-center text-muted-foreground"
                     >
                       Sin resultados.
@@ -398,6 +400,13 @@ export function OnboardingClient({
                       </TableCell>
                       <TableCell>
                         <CarpetaCell e={e} />
+                      </TableCell>
+                      <TableCell>
+                        <TextoCopiable
+                          texto={e.correo}
+                          etiqueta="Correo"
+                          className="max-w-[220px]"
+                        />
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatFecha(e.created_at)}
