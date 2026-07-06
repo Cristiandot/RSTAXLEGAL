@@ -121,6 +121,7 @@ export async function guardarCampo(
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/onboarding");
+  revalidatePath("/clientes");
   return { ok: true };
 }
 
@@ -438,6 +439,39 @@ export async function registrosFaltanCampo(
         ? (cliMap.get(r.registro_id)?.rut ?? null)
         : (trabMap.get(r.registro_id)?.rut ?? null),
   }));
+}
+
+/** Campos faltantes de TODAS las empresas (y sus trabajadores) de un cliente. */
+export async function faltantesDeGrupo(grupoId: string): Promise<FaltanteRow[]> {
+  const supabase = await createClient();
+  const { data: empresas } = await supabase
+    .from("clientes")
+    .select("id")
+    .eq("grupo_id", grupoId);
+  const ids = (empresas ?? []).map((e) => e.id);
+  if (!ids.length) return [];
+
+  const listas = await Promise.all(ids.map((id) => faltantesDeEmpresa(id)));
+  return listas.flat();
+}
+
+/** Actualiza el contacto simple del cliente (grupo). */
+export async function actualizarContactoCliente(
+  grupoId: string,
+  correo: string,
+  telefono: string,
+): Promise<Resp> {
+  const c = correo.trim();
+  if (c && !/^\S+@\S+\.\S+$/.test(c))
+    return { ok: false, error: "Correo inválido" };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("grupos_cliente")
+    .update({ correo: c || null, telefono: telefono.trim() || null })
+    .eq("id", grupoId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/clientes");
+  return { ok: true };
 }
 
 /** Cambia la etapa de onboarding de una empresa y estampa el hito de la etapa. */

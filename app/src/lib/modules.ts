@@ -225,9 +225,9 @@ export const MODULOS: SeccionModulos[] = [
     modulos: [
       {
         key: "onboarding",
-        label: "Onboarding y datos",
+        label: "Onboarding",
         descripcion:
-          "Completitud de datos de empresas y trabajadores por campo y por empresa, y cola de validación de lo que cargan los clientes.",
+          "Incorporación de clientes y empresas: alta con carpeta OneDrive automática y cola de validación de lo que cargan los clientes.",
         href: "/onboarding",
         icon: ClipboardCheck,
         estado: "activo",
@@ -235,18 +235,20 @@ export const MODULOS: SeccionModulos[] = [
       {
         key: "clientes",
         label: "Clientes",
-        descripcion: "Datos, empresas, credenciales y responsables.",
+        descripcion:
+          "Datos simples de cada cliente y checklist de completitud de sus fichas, para ir rellenando.",
         href: "/clientes",
-        icon: Building2,
-        estado: "proximamente",
+        icon: Users,
+        estado: "activo",
       },
       {
-        key: "trabajadores",
-        label: "Trabajadores",
-        descripcion: "Nómina por empresa: datos contractuales y previsionales.",
-        href: "/trabajadores",
-        icon: Users,
-        estado: "proximamente",
+        key: "empresas",
+        label: "Empresas",
+        descripcion:
+          "Ficha de cada empresa (datos tributarios, contacto, servicios) y su nómina de recursos humanos.",
+        href: "/empresas",
+        icon: Building2,
+        estado: "activo",
       },
       {
         key: "excel-compartidos",

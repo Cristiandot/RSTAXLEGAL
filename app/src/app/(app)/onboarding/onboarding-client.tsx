@@ -3,10 +3,11 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Check, Undo2, ChevronRight, Plus, UserPlus } from "lucide-react";
+import { Search, Check, Undo2, Plus, UserPlus, FolderCheck, FolderClock } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
 import { ThSort } from "@/components/th-sort";
 import { comparar, type Orden } from "@/lib/ordenar";
+import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,29 +30,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  LABEL_ESTADO,
-  ESTADOS_ONBOARDING,
   GRUPOS_CARTERA,
-  PLACEHOLDER_LINEAS,
-  claseEstadoOnboarding,
-  claseFuente,
-  claseCompletitud,
-  tipoCampo,
+  type AltaEmpresaRow,
   type Catalogos,
-  type CatalogoOpcion,
   type GrupoClienteOpcion,
-  type EmpresaOnboardingRow,
-  type PorCampoRow,
   type CambioPropuestoRow,
-  type FaltanteRow,
 } from "@/lib/onboarding";
 import {
-  faltantesDeEmpresa,
-  registrosFaltanCampo,
-  setOnboardingEstado,
   aprobarCambio,
   devolverCambio,
-  guardarCampo,
   crearEmpresa,
   crearCliente,
   type NuevaEmpresaInput,
@@ -60,216 +47,52 @@ import {
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-type Tab = "empresas" | "campos" | "validacion";
+type Tab = "altas" | "validacion";
 
-function StatCard({ label, valor }: { label: string; valor: string | number }) {
-  return (
-    <div className="card-soft rounded-xl bg-card px-4 py-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-0.5 text-2xl font-semibold">{valor}</div>
-    </div>
-  );
-}
-
-function Pct({ valor }: { valor: number | null }) {
-  return (
-    <span className={claseCompletitud(valor)}>
-      {valor === null ? "—" : `${valor}%`}
-    </span>
-  );
-}
-
-/** Input inline para llenar un campo faltante y guardarlo directo a la ficha. */
-function EditorCampo({
-  item,
-  selector,
-  opciones,
-  onSaved,
-}: {
-  item: FaltanteRow;
-  selector: string | null;
-  opciones?: CatalogoOpcion[];
-  onSaved: () => void;
-}) {
-  const [valor, setValor] = useState("");
-  const [saving, startSave] = useTransition();
-  const tipo = tipoCampo(item.campo);
-
-  function guardar() {
-    if (!valor.trim() || saving) return;
-    startSave(async () => {
-      const res = await guardarCampo(
-        item.entidad,
-        item.registro_id,
-        item.campo,
-        valor,
-      );
-      if (res.ok) {
-        toast.success(`${item.etiqueta}: guardado`);
-        onSaved();
-      } else toast.error(res.error ?? "Error al guardar");
-    });
-  }
-
-  return (
-    <div className="flex w-full items-start gap-1.5">
-      {selector ? (
-        <select
-          aria-label={item.etiqueta}
-          className={`${selectCls} h-8 w-full min-w-0`}
-          value={valor}
-          onChange={(e) => setValor(e.target.value)}
-        >
-          <option value="">— Elegir —</option>
-          {(opciones ?? []).map((o) => (
-            <option key={o.codigo} value={o.codigo}>
-              {o.etiqueta}
-            </option>
-          ))}
-        </select>
-      ) : tipo === "lineas" ? (
-        <Textarea
-          rows={2}
-          className="min-w-0 flex-1 bg-card text-sm"
-          placeholder={PLACEHOLDER_LINEAS[item.campo] ?? ""}
-          value={valor}
-          onChange={(e) => setValor(e.target.value)}
-        />
-      ) : (
-        <Input
-          type={
-            tipo === "fecha" ? "date" : tipo === "numero" ? "number" : "text"
-          }
-          className="h-8 w-full min-w-0 bg-card text-sm"
-          placeholder={
-            tipo === "rut"
-              ? "12.345.678-9"
-              : tipo === "correo"
-                ? "correo@dominio.cl"
-                : item.etiqueta
-          }
-          value={valor}
-          onChange={(e) => setValor(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") guardar();
-          }}
-        />
-      )}
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-8 shrink-0 px-2"
-        title="Guardar"
-        disabled={saving || !valor.trim()}
-        onClick={guardar}
-      >
-        <Check className="size-4" />
-      </Button>
-    </div>
-  );
-}
-
-/** Campos faltantes agrupados, cada uno editable en línea. */
-function CamposEditables({
-  items,
-  catalogos,
-  selectores,
-  onSaved,
-}: {
-  items: FaltanteRow[];
-  catalogos: Catalogos;
-  selectores: Record<string, string | null>;
-  onSaved: (f: FaltanteRow) => void;
-}) {
-  const porGrupo = useMemo(() => {
-    const m = new Map<string, FaltanteRow[]>();
-    for (const it of items) {
-      const arr = m.get(it.grupo) ?? [];
-      arr.push(it);
-      m.set(it.grupo, arr);
-    }
-    return [...m.entries()];
-  }, [items]);
-
-  if (!items.length)
+/** Estado de la carpeta OneDrive de una empresa dada de alta. */
+function CarpetaBadge({ e }: { e: AltaEmpresaRow }) {
+  if (e.carpeta_onedrive)
     return (
-      <p className="text-sm text-emerald-600">Sin campos faltantes. ✓</p>
+      <Badge
+        variant="outline"
+        className="border-emerald-200 bg-emerald-50 text-emerald-700"
+        title={e.carpeta_onedrive}
+      >
+        <FolderCheck className="size-3.5" /> Creada
+      </Badge>
     );
-
-  return (
-    <div className="space-y-3">
-      {porGrupo.map(([grupo, arr]) => (
-        <div key={grupo}>
-          <div className="text-xs font-medium text-muted-foreground">
-            {grupo}
-          </div>
-          <div className="mt-1.5 space-y-1.5">
-            {arr.map((c) => {
-              const sel = selectores[`${c.entidad}:${c.campo}`] ?? null;
-              return (
-                <div
-                  key={`${c.registro_id}:${c.campo}`}
-                  className="grid grid-cols-[10rem_minmax(0,1fr)] items-start gap-2"
-                >
-                  <Badge
-                    variant="outline"
-                    className={`${claseFuente(c.fuente)} mt-1 max-w-full justify-start`}
-                    title={`${c.etiqueta} · Fuente: ${c.fuente}`}
-                  >
-                    <span className="truncate">{c.etiqueta}</span>
-                  </Badge>
-                  <EditorCampo
-                    item={c}
-                    selector={sel}
-                    opciones={sel ? catalogos[sel] : undefined}
-                    onSaved={() => onSaved(c)}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  if (e.carpeta_solicitada_at)
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-200 bg-amber-50 text-amber-700"
+        title="El proceso local la crea en la próxima pasada (máx. 15 min)"
+      >
+        <FolderClock className="size-3.5" /> Pendiente
+      </Badge>
+    );
+  return <span className="text-xs text-muted-foreground">—</span>;
 }
 
 export function OnboardingClient({
   empresas,
-  porCampo,
+  grupos,
   cambios,
   catalogos,
-  selectores,
-  grupos,
   errorCarga,
 }: {
-  empresas: EmpresaOnboardingRow[];
-  porCampo: PorCampoRow[];
+  empresas: AltaEmpresaRow[];
+  grupos: GrupoClienteOpcion[];
   cambios: CambioPropuestoRow[];
   catalogos: Catalogos;
-  selectores: Record<string, string | null>;
-  grupos: GrupoClienteOpcion[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("empresas");
+  const [tab, setTab] = useState<Tab>("altas");
   const [buscar, setBuscar] = useState("");
-  const [estadoF, setEstadoF] = useState("");
-  const [clienteF, setClienteF] = useState(""); // "" todos · "__sin__" sin cliente · uuid
+  const [clienteF, setClienteF] = useState("");
   const [orden, setOrden] = useState<Orden>(null);
-  const [entidadF, setEntidadF] = useState("");
-  const [marcando, startMarcar] = useTransition();
   const [accionando, startAccion] = useTransition();
-
-  // Drill-down empresa
-  const [empSel, setEmpSel] = useState<EmpresaOnboardingRow | null>(null);
-  const [empFaltantes, setEmpFaltantes] = useState<FaltanteRow[]>([]);
-  const [cargandoEmp, startEmp] = useTransition();
-
-  // Drill-down campo
-  const [campoSel, setCampoSel] = useState<PorCampoRow | null>(null);
-  const [campoFaltantes, setCampoFaltantes] = useState<FaltanteRow[]>([]);
-  const [cargandoCampo, startCampo] = useTransition();
 
   // Devolver cambio
   const [devolviendo, setDevolviendo] = useState<CambioPropuestoRow | null>(
@@ -293,6 +116,14 @@ export function OnboardingClient({
   const [nTrab, setNTrab] = useState("");
   const [creando, startCrear] = useTransition();
 
+  // Nuevo cliente (solo, sin empresa todavía)
+  const [nuevoCliOpen, setNuevoCliOpen] = useState(false);
+  const [nuevoCliNombre, setNuevoCliNombre] = useState("");
+  const [nuevoCliLetra, setNuevoCliLetra] = useState("D");
+  const [nuevoCliCorreo, setNuevoCliCorreo] = useState("");
+  const [nuevoCliFono, setNuevoCliFono] = useState("");
+  const [creandoCli, startCrearCli] = useTransition();
+
   function setN(k: keyof NuevaEmpresaInput, v: string) {
     setNueva((p) => ({ ...p, [k]: v }));
   }
@@ -302,34 +133,36 @@ export function OnboardingClient({
       ? Boolean(nueva.nuevo_cliente_nombre?.trim())
       : Boolean(clienteSel);
 
-  // Nuevo cliente (solo, sin empresa todavía)
-  const [nuevoCliOpen, setNuevoCliOpen] = useState(false);
-  const [nuevoCliNombre, setNuevoCliNombre] = useState("");
-  const [nuevoCliLetra, setNuevoCliLetra] = useState("D");
-  const [nuevoCliCorreo, setNuevoCliCorreo] = useState("");
-  const [nuevoCliFono, setNuevoCliFono] = useState("");
-  const [creandoCli, startCrearCli] = useTransition();
-
-  function crearClienteSolo() {
-    startCrearCli(async () => {
-      const res = await crearCliente(
-        nuevoCliNombre,
-        nuevoCliLetra,
-        nuevoCliCorreo,
-        nuevoCliFono,
-      );
-      if (res.ok) {
-        toast.success(
-          `Cliente creado como ${res.codigo}. Su carpeta OneDrive se creará automáticamente en unos minutos.`,
-        );
-        setNuevoCliOpen(false);
-        setNuevoCliNombre("");
-        setNuevoCliCorreo("");
-        setNuevoCliFono("");
-        router.refresh();
-      } else toast.error(res.error ?? "Error al crear el cliente");
+  const empresasFiltradas = useMemo(() => {
+    const q = buscar.trim().toLowerCase();
+    const filtradas = empresas.filter((e) => {
+      if (q) {
+        const t =
+          `${e.razon_social} ${e.rut_empresa ?? ""} ${e.grupo_codigo ?? ""} ${e.grupo_nombre ?? ""}`.toLowerCase();
+        if (!t.includes(q)) return false;
+      }
+      if (clienteF === "__sin__" && e.grupo_id) return false;
+      if (clienteF && clienteF !== "__sin__" && e.grupo_id !== clienteF)
+        return false;
+      return true;
     });
-  }
+    if (!orden) return filtradas; // orden del servidor: alta más reciente primero
+    const val = (e: AltaEmpresaRow): unknown => {
+      switch (orden.col) {
+        case "cliente":
+          return e.grupo_codigo
+            ? `${e.grupo_codigo} ${e.grupo_nombre ?? ""}`
+            : (e.grupo_nombre ?? null);
+        case "empresa":
+          return e.razon_social;
+        case "alta":
+          return e.created_at;
+        default:
+          return null;
+      }
+    };
+    return [...filtradas].sort((a, b) => comparar(val(a), val(b), orden.dir));
+  }, [empresas, buscar, clienteF, orden]);
 
   function crear() {
     startCrear(async () => {
@@ -360,94 +193,24 @@ export function OnboardingClient({
     });
   }
 
-  /** Al guardar un campo desde un diálogo: sacarlo de la lista local y refrescar contadores. */
-  function guardadoEnEmpresa(f: FaltanteRow) {
-    setEmpFaltantes((prev) =>
-      prev.filter((x) => !(x.registro_id === f.registro_id && x.campo === f.campo)),
-    );
-    router.refresh();
-  }
-  function guardadoEnCampo(f: FaltanteRow) {
-    setCampoFaltantes((prev) =>
-      prev.filter((x) => x.registro_id !== f.registro_id),
-    );
-    router.refresh();
-  }
-
-  const empresasFiltradas = useMemo(() => {
-    const q = buscar.trim().toLowerCase();
-    const filtradas = empresas.filter((e) => {
-      if (q) {
-        const t =
-          `${e.razon_social} ${e.rut_empresa ?? ""} ${e.grupo_codigo ?? ""} ${e.grupo_nombre ?? ""}`.toLowerCase();
-        if (!t.includes(q)) return false;
-      }
-      if (estadoF && e.onboarding_estado !== estadoF) return false;
-      if (clienteF === "__sin__" && e.grupo_id) return false;
-      if (clienteF && clienteF !== "__sin__" && e.grupo_id !== clienteF)
-        return false;
-      return true;
-    });
-    if (!orden) return filtradas; // orden del servidor: menor completitud primero
-    const val = (e: EmpresaOnboardingRow): unknown => {
-      switch (orden.col) {
-        case "cliente":
-          return e.grupo_codigo
-            ? `${e.grupo_codigo} ${e.grupo_nombre ?? ""}`
-            : (e.grupo_nombre ?? null);
-        case "empresa":
-          return e.razon_social;
-        case "etapa":
-          return LABEL_ESTADO[e.onboarding_estado] ?? e.onboarding_estado;
-        case "pct":
-          return e.pct_empresa;
-        case "ntrab":
-          return e.n_trab;
-        case "pcttrab":
-          return e.pct_trab;
-        case "faltan":
-          return e.faltan_empresa + e.faltan_trab;
-        default:
-          return null;
-      }
-    };
-    return [...filtradas].sort((a, b) => comparar(val(a), val(b), orden.dir));
-  }, [empresas, buscar, estadoF, clienteF, orden]);
-
-  const camposFiltrados = useMemo(() => {
-    const out = porCampo.filter((c) => !entidadF || c.entidad === entidadF);
-    return [...out].sort((a, b) => b.faltan - a.faltan);
-  }, [porCampo, entidadF]);
-
-  const pctProm = useMemo(() => {
-    const vals = empresas
-      .map((e) => e.pct_empresa)
-      .filter((v): v is number => v !== null);
-    if (!vals.length) return null;
-    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-  }, [empresas]);
-
-  function abrirEmpresa(e: EmpresaOnboardingRow) {
-    setEmpSel(e);
-    setEmpFaltantes([]);
-    startEmp(async () => {
-      setEmpFaltantes(await faltantesDeEmpresa(e.cliente_id));
-    });
-  }
-
-  function abrirCampo(c: PorCampoRow) {
-    setCampoSel(c);
-    setCampoFaltantes([]);
-    startCampo(async () => {
-      setCampoFaltantes(await registrosFaltanCampo(c.entidad, c.campo));
-    });
-  }
-
-  function cambiarEstado(clienteId: string, estado: string) {
-    startMarcar(async () => {
-      const res = await setOnboardingEstado(clienteId, estado);
-      if (res.ok) router.refresh();
-      else toast.error(res.error ?? "Error al cambiar la etapa");
+  function crearClienteSolo() {
+    startCrearCli(async () => {
+      const res = await crearCliente(
+        nuevoCliNombre,
+        nuevoCliLetra,
+        nuevoCliCorreo,
+        nuevoCliFono,
+      );
+      if (res.ok) {
+        toast.success(
+          `Cliente creado como ${res.codigo}. Su carpeta OneDrive se creará automáticamente en unos minutos.`,
+        );
+        setNuevoCliOpen(false);
+        setNuevoCliNombre("");
+        setNuevoCliCorreo("");
+        setNuevoCliFono("");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al crear el cliente");
     });
   }
 
@@ -497,18 +260,17 @@ export function OnboardingClient({
     <div className="space-y-5">
       <div>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Onboarding y calidad de datos
+          Onboarding
         </h1>
         <p className="text-sm text-muted-foreground">
-          Estado de completitud de los datos de empresas y trabajadores, por
-          campo y por empresa, y cola de validación de lo que cargan los
-          clientes.
+          Incorporación de clientes y empresas: alta con carpeta OneDrive
+          automática, y validación de lo que cargan los clientes. El avance de
+          las fichas se controla en Clientes.
         </p>
       </div>
 
       <div className="inline-flex gap-1 rounded-lg bg-muted p-1">
-        {tabBtn("empresas", "Empresas")}
-        {tabBtn("campos", "Por campo")}
+        {tabBtn("altas", "Altas")}
         {tabBtn("validacion", "Validación", cambios.length)}
       </div>
 
@@ -518,43 +280,14 @@ export function OnboardingClient({
         </div>
       ) : null}
 
-      {/* ====================== EMPRESAS ====================== */}
-      {tab === "empresas" ? (
+      {/* ====================== ALTAS ====================== */}
+      {tab === "altas" ? (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            <StatCard label="Empresas" valor={empresas.length} />
-            <StatCard
-              label="% ficha promedio"
-              valor={pctProm === null ? "—" : `${pctProm}%`}
-            />
-            <StatCard
-              label="En revisión"
-              valor={
-                empresas.filter((e) => e.onboarding_estado === "en_revision")
-                  .length
-              }
-            />
-            <StatCard
-              label="Completas"
-              valor={
-                empresas.filter((e) => e.onboarding_estado === "completo").length
-              }
-            />
-            <StatCard
-              label="Ficha < 60%"
-              valor={
-                empresas.filter(
-                  (e) => e.pct_empresa !== null && e.pct_empresa < 60,
-                ).length
-              }
-            />
-          </div>
-
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar empresa o RUT…"
+                placeholder="Buscar empresa, RUT o cliente…"
                 className="h-9 w-56 bg-card pl-8"
                 value={buscar}
                 onChange={(e) => setBuscar(e.target.value)}
@@ -572,19 +305,6 @@ export function OnboardingClient({
                 <option key={g.id} value={g.id}>
                   {g.codigo ? `${g.codigo} — ` : ""}
                   {g.nombre}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Etapa"
-              className={selectCls}
-              value={estadoF}
-              onChange={(e) => setEstadoF(e.target.value)}
-            >
-              <option value="">Todas las etapas</option>
-              {ESTADOS_ONBOARDING.map((s) => (
-                <option key={s} value={s}>
-                  {LABEL_ESTADO[s]}
                 </option>
               ))}
             </select>
@@ -608,36 +328,24 @@ export function OnboardingClient({
             <Table stickyHeader>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[170px]">
+                  <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[190px]">
                     Cliente
                   </ThSort>
-                  <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[240px]">
+                  <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[260px]">
                     Empresa
                   </ThSort>
                   <TableHead>RUT</TableHead>
-                  <ThSort col="etapa" orden={orden} setOrden={setOrden}>
-                    Etapa
+                  <TableHead>Carpeta OneDrive</TableHead>
+                  <ThSort col="alta" orden={orden} setOrden={setOrden}>
+                    Alta
                   </ThSort>
-                  <ThSort col="pct" orden={orden} setOrden={setOrden} className="text-center">
-                    % Ficha
-                  </ThSort>
-                  <ThSort col="ntrab" orden={orden} setOrden={setOrden} className="text-center">
-                    Trab.
-                  </ThSort>
-                  <ThSort col="pcttrab" orden={orden} setOrden={setOrden} className="text-center">
-                    % Trab.
-                  </ThSort>
-                  <ThSort col="faltan" orden={orden} setOrden={setOrden} className="text-center">
-                    Campos faltan
-                  </ThSort>
-                  <TableHead className="w-8" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {empresasFiltradas.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={9}
+                      colSpan={5}
                       className="py-10 text-center text-muted-foreground"
                     >
                       Sin resultados.
@@ -645,15 +353,11 @@ export function OnboardingClient({
                   </TableRow>
                 ) : (
                   empresasFiltradas.map((e) => (
-                    <TableRow
-                      key={e.cliente_id}
-                      className="cursor-pointer"
-                      onClick={() => abrirEmpresa(e)}
-                    >
+                    <TableRow key={e.id} className="hover:bg-transparent">
                       <TableCell>
                         {e.grupo_codigo || e.grupo_nombre ? (
                           <span
-                            className="block max-w-[170px] truncate text-sm"
+                            className="block max-w-[190px] truncate text-sm"
                             title={`${e.grupo_codigo ?? ""} ${e.grupo_nombre ?? ""}`.trim()}
                           >
                             {e.grupo_codigo ? (
@@ -673,7 +377,7 @@ export function OnboardingClient({
                       </TableCell>
                       <TableCell className="font-medium">
                         <span
-                          className="block max-w-[240px] truncate"
+                          className="block max-w-[260px] truncate"
                           title={e.razon_social}
                         >
                           {e.razon_social}
@@ -682,109 +386,15 @@ export function OnboardingClient({
                       <TableCell>
                         <RutCopiable rut={e.rut_empresa} />
                       </TableCell>
-                      <TableCell onClick={(ev) => ev.stopPropagation()}>
-                        <select
-                          aria-label="Etapa"
-                          className={`${selectCls} h-8`}
-                          value={e.onboarding_estado}
-                          disabled={marcando}
-                          onChange={(ev) =>
-                            cambiarEstado(e.cliente_id, ev.target.value)
-                          }
-                        >
-                          {ESTADOS_ONBOARDING.map((s) => (
-                            <option key={s} value={s}>
-                              {LABEL_ESTADO[s]}
-                            </option>
-                          ))}
-                        </select>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Pct valor={e.pct_empresa} />
-                      </TableCell>
-                      <TableCell className="text-center">{e.n_trab}</TableCell>
-                      <TableCell className="text-center">
-                        <Pct valor={e.pct_trab} />
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {e.faltan_empresa + e.faltan_trab}
+                      <TableCell>
+                        <CarpetaBadge e={e} />
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        <ChevronRight className="size-4" />
+                        {formatFecha(e.created_at)}
                       </TableCell>
                     </TableRow>
                   ))
                 )}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      ) : null}
-
-      {/* ====================== POR CAMPO ====================== */}
-      {tab === "campos" ? (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              aria-label="Entidad"
-              className={selectCls}
-              value={entidadF}
-              onChange={(e) => setEntidadF(e.target.value)}
-            >
-              <option value="">Empresas y trabajadores</option>
-              <option value="cliente">Solo empresas</option>
-              <option value="trabajador">Solo trabajadores</option>
-            </select>
-            <span className="ml-auto text-sm text-muted-foreground">
-              Atacar en lotes: ordenado por mayor cantidad de faltantes.
-            </span>
-          </div>
-
-          <div className="card-soft rounded-xl bg-card">
-            <Table stickyHeader>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Entidad</TableHead>
-                  <TableHead>Grupo</TableHead>
-                  <TableHead>Campo</TableHead>
-                  <TableHead>Fuente</TableHead>
-                  <TableHead className="text-center">Faltan</TableHead>
-                  <TableHead className="text-center">Requeridos</TableHead>
-                  <TableHead className="w-8" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {camposFiltrados.map((c) => (
-                  <TableRow
-                    key={`${c.entidad}:${c.campo}`}
-                    className={`cursor-pointer ${c.faltan === 0 ? "opacity-50" : ""}`}
-                    onClick={() => c.faltan > 0 && abrirCampo(c)}
-                  >
-                    <TableCell className="capitalize text-muted-foreground">
-                      {c.entidad}
-                    </TableCell>
-                    <TableCell>{c.grupo}</TableCell>
-                    <TableCell className="font-medium">{c.etiqueta}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={claseFuente(c.fuente)}>
-                        {c.fuente}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center font-semibold">
-                      {c.faltan === 0 ? (
-                        <span className="text-emerald-600">0</span>
-                      ) : (
-                        <span className="text-red-600">{c.faltan}</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center text-muted-foreground">
-                      {c.requeridos}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {c.faltan > 0 ? <ChevronRight className="size-4" /> : null}
-                    </TableCell>
-                  </TableRow>
-                ))}
               </TableBody>
             </Table>
           </div>
@@ -869,155 +479,6 @@ export function OnboardingClient({
         </div>
       ) : null}
 
-      {/* ============ Diálogo: detalle de empresa ============ */}
-      <Dialog
-        open={empSel !== null}
-        onOpenChange={(o) => {
-          if (!o) setEmpSel(null);
-        }}
-      >
-        {empSel ? (
-          <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="font-heading">
-                {empSel.razon_social}
-              </DialogTitle>
-              <DialogDescription>
-                <Badge
-                  variant="outline"
-                  className={claseEstadoOnboarding(empSel.onboarding_estado)}
-                >
-                  {LABEL_ESTADO[empSel.onboarding_estado]}
-                </Badge>
-                <span className="ml-2">
-                  Ficha <Pct valor={empSel.pct_empresa} /> · {empSel.n_trab}{" "}
-                  trabajadores · complete y guarde campo a campo
-                </span>
-              </DialogDescription>
-            </DialogHeader>
-            <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
-              {cargandoEmp ? (
-                <p className="text-sm text-muted-foreground">Cargando…</p>
-              ) : (
-                (() => {
-                  const ficha = empFaltantes.filter(
-                    (f) => f.entidad === "cliente",
-                  );
-                  const trabs = empFaltantes.filter(
-                    (f) => f.entidad === "trabajador",
-                  );
-                  const porTrab = new Map<string, FaltanteRow[]>();
-                  for (const t of trabs) {
-                    const arr = porTrab.get(t.registro_id) ?? [];
-                    arr.push(t);
-                    porTrab.set(t.registro_id, arr);
-                  }
-                  return (
-                    <>
-                      <div>
-                        <div className="mb-1 text-sm font-semibold">
-                          Ficha de la empresa
-                        </div>
-                        <CamposEditables
-                          items={ficha}
-                          catalogos={catalogos}
-                          selectores={selectores}
-                          onSaved={guardadoEnEmpresa}
-                        />
-                      </div>
-                      {[...porTrab.values()].map((arr) => (
-                        <div key={arr[0].registro_id}>
-                          <div className="mb-1 text-sm font-semibold">
-                            {arr[0].registro_nombre}{" "}
-                            <span className="font-normal text-muted-foreground">
-                              {arr[0].registro_rut ?? ""}
-                            </span>
-                          </div>
-                          <CamposEditables
-                            items={arr}
-                            catalogos={catalogos}
-                            selectores={selectores}
-                            onSaved={guardadoEnEmpresa}
-                          />
-                        </div>
-                      ))}
-                      {ficha.length === 0 && trabs.length === 0 ? (
-                        <p className="text-sm text-emerald-600">
-                          Esta empresa tiene todos sus datos requeridos. ✓
-                        </p>
-                      ) : null}
-                    </>
-                  );
-                })()
-              )}
-            </div>
-          </DialogContent>
-        ) : null}
-      </Dialog>
-
-      {/* ============ Diálogo: detalle de campo ============ */}
-      <Dialog
-        open={campoSel !== null}
-        onOpenChange={(o) => {
-          if (!o) setCampoSel(null);
-        }}
-      >
-        {campoSel ? (
-          <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="font-heading">
-                {campoSel.etiqueta}
-              </DialogTitle>
-              <DialogDescription>
-                {campoFaltantes.length || campoSel.faltan}{" "}
-                {campoSel.entidad === "cliente" ? "empresas" : "trabajadores"}{" "}
-                sin este dato · fuente {campoSel.fuente} · llene y guarde uno a
-                uno
-              </DialogDescription>
-            </DialogHeader>
-            <div className="max-h-[60vh] overflow-y-auto pr-1">
-              {cargandoCampo ? (
-                <p className="text-sm text-muted-foreground">Cargando…</p>
-              ) : campoFaltantes.length === 0 ? (
-                <p className="text-sm text-emerald-600">
-                  Todos los registros tienen este dato. ✓
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {campoFaltantes.map((f) => {
-                    const sel = selectores[`${f.entidad}:${f.campo}`] ?? null;
-                    return (
-                      <div
-                        key={f.registro_id}
-                        className="grid grid-cols-[minmax(0,14rem)_minmax(0,1fr)] items-start gap-2"
-                      >
-                        <div className="pt-1">
-                          <div
-                            className="truncate text-sm font-medium"
-                            title={f.registro_nombre}
-                          >
-                            {f.registro_nombre}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {f.registro_rut ?? "—"}
-                          </div>
-                        </div>
-                        <EditorCampo
-                          item={f}
-                          selector={sel}
-                          opciones={sel ? catalogos[sel] : undefined}
-                          onSaved={() => guardadoEnCampo(f)}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        ) : null}
-      </Dialog>
-
       {/* ============ Diálogo: devolver cambio ============ */}
       <Dialog
         open={devolviendo !== null}
@@ -1046,10 +507,7 @@ export function OnboardingClient({
               />
             </div>
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setDevolviendo(null)}
-              >
+              <Button variant="outline" onClick={() => setDevolviendo(null)}>
                 Cancelar
               </Button>
               <Button disabled={accionando} onClick={confirmarDevolver}>
@@ -1146,8 +604,7 @@ export function OnboardingClient({
               Toda empresa cuelga de un <span className="font-medium">cliente</span>{" "}
               (que puede tener varias). Si el cliente es nuevo, se le asigna el
               correlativo siguiente de su letra y su carpeta OneDrive se crea
-              automáticamente; la empresa queda en{" "}
-              <span className="font-medium">pendiente de contacto</span>.
+              automáticamente.
             </DialogDescription>
           </DialogHeader>
           <div className="grid max-h-[60vh] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2">

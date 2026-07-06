@@ -104,6 +104,40 @@ export const PLACEHOLDER_LINEAS: Record<string, string> = {
   actividades_sii: "Un código o glosa de actividad por línea",
 };
 
+/** Fila de la grilla de altas de /onboarding (empresa recién incorporada). */
+export type AltaEmpresaRow = {
+  id: string;
+  razon_social: string;
+  rut_empresa: string | null;
+  grupo_id: string | null;
+  grupo_codigo: string | null;
+  grupo_nombre: string | null;
+  carpeta_onedrive: string | null;
+  carpeta_solicitada_at: string | null;
+  created_at: string;
+};
+
+/** Resumen de un cliente para la grilla de /clientes. */
+export type ClienteResumenRow = {
+  grupo_id: string;
+  codigo: string | null;
+  nombre: string;
+  correo: string | null;
+  telefono: string | null;
+  n_empresas: number;
+  n_trab: number;
+  /** % de completitud (promedio de fichas + trabajadores de sus empresas). */
+  pct: number | null;
+  faltan: number;
+};
+
+/** Empresa de un cliente (para el detalle del checklist). */
+export type EmpresaDeGrupo = {
+  id: string;
+  razon_social: string;
+  pct: number | null;
+};
+
 /** Fila de `v_onboarding_empresas` (+ el cliente/grupo al que pertenece). */
 export type EmpresaOnboardingRow = {
   cliente_id: string;
