@@ -126,6 +126,7 @@ export type FichaTrabajadorInput = {
   salud_plan_valor: number | null;
   salud_plan_unidad: string | null;
   sueldo_base: number | null;
+  sueldo_modalidad: string;
   gratificacion_tipo: string | null;
   gratificacion_monto: number | null;
   mas_11_anios: boolean;
@@ -166,6 +167,7 @@ export async function guardarFichaTrabajador(
     salud_plan_valor: t.salud_plan_valor,
     salud_plan_unidad: t.salud_plan_unidad,
     sueldo_base: t.sueldo_base,
+    sueldo_modalidad: t.sueldo_modalidad || "mensual",
     gratificacion_tipo: t.gratificacion_tipo,
     gratificacion_monto: t.gratificacion_monto,
     mas_11_anios: t.mas_11_anios,
@@ -306,6 +308,10 @@ export async function guardarLiquidacionDetalle(
     horasExtra: number;
     anticipo: number;
     kameLiquido: number | null;
+    /** Modalidad por hora: horas normales trabajadas en el mes. */
+    horasNormales?: number;
+    /** Modalidad por día: días a pago del mes. */
+    diasPagados?: number;
   },
 ): Promise<Resp & { liquido?: number; detalle?: ReturnType<typeof calcularLiquidacion> }> {
   const supabase = await createClient();
@@ -336,6 +342,10 @@ export async function guardarLiquidacionDetalle(
     filas.push({ cliente_id: clienteId, trabajador_id: trabajadorId, periodo, tipo: "hora_extra", cantidad: p.horasExtra, origen: "equipo" });
   if (p.anticipo > 0)
     filas.push({ cliente_id: clienteId, trabajador_id: trabajadorId, periodo, tipo: "anticipo", monto: p.anticipo, origen: "equipo" });
+  if ((p.horasNormales ?? 0) > 0)
+    filas.push({ cliente_id: clienteId, trabajador_id: trabajadorId, periodo, tipo: "horas_normales", cantidad: p.horasNormales, origen: "equipo" });
+  if ((p.diasPagados ?? 0) > 0)
+    filas.push({ cliente_id: clienteId, trabajador_id: trabajadorId, periodo, tipo: "dias_pagados", cantidad: p.diasPagados, origen: "equipo" });
 
   if (filas.length > 0) {
     const ins = await supabase.from("novedades_remuneraciones").insert(filas);
@@ -422,6 +432,15 @@ export async function descargarLiquidaciones(
         periodo,
         diasTrabajados: dias.trab,
       });
+      const modalidad = (t.sueldo_modalidad as string) ?? "mensual";
+      let sueldoLinea: string | undefined;
+      if (modalidad === "hora" || modalidad === "dia") {
+        const cant = novs
+          .filter((n) => n.tipo === (modalidad === "hora" ? "horas_normales" : "dias_pagados"))
+          .reduce((s, n) => s + Number(n.cantidad ?? 0), 0);
+        const tarifa = Number(t.sueldo_base ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
+        sueldoLinea = `SUELDO BASE ${cant.toLocaleString("es-CL")} ${modalidad === "hora" ? "HORAS" : "DIAS"} x $${tarifa}`;
+      }
       const esIsapre =
         !!t.salud && String(t.salud).toLowerCase() !== "fonasa" && String(t.salud).toLowerCase() !== "sin isapre";
       const planValor = Number(t.salud_plan_valor ?? 0);
@@ -453,9 +472,12 @@ export async function descargarLiquidaciones(
         diasLicencia: dias.lic,
         sueldoBase: entrada.sueldoBase,
         r: calcularLiquidacion(entrada),
+        sueldoLinea,
         alerta:
-          dias.trab === 0
-            ? "PENDIENTE: INFORMAR LOS DIAS TRABAJADOS DEL MES PARA CALCULAR ESTA LIQUIDACION."
+          entrada.diasTrabajados === 0
+            ? modalidad === "hora"
+              ? "PENDIENTE: INFORMAR LAS HORAS TRABAJADAS DEL MES PARA CALCULAR ESTA LIQUIDACION."
+              : "PENDIENTE: INFORMAR LOS DIAS TRABAJADOS DEL MES PARA CALCULAR ESTA LIQUIDACION."
             : undefined,
       };
     });

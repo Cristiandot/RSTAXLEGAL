@@ -513,6 +513,14 @@ function LiquidacionDialog({
   const [anticipo, setAnticipo] = useState(
     String(novedades.find((n) => n.tipo === "anticipo")?.monto ?? ""),
   );
+  // Modalidad por hora / por día: la cantidad del mes define el sueldo (tarifa × cantidad).
+  const modalidad = str(trabajador.sueldo_modalidad) || "mensual";
+  const [horasNormales, setHorasNormales] = useState(
+    String(novedades.find((n) => n.tipo === "horas_normales")?.cantidad ?? ""),
+  );
+  const [diasPagados, setDiasPagados] = useState(
+    String(novedades.find((n) => n.tipo === "dias_pagados")?.cantidad ?? ""),
+  );
   const [kameLiquido, setKameLiquido] = useState(String(liquidacion?.kame_liquido ?? ""));
   const [resultado, setResultado] = useState<Record<string, unknown> | null>(
     (liquidacion?.detalle as Record<string, unknown> | null) ?? null,
@@ -530,6 +538,8 @@ function LiquidacionDialog({
         horasExtra: Number(horasExtra) || 0,
         anticipo: Number(anticipo) || 0,
         kameLiquido: kameLiquido === "" ? null : Number(kameLiquido),
+        horasNormales: modalidad === "hora" ? Number(horasNormales) || 0 : 0,
+        diasPagados: modalidad === "dia" ? Number(diasPagados) || 0 : 0,
       });
       if (res.ok) {
         setResultado((res.detalle as Record<string, unknown>) ?? null);
@@ -574,6 +584,29 @@ function LiquidacionDialog({
               </div>
             </div>
             <p className="text-xs text-muted-foreground">Días pagados = 30 − licencia (la cubre el subsidio). Las vacaciones se pagan, no descuentan.</p>
+
+            {modalidad === "hora" ? (
+              <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                <span className="flex-1 text-sm font-medium">
+                  Horas trabajadas del mes
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    Pago por hora: {formatMonto(Number(trabajador.sueldo_base) || 0)}/hora × horas. Los días de arriba no prorratean el sueldo.
+                  </span>
+                </span>
+                <Input type="number" step="0.5" className="w-32" value={horasNormales} onChange={(e) => setHorasNormales(e.target.value)} />
+              </div>
+            ) : null}
+            {modalidad === "dia" ? (
+              <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-2">
+                <span className="flex-1 text-sm font-medium">
+                  Días a pago del mes
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    Pago por día: {formatMonto(Number(trabajador.sueldo_base) || 0)}/día × días. Los días de arriba no prorratean el sueldo.
+                  </span>
+                </span>
+                <Input type="number" step="0.5" className="w-32" value={diasPagados} onChange={(e) => setDiasPagados(e.target.value)} />
+              </div>
+            ) : null}
 
             {grupos.map((g) =>
               porNaturaleza(g.nat).length > 0 ? (
@@ -768,6 +801,7 @@ function FichaDialog({
   const [salud, setSalud] = useState(g("salud") || "Fonasa");
   const esIsapre = salud !== "Fonasa" && salud !== "Sin Isapre" && salud !== "";
   const [gratTipo, setGratTipo] = useState(g("gratificacion_tipo") || "sin");
+  const [modalidad, setModalidad] = useState(g("sueldo_modalidad") || "mensual");
 
   const fijosIni = (trabajador?.montos_fijos ?? {}) as { colacion?: number; movilizacion?: number; conceptos?: Record<string, number> };
   const [colacion, setColacion] = useState(fijosIni.colacion != null ? String(fijosIni.colacion) : "");
@@ -798,6 +832,7 @@ function FichaDialog({
       salud_plan_valor: esIsapre ? numOrNull(fd.get("salud_plan_valor")) : null,
       salud_plan_unidad: esIsapre ? String(fd.get("salud_plan_unidad") ?? "UF") : null,
       sueldo_base: numOrNull(fd.get("sueldo_base")),
+      sueldo_modalidad: modalidad || "mensual",
       gratificacion_tipo: gratTipo || null,
       gratificacion_monto: gratTipo === "manual" ? numOrNull(fd.get("gratificacion_monto")) : null,
       mas_11_anios: false,
@@ -900,7 +935,19 @@ function FichaDialog({
             </select>
           </div>
           {campo("Horas semanales", "horas_semanales", { type: "number", step: "0.01", placeholder: "45" })}
-          {campo("Sueldo base", "sueldo_base", { type: "number" })}
+          <div className="flex flex-col gap-1.5">
+            <Label>Modalidad de sueldo</Label>
+            <select name="sueldo_modalidad" className={selectCls} value={modalidad} onChange={(e) => setModalidad(e.target.value)}>
+              <option value="mensual">Mensual</option>
+              <option value="dia">Por día (tarifa diaria)</option>
+              <option value="hora">Por hora (valor hora)</option>
+            </select>
+          </div>
+          {campo(
+            modalidad === "hora" ? "Valor hora" : modalidad === "dia" ? "Tarifa por día" : "Sueldo base",
+            "sueldo_base",
+            { type: "number", step: "0.01" },
+          )}
           <div className="flex flex-col gap-1.5">
             <Label>Gratificación (si no hay contrato en el panel)</Label>
             <select name="gratificacion_tipo" className={selectCls} value={gratTipo} onChange={(e) => setGratTipo(e.target.value)}>

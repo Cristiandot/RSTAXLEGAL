@@ -37,6 +37,8 @@ export type ClienteRow = {
 
 export type TrabajadorRow = {
   sueldo_base?: number | string | null;
+  /** 'mensual' (default) | 'dia' | 'hora' — con dia/hora, sueldo_base es la TARIFA. */
+  sueldo_modalidad?: string | null;
   gratificacion_tipo?: string | null;
   gratificacion_monto?: number | string | null;
   afp?: string | null;
@@ -145,10 +147,31 @@ function tiene11Anios(fechaIngreso: string | null | undefined, periodo: string |
 
 export function armarEntrada(p: ArmarParams): EntradaLiquidacion {
   const rem = p.contrato?.remuneracion ?? null;
-  const sueldoBase = num(rem?.sueldo_base ?? p.trabajador.sueldo_base);
+  const modalidad = p.trabajador.sueldo_modalidad ?? "mensual";
+  const tarifa = num(rem?.sueldo_base ?? p.trabajador.sueldo_base);
   const jornadaSemanal =
     num(p.contrato?.jornada?.horas_semanales ?? p.trabajador.horas_semanales, 45) || 45;
   const porId = new Map(p.conceptos.map((c) => [c.id, c]));
+
+  // Modalidad por día / por hora (KAME "SUELDO BASE DIARIO" / horas normales):
+  // el sueldo del mes = tarifa × cantidad, SIN prorrateo por días (la cantidad
+  // ya define lo trabajado). La gratificación 25% se calcula sobre ese total,
+  // igual que KAME (que gratificaba días + horas normales).
+  let cantidadModalidad = 0;
+  if (modalidad === "hora" || modalidad === "dia") {
+    const tipoNovedad = modalidad === "hora" ? "horas_normales" : "dias_pagados";
+    for (const n of p.novedades) if (n.tipo === tipoNovedad) cantidadModalidad += num(n.cantidad);
+  }
+  const sueldoBase =
+    modalidad === "hora" || modalidad === "dia"
+      ? Math.round(tarifa * cantidadModalidad + 1e-6)
+      : tarifa;
+  const diasTrabajadosEfectivos =
+    modalidad === "hora" || modalidad === "dia"
+      ? cantidadModalidad > 0
+        ? 30 // sin prorrateo: el monto ya refleja lo trabajado
+        : 0
+      : (p.diasTrabajados ?? 30);
 
   // Montos fijos de la ficha del trabajador (recurren cada mes).
   const fijos = (p.trabajador.montos_fijos ?? {}) as {
@@ -208,7 +231,7 @@ export function armarEntrada(p: ArmarParams): EntradaLiquidacion {
     ind: mapearIndicadores(p.ind),
     mutualTasa: num(p.cliente.mutual_tasa),
     sueldoBase,
-    diasTrabajados: p.diasTrabajados ?? 30,
+    diasTrabajados: diasTrabajadosEfectivos,
     // Precedencia: contrato del panel > ficha del trabajador > sin gratificación.
     gratificacionTipo:
       ((rem?.gratificacion_tipo ?? p.trabajador.gratificacion_tipo) as GratificacionTipo) ?? "sin",

@@ -30,6 +30,8 @@ export type DatosLiquidacionPdf = {
   r: ResultadoLiquidacion;
   /** Aviso destacado en ROJO bajo los datos del trabajador (ej.: faltan los días trabajados). */
   alerta?: string;
+  /** Etiqueta de la línea de sueldo (modalidad día/hora): ej. "SUELDO BASE 77 HORAS × $3,175.56". */
+  sueldoLinea?: string;
 };
 
 const NEG = rgb(0, 0, 0);
@@ -96,7 +98,7 @@ function dibujar(page: PDFPage, font: PDFFont, bold: PDFFont, d: DatosLiquidacio
   const r = d.r;
   text("HABERES", L, y, 9, bold); y -= 12;
   text("IMPONIBLES", L, y, 9, bold); y -= 14;
-  detalle(`SUELDO BASE ${d.diasTrabajados} DIAS`, r.sueldoBase, y); y -= 13;
+  detalle(d.sueldoLinea ?? `SUELDO BASE ${d.diasTrabajados} DIAS`, r.sueldoBase, y); y -= 13;
   if (r.gratificacion > 0) { detalle("GRATIFICACION", r.gratificacion, y); y -= 13; }
   if (r.horasExtras > 0) { detalle("HORAS EXTRAS", r.horasExtras, y); y -= 13; }
   if (r.semanaCorrida > 0) { detalle("SEMANA CORRIDA", r.semanaCorrida, y); y -= 13; }
