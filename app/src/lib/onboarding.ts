@@ -1,0 +1,118 @@
+/** Tipos y utilidades del módulo Onboarding y Calidad de Datos. */
+
+/** Etapa del onboarding de una empresa (col `clientes.onboarding_estado`). */
+export const ESTADOS_ONBOARDING = [
+  "pendiente_contacto",
+  "invitado",
+  "en_proceso",
+  "en_revision",
+  "completo",
+] as const;
+export type EstadoOnboarding = (typeof ESTADOS_ONBOARDING)[number];
+
+export const LABEL_ESTADO: Record<string, string> = {
+  pendiente_contacto: "Pendiente de contacto",
+  invitado: "Invitado",
+  en_proceso: "En proceso",
+  en_revision: "En revisión",
+  completo: "Completo",
+};
+
+/** Columna `onboarding_<estado>_at` que se estampa al pasar a cada etapa. */
+export const HITO_ESTADO: Record<string, string | null> = {
+  pendiente_contacto: null,
+  invitado: "onboarding_invitado_at",
+  en_proceso: "onboarding_en_proceso_at",
+  en_revision: "onboarding_en_revision_at",
+  completo: "onboarding_completo_at",
+};
+
+export function claseEstadoOnboarding(estado: string): string {
+  switch (estado) {
+    case "completo":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "en_revision":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "en_proceso":
+      return "border-sky-200 bg-sky-50 text-sky-700";
+    case "invitado":
+      return "border-violet-200 bg-violet-50 text-violet-700";
+    default:
+      return "border-slate-200 bg-slate-100 text-slate-600";
+  }
+}
+
+/** Clase del badge de fuente del dato. */
+export function claseFuente(fuente: string): string {
+  switch (fuente) {
+    case "SII":
+      return "border-indigo-200 bg-indigo-50 text-indigo-700";
+    case "KAME":
+      return "border-orange-200 bg-orange-50 text-orange-700";
+    case "CLIENTE":
+      return "border-teal-200 bg-teal-50 text-teal-700";
+    default:
+      return "border-slate-200 bg-slate-100 text-slate-600";
+  }
+}
+
+/** Color del % de completitud. */
+export function claseCompletitud(pct: number | null): string {
+  if (pct === null) return "text-muted-foreground";
+  if (pct >= 90) return "font-semibold text-emerald-600";
+  if (pct >= 60) return "font-medium text-amber-600";
+  return "font-semibold text-red-600";
+}
+
+/** Fila de `v_onboarding_empresas`. */
+export type EmpresaOnboardingRow = {
+  cliente_id: string;
+  razon_social: string;
+  rut_empresa: string | null;
+  onboarding_estado: string;
+  pct_empresa: number | null;
+  faltan_empresa: number;
+  n_trab: number;
+  pct_trab: number | null;
+  faltan_trab: number;
+};
+
+/** Fila de `v_onboarding_por_campo`. */
+export type PorCampoRow = {
+  entidad: "cliente" | "trabajador";
+  grupo: string;
+  campo: string;
+  etiqueta: string;
+  fuente: string;
+  requeridos: number;
+  faltan: number;
+};
+
+/** Fila de detalle (drill-down): un campo faltante de un registro concreto. */
+export type FaltanteRow = {
+  entidad: "cliente" | "trabajador";
+  registro_id: string;
+  cliente_id: string;
+  campo: string;
+  etiqueta: string;
+  grupo: string;
+  fuente: string;
+  registro_nombre: string;
+  registro_rut: string | null;
+};
+
+/** Fila de la cola de validación (`cambios_propuestos` + nombres). */
+export type CambioPropuestoRow = {
+  id: string;
+  entidad: "cliente" | "trabajador";
+  registro_id: string;
+  cliente_id: string | null;
+  campo: string;
+  etiqueta: string | null;
+  valor_actual: string | null;
+  valor_propuesto: string | null;
+  origen: string;
+  observacion: string | null;
+  created_at: string;
+  razon_social: string | null;
+};
