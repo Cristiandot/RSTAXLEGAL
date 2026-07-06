@@ -455,11 +455,10 @@ export async function faltantesDeGrupo(grupoId: string): Promise<FaltanteRow[]> 
   return listas.flat();
 }
 
-/** Actualiza el contacto simple del cliente (grupo). */
+/** Actualiza el correo del cliente (grupo). */
 export async function actualizarContactoCliente(
   grupoId: string,
   correo: string,
-  telefono: string,
 ): Promise<Resp> {
   const c = correo.trim();
   if (c && !/^\S+@\S+\.\S+$/.test(c))
@@ -467,7 +466,7 @@ export async function actualizarContactoCliente(
   const supabase = await createClient();
   const { error } = await supabase
     .from("grupos_cliente")
-    .update({ correo: c || null, telefono: telefono.trim() || null })
+    .update({ correo: c || null })
     .eq("id", grupoId);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/clientes");

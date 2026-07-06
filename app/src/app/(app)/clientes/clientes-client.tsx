@@ -24,8 +24,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ThSort } from "@/components/th-sort";
+import { TextoCopiable } from "@/components/texto-copiable";
+import { RutCopiable } from "@/components/rut-copiable";
 import { comparar, type Orden } from "@/lib/ordenar";
-import { CamposEditables, EditorCampo } from "@/components/campos-editables";
+import { EditorCampo } from "@/components/campos-editables";
 import {
   claseCompletitud,
   claseFuente,
@@ -36,7 +38,6 @@ import {
   type PorCampoRow,
 } from "@/lib/onboarding";
 import {
-  faltantesDeGrupo,
   registrosFaltanCampo,
   actualizarContactoCliente,
 } from "../onboarding/actions";
@@ -94,14 +95,11 @@ export function ClientesClient({
   const [orden, setOrden] = useState<Orden>(null);
   const [entidadF, setEntidadF] = useState("");
 
-  // Detalle de cliente (checklist)
+  // Detalle de cliente (empresas básicas)
   const [cliSel, setCliSel] = useState<ClienteResumenRow | null>(null);
-  const [faltantes, setFaltantes] = useState<FaltanteRow[]>([]);
-  const [cargando, startCargar] = useTransition();
 
-  // Contacto editable dentro del detalle
+  // Correo editable dentro del detalle
   const [correo, setCorreo] = useState("");
-  const [fono, setFono] = useState("");
   const [guardandoContacto, startContacto] = useTransition();
 
   // Drill-down por campo
@@ -114,7 +112,7 @@ export function ClientesClient({
     const out = clientes.filter((c) => {
       if (!q) return true;
       const t =
-        `${c.codigo ?? ""} ${c.nombre} ${c.correo ?? ""} ${c.telefono ?? ""}`.toLowerCase();
+        `${c.codigo ?? ""} ${c.nombre} ${c.correo ?? ""}`.toLowerCase();
       return t.includes(q);
     });
     if (!orden) return out; // por código (orden del servidor)
@@ -126,8 +124,6 @@ export function ClientesClient({
           return c.nombre;
         case "empresas":
           return c.n_empresas;
-        case "trab":
-          return c.n_trab;
         case "pct":
           return c.pct;
         case "faltan":
@@ -155,11 +151,6 @@ export function ClientesClient({
   function abrirCliente(c: ClienteResumenRow) {
     setCliSel(c);
     setCorreo(c.correo ?? "");
-    setFono(c.telefono ?? "");
-    setFaltantes([]);
-    startCargar(async () => {
-      setFaltantes(await faltantesDeGrupo(c.grupo_id));
-    });
   }
 
   function abrirCampo(c: PorCampoRow) {
@@ -174,19 +165,12 @@ export function ClientesClient({
     if (!cliSel) return;
     const id = cliSel.grupo_id;
     startContacto(async () => {
-      const res = await actualizarContactoCliente(id, correo, fono);
+      const res = await actualizarContactoCliente(id, correo);
       if (res.ok) {
-        toast.success("Contacto del cliente guardado");
+        toast.success("Correo del cliente guardado");
         router.refresh();
       } else toast.error(res.error ?? "Error al guardar");
     });
-  }
-
-  function quitarFaltante(f: FaltanteRow) {
-    setFaltantes((prev) =>
-      prev.filter((x) => !(x.registro_id === f.registro_id && x.campo === f.campo)),
-    );
-    router.refresh();
   }
 
   function quitarFaltanteCampo(f: FaltanteRow) {
@@ -275,12 +259,8 @@ export function ClientesClient({
                     Cliente
                   </ThSort>
                   <TableHead>Correo</TableHead>
-                  <TableHead>Teléfono</TableHead>
                   <ThSort col="empresas" orden={orden} setOrden={setOrden} className="text-center">
                     Empresas
-                  </ThSort>
-                  <ThSort col="trab" orden={orden} setOrden={setOrden} className="text-center">
-                    Trab.
                   </ThSort>
                   <ThSort col="pct" orden={orden} setOrden={setOrden}>
                     % Completado
@@ -295,7 +275,7 @@ export function ClientesClient({
                 {filtrados.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={9}
+                      colSpan={7}
                       className="py-10 text-center text-muted-foreground"
                     >
                       Sin resultados.
@@ -319,16 +299,16 @@ export function ClientesClient({
                           {c.nombre}
                         </span>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {c.correo ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {c.telefono ?? "—"}
+                      <TableCell>
+                        <TextoCopiable
+                          texto={c.correo}
+                          etiqueta="Correo"
+                          className="max-w-[240px]"
+                        />
                       </TableCell>
                       <TableCell className="text-center">
                         {c.n_empresas}
                       </TableCell>
-                      <TableCell className="text-center">{c.n_trab}</TableCell>
                       <TableCell>
                         <Progreso pct={c.pct} />
                       </TableCell>
@@ -431,7 +411,7 @@ export function ClientesClient({
         }}
       >
         {cliSel ? (
-          <DialogContent className="sm:max-w-2xl">
+          <DialogContent className="sm:max-w-xl">
             <DialogHeader>
               <DialogTitle className="font-heading">
                 {cliSel.codigo ? `${cliSel.codigo} — ` : ""}
@@ -439,17 +419,13 @@ export function ClientesClient({
               </DialogTitle>
               <DialogDescription>
                 {cliSel.n_empresas}{" "}
-                {cliSel.n_empresas === 1 ? "empresa" : "empresas"} ·{" "}
-                {cliSel.n_trab} trabajadores · checklist{" "}
+                {cliSel.n_empresas === 1 ? "empresa" : "empresas"} · completado{" "}
                 {cliSel.pct === null ? "—" : `${cliSel.pct}%`}
               </DialogDescription>
             </DialogHeader>
             <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
               {/* Datos simples del cliente */}
               <div className="rounded-lg border bg-muted/40 p-3">
-                <div className="mb-2 text-sm font-semibold">
-                  Datos del cliente
-                </div>
                 {cliSel.carpeta_onedrive ? (
                   <p
                     className="mb-2 truncate text-xs text-muted-foreground"
@@ -458,27 +434,16 @@ export function ClientesClient({
                     Carpeta OneDrive: {cliSel.carpeta_onedrive}
                   </p>
                 ) : null}
-                <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_auto]">
                   <div className="flex flex-col gap-1">
                     <Label htmlFor="cli-correo" className="text-xs">
-                      Correo
+                      Correo del cliente
                     </Label>
                     <Input
                       id="cli-correo"
                       className="h-8 bg-card text-sm"
                       value={correo}
                       onChange={(e) => setCorreo(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <Label htmlFor="cli-fono" className="text-xs">
-                      Teléfono
-                    </Label>
-                    <Input
-                      id="cli-fono"
-                      className="h-8 bg-card text-sm"
-                      value={fono}
-                      onChange={(e) => setFono(e.target.value)}
                     />
                   </div>
                   <Button
@@ -493,70 +458,47 @@ export function ClientesClient({
                 </div>
               </div>
 
-              {/* Checklist por empresa */}
-              {cargando ? (
-                <p className="text-sm text-muted-foreground">Cargando…</p>
-              ) : (
-                (empresasDeGrupo[cliSel.grupo_id] ?? []).map((emp) => {
-                  const deEmpresa = faltantes.filter(
-                    (f) =>
-                      (f.entidad === "cliente" && f.registro_id === emp.id) ||
-                      (f.entidad === "trabajador" && f.cliente_id === emp.id),
-                  );
-                  const ficha = deEmpresa.filter((f) => f.entidad === "cliente");
-                  const trabs = deEmpresa.filter(
-                    (f) => f.entidad === "trabajador",
-                  );
-                  const porTrab = new Map<string, FaltanteRow[]>();
-                  for (const t of trabs) {
-                    const arr = porTrab.get(t.registro_id) ?? [];
-                    arr.push(t);
-                    porTrab.set(t.registro_id, arr);
-                  }
-                  return (
-                    <div key={emp.id} className="rounded-lg border p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <div className="text-sm font-semibold">
-                          {emp.razon_social}
-                        </div>
-                        <Progreso pct={emp.pct} />
-                      </div>
-                      {deEmpresa.length === 0 ? (
-                        <p className="text-sm text-emerald-600">
-                          Ficha completa. ✓
-                        </p>
-                      ) : (
-                        <div className="space-y-3">
-                          {ficha.length ? (
-                            <CamposEditables
-                              items={ficha}
-                              catalogos={catalogos}
-                              selectores={selectores}
-                              onSaved={quitarFaltante}
-                            />
-                          ) : null}
-                          {[...porTrab.values()].map((arr) => (
-                            <div key={arr[0].registro_id}>
-                              <div className="mb-1 text-sm font-medium">
-                                {arr[0].registro_nombre}{" "}
-                                <span className="font-normal text-muted-foreground">
-                                  {arr[0].registro_rut ?? ""}
-                                </span>
-                              </div>
-                              <CamposEditables
-                                items={arr}
-                                catalogos={catalogos}
-                                selectores={selectores}
-                                onSaved={quitarFaltante}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
+              {/* Empresas del cliente (datos básicos; el detalle vive en /empresas) */}
+              <div>
+                <div className="mb-1 text-sm font-semibold">Empresas</div>
+                {(empresasDeGrupo[cliSel.grupo_id] ?? []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Este cliente no tiene empresas registradas.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableBody>
+                      {(empresasDeGrupo[cliSel.grupo_id] ?? []).map((emp) => (
+                        <TableRow key={emp.id} className="hover:bg-transparent">
+                          <TableCell className="font-medium">
+                            <span
+                              className="block max-w-[240px] truncate"
+                              title={emp.razon_social}
+                            >
+                              {emp.razon_social}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <RutCopiable rut={emp.rut_empresa} />
+                          </TableCell>
+                          <TableCell>
+                            <Progreso pct={emp.pct} />
+                          </TableCell>
+                          <TableCell className="text-center text-sm">
+                            {emp.faltan === 0 ? (
+                              <span className="text-emerald-600">✓</span>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                faltan {emp.faltan}
+                              </span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
             </div>
           </DialogContent>
         ) : null}

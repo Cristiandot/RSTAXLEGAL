@@ -127,20 +127,20 @@ export type ClienteResumenRow = {
   codigo: string | null;
   nombre: string;
   correo: string | null;
-  telefono: string | null;
   n_empresas: number;
-  n_trab: number;
   /** % de completitud (promedio de fichas + trabajadores de sus empresas). */
   pct: number | null;
   faltan: number;
   carpeta_onedrive: string | null;
 };
 
-/** Empresa de un cliente (para el detalle del checklist). */
+/** Empresa de un cliente (datos básicos para el detalle). */
 export type EmpresaDeGrupo = {
   id: string;
   razon_social: string;
+  rut_empresa: string | null;
   pct: number | null;
+  faltan: number;
 };
 
 /** Fila de `v_onboarding_empresas` (+ el cliente/grupo al que pertenece). */

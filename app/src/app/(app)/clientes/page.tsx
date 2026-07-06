@@ -16,9 +16,9 @@ export default async function ClientesPage() {
     await Promise.all([
       supabase
         .from("grupos_cliente")
-        .select("id, codigo, nombre, correo, telefono, carpeta_onedrive")
+        .select("id, codigo, nombre, correo, carpeta_onedrive")
         .order("codigo"),
-      supabase.from("clientes").select("id, grupo_id, razon_social"),
+      supabase.from("clientes").select("id, grupo_id, razon_social, rut_empresa"),
       supabase.from("v_onboarding_empresas").select("*"),
       supabase.from("v_onboarding_por_campo").select("*"),
       supabase
@@ -47,7 +47,7 @@ export default async function ClientesPage() {
     });
   }
 
-  // Empresas de cada cliente (para el detalle del checklist).
+  // Empresas de cada cliente (datos básicos para el detalle).
   const empresasPorGrupo = new Map<string, EmpresaDeGrupo[]>();
   for (const v of vinculosRes.data ?? []) {
     if (!v.grupo_id) continue;
@@ -55,7 +55,9 @@ export default async function ClientesPage() {
     arr.push({
       id: v.id,
       razon_social: v.razon_social,
+      rut_empresa: v.rut_empresa,
       pct: pctPorEmpresa.get(v.id)?.pct ?? null,
+      faltan: pctPorEmpresa.get(v.id)?.faltan ?? 0,
     });
     empresasPorGrupo.set(v.grupo_id, arr);
   }
@@ -73,9 +75,7 @@ export default async function ClientesPage() {
       codigo: g.codigo,
       nombre: g.nombre,
       correo: g.correo,
-      telefono: g.telefono,
       n_empresas: emps.length,
-      n_trab: stats.reduce((a, s) => a + s.nTrab, 0),
       pct: pcts.length
         ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length)
         : null,
