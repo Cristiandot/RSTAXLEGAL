@@ -283,6 +283,10 @@ export function OnboardingClient({
   const [nueva, setNueva] = useState<NuevaEmpresaInput>(NUEVA_VACIA);
   // "" = sin elegir · "__nuevo__" = cliente nuevo · uuid = grupo existente
   const [clienteSel, setClienteSel] = useState("");
+  // Servicios que definen los ciclos mensuales de la empresa.
+  const [haceF29, setHaceF29] = useState(true);
+  const [haceLiq, setHaceLiq] = useState(false);
+  const [nTrab, setNTrab] = useState("");
   const [creando, startCrear] = useTransition();
 
   function setN(k: keyof NuevaEmpresaInput, v: string) {
@@ -332,6 +336,9 @@ export function OnboardingClient({
           clienteSel === "__nuevo__" ? nueva.nuevo_cliente_nombre : undefined,
         nuevo_cliente_letra:
           clienteSel === "__nuevo__" ? nueva.nuevo_cliente_letra : undefined,
+        hace_f29: haceF29,
+        hace_liquidaciones: haceLiq,
+        n_trabajadores_esperados: haceLiq ? Number(nTrab) : undefined,
       };
       const res = await crearEmpresa(input);
       if (res.ok) {
@@ -341,6 +348,9 @@ export function OnboardingClient({
         setNuevaOpen(false);
         setNueva(NUEVA_VACIA);
         setClienteSel("");
+        setHaceF29(true);
+        setHaceLiq(false);
+        setNTrab("");
         router.refresh();
       } else toast.error(res.error ?? "Error al crear la empresa");
     });
@@ -1237,6 +1247,54 @@ export function OnboardingClient({
                 onChange={(e) => setN("domicilio", e.target.value)}
               />
             </div>
+            <div className="rounded-lg border bg-muted/40 p-3 sm:col-span-2">
+              <div className="mb-2 text-sm font-semibold">Servicios</div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="ne-f29">¿Requiere F29? *</Label>
+                  <select
+                    id="ne-f29"
+                    className={selectCls}
+                    value={haceF29 ? "si" : "no"}
+                    onChange={(e) => setHaceF29(e.target.value === "si")}
+                  >
+                    <option value="si">Sí</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="ne-liq">¿Liquidaciones de sueldo? *</Label>
+                  <select
+                    id="ne-liq"
+                    className={selectCls}
+                    value={haceLiq ? "si" : "no"}
+                    onChange={(e) => setHaceLiq(e.target.value === "si")}
+                  >
+                    <option value="no">No</option>
+                    <option value="si">Sí</option>
+                  </select>
+                </div>
+                {haceLiq ? (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="ne-ntrab">N° de trabajadores *</Label>
+                    <Input
+                      id="ne-ntrab"
+                      type="number"
+                      min={1}
+                      placeholder="Ej.: 8"
+                      value={nTrab}
+                      onChange={(e) => setNTrab(e.target.value)}
+                    />
+                  </div>
+                ) : null}
+              </div>
+              {haceLiq ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  La dotación declarada se contrasta con las liquidaciones
+                  cargadas cada mes, para que no se pase ninguna.
+                </p>
+              ) : null}
+            </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="ne-contacto">Persona de contacto</Label>
               <Input
@@ -1272,7 +1330,8 @@ export function OnboardingClient({
                 creando ||
                 !clienteListo ||
                 !nueva.razon_social.trim() ||
-                !nueva.rut_empresa.trim()
+                !nueva.rut_empresa.trim() ||
+                (haceLiq && !(Number(nTrab) >= 1))
               }
               onClick={crear}
             >

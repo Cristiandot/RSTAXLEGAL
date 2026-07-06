@@ -214,6 +214,11 @@ export type NuevaEmpresaInput = {
   contacto_telefono?: string;
   comuna?: string;
   domicilio?: string;
+  /** Servicios: definen los ciclos mensuales que el panel le abre a la empresa. */
+  hace_f29?: boolean;
+  hace_liquidaciones?: boolean;
+  /** Dotación declarada (obligatoria si hace_liquidaciones). */
+  n_trabajadores_esperados?: number;
 };
 
 /**
@@ -283,6 +288,19 @@ export async function crearEmpresa(
   if (input.contacto_correo && !/^\S+@\S+\.\S+$/.test(input.contacto_correo))
     return { ok: false, error: "Correo de contacto inválido" };
 
+  // Si hace liquidaciones, la dotación declarada es obligatoria (>0) —
+  // es el contraste para que no se pase ninguna liquidación.
+  const nTrab = input.hace_liquidaciones
+    ? input.n_trabajadores_esperados
+    : null;
+  if (input.hace_liquidaciones) {
+    if (!Number.isInteger(nTrab) || (nTrab as number) < 1)
+      return {
+        ok: false,
+        error: "Indique cuántos trabajadores tiene la empresa",
+      };
+  }
+
   const { data, error } = await supabase
     .from("clientes")
     .insert({
@@ -298,6 +316,9 @@ export async function crearEmpresa(
       contacto_telefono: input.contacto_telefono?.trim() || null,
       comuna: input.comuna || null,
       domicilio: input.domicilio?.trim() || null,
+      hace_f29: Boolean(input.hace_f29),
+      hace_liquidaciones: Boolean(input.hace_liquidaciones),
+      n_trabajadores_esperados: nTrab,
       activo: true,
       onboarding_estado: "pendiente_contacto",
       carpeta_solicitada_at: new Date().toISOString(),
