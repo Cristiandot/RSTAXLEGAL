@@ -1,40 +1,28 @@
 import { createClient } from "@/lib/supabase/server";
 import { NominasClient, type NominaEmpresaRow } from "./nominas-client";
-import type { CampoDef, Catalogos, GrupoClienteOpcion } from "@/lib/onboarding";
+import type { GrupoClienteOpcion } from "@/lib/onboarding";
 
 export const metadata = { title: "Nóminas — RS Tax & Legal" };
 
 export default async function NominasPage() {
   const supabase = await createClient();
 
-  const [empresasRes, gruposRes, trabsRes, pctRes, catRes, defsRes] =
-    await Promise.all([
-      // Solo empresas con liquidaciones de sueldo.
-      supabase
-        .from("clientes")
-        .select("id, razon_social, rut_empresa, grupo_id, n_trabajadores_esperados")
-        .eq("hace_liquidaciones", true)
-        .order("razon_social"),
-      supabase
-        .from("grupos_cliente")
-        .select("id, codigo, nombre")
-        .order("codigo"),
-      supabase.from("trabajadores").select("cliente_id, activo"),
-      supabase
-        .from("v_onboarding_empresas")
-        .select("cliente_id, pct_trab, faltan_trab"),
-      supabase
-        .from("catalogo_valores")
-        .select("tipo, codigo, etiqueta")
-        .eq("activo", true)
-        .order("orden")
-        .order("etiqueta"),
-      supabase
-        .from("onboarding_campos")
-        .select("entidad, campo, etiqueta, grupo, fuente, selector, obligatorio")
-        .eq("activo", true)
-        .order("orden"),
-    ]);
+  const [empresasRes, gruposRes, trabsRes, pctRes] = await Promise.all([
+    // Solo empresas con liquidaciones de sueldo.
+    supabase
+      .from("clientes")
+      .select("id, razon_social, rut_empresa, grupo_id, n_trabajadores_esperados")
+      .eq("hace_liquidaciones", true)
+      .order("razon_social"),
+    supabase
+      .from("grupos_cliente")
+      .select("id, codigo, nombre")
+      .order("codigo"),
+    supabase.from("trabajadores").select("cliente_id, activo"),
+    supabase
+      .from("v_onboarding_empresas")
+      .select("cliente_id, pct_trab, faltan_trab"),
+  ]);
 
   const grupos: GrupoClienteOpcion[] = gruposRes.data ?? [];
   const grupoPorId = new Map(grupos.map((g) => [g.id, g]));
@@ -79,22 +67,11 @@ export default async function NominasPage() {
     };
   });
 
-  const catalogos: Catalogos = {};
-  for (const c of catRes.data ?? []) {
-    (catalogos[c.tipo] ??= []).push({ codigo: c.codigo, etiqueta: c.etiqueta });
-  }
-  // Definición de la ficha del trabajador (el RUT va en el encabezado).
-  const fichaCampos: CampoDef[] = (defsRes.data ?? []).filter(
-    (d) => d.entidad === "trabajador" && d.campo !== "rut",
-  );
-
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
       <NominasClient
         empresas={empresas}
         grupos={grupos}
-        catalogos={catalogos}
-        fichaCampos={fichaCampos}
         errorCarga={empresasRes.error?.message ?? null}
       />
     </main>

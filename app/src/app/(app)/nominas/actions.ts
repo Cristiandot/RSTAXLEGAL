@@ -123,7 +123,7 @@ export async function agregarCarga(
     .eq("id", trabajadorId);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/nominas");
+  revalidatePath("/nominas", "layout");
   return { ok: true };
 }
 
@@ -153,6 +153,6 @@ export async function quitarCarga(
     .eq("id", trabajadorId);
   if (error) return { ok: false, error: error.message };
 
-  revalidatePath("/nominas");
+  revalidatePath("/nominas", "layout");
   return { ok: true };
 }
