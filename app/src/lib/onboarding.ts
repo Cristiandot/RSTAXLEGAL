@@ -69,7 +69,7 @@ export type CatalogoOpcion = { codigo: string; etiqueta: string };
 /** Opciones por tipo de selector (afp, comuna, banco, …). */
 export type Catalogos = Record<string, CatalogoOpcion[]>;
 
-/** Grupos de cartera OneDrive/ClickUp para clientes nuevos. */
+/** Letras de cartera OneDrive/ClickUp para clientes nuevos. */
 export const GRUPOS_CARTERA = [
   { codigo: "A", etiqueta: "A — Cartera histórica" },
   { codigo: "B", etiqueta: "B — Grupo abril 2026 (1)" },
@@ -77,6 +77,13 @@ export const GRUPOS_CARTERA = [
   { codigo: "D", etiqueta: "D — Cartera ligera" },
   { codigo: "Z", etiqueta: "Z — Otros" },
 ] as const;
+
+/** Cliente (grupo de empresas): fila de `grupos_cliente` para el selector. */
+export type GrupoClienteOpcion = {
+  id: string;
+  codigo: string | null;
+  nombre: string;
+};
 
 /** Tipo de input para editar un campo, inferido por convención de nombre. */
 export type TipoCampo = "texto" | "fecha" | "numero" | "rut" | "correo" | "lineas";
@@ -97,7 +104,7 @@ export const PLACEHOLDER_LINEAS: Record<string, string> = {
   actividades_sii: "Un código o glosa de actividad por línea",
 };
 
-/** Fila de `v_onboarding_empresas`. */
+/** Fila de `v_onboarding_empresas` (+ el cliente/grupo al que pertenece). */
 export type EmpresaOnboardingRow = {
   cliente_id: string;
   razon_social: string;
@@ -108,6 +115,8 @@ export type EmpresaOnboardingRow = {
   n_trab: number;
   pct_trab: number | null;
   faltan_trab: number;
+  grupo_codigo: string | null;
+  grupo_nombre: string | null;
 };
 
 /** Fila de `v_onboarding_por_campo`. */

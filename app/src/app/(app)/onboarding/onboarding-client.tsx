@@ -37,6 +37,7 @@ import {
   tipoCampo,
   type Catalogos,
   type CatalogoOpcion,
+  type GrupoClienteOpcion,
   type EmpresaOnboardingRow,
   type PorCampoRow,
   type CambioPropuestoRow,
@@ -236,6 +237,7 @@ export function OnboardingClient({
   cambios,
   catalogos,
   selectores,
+  grupos,
   errorCarga,
 }: {
   empresas: EmpresaOnboardingRow[];
@@ -243,6 +245,7 @@ export function OnboardingClient({
   cambios: CambioPropuestoRow[];
   catalogos: Catalogos;
   selectores: Record<string, string | null>;
+  grupos: GrupoClienteOpcion[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -269,29 +272,45 @@ export function OnboardingClient({
   );
   const [obs, setObs] = useState("");
 
-  // Nueva empresa
+  // Nueva empresa (cuelga de un cliente existente o de uno nuevo)
   const NUEVA_VACIA: NuevaEmpresaInput = {
-    grupo_cartera: "D",
     rut_empresa: "",
     razon_social: "",
+    nuevo_cliente_letra: "D",
   };
   const [nuevaOpen, setNuevaOpen] = useState(false);
   const [nueva, setNueva] = useState<NuevaEmpresaInput>(NUEVA_VACIA);
+  // "" = sin elegir · "__nuevo__" = cliente nuevo · uuid = grupo existente
+  const [clienteSel, setClienteSel] = useState("");
   const [creando, startCrear] = useTransition();
 
   function setN(k: keyof NuevaEmpresaInput, v: string) {
     setNueva((p) => ({ ...p, [k]: v }));
   }
 
+  const clienteListo =
+    clienteSel === "__nuevo__"
+      ? Boolean(nueva.nuevo_cliente_nombre?.trim())
+      : Boolean(clienteSel);
+
   function crear() {
     startCrear(async () => {
-      const res = await crearEmpresa(nueva);
+      const input: NuevaEmpresaInput = {
+        ...nueva,
+        grupo_id: clienteSel === "__nuevo__" ? undefined : clienteSel,
+        nuevo_cliente_nombre:
+          clienteSel === "__nuevo__" ? nueva.nuevo_cliente_nombre : undefined,
+        nuevo_cliente_letra:
+          clienteSel === "__nuevo__" ? nueva.nuevo_cliente_letra : undefined,
+      };
+      const res = await crearEmpresa(input);
       if (res.ok) {
         toast.success(
           "Empresa creada. La carpeta OneDrive se creará automáticamente en unos minutos.",
         );
         setNuevaOpen(false);
         setNueva(NUEVA_VACIA);
+        setClienteSel("");
         router.refresh();
       } else toast.error(res.error ?? "Error al crear la empresa");
     });
@@ -315,7 +334,8 @@ export function OnboardingClient({
     const q = buscar.trim().toLowerCase();
     return empresas.filter((e) => {
       if (q) {
-        const t = `${e.razon_social} ${e.rut_empresa ?? ""}`.toLowerCase();
+        const t =
+          `${e.razon_social} ${e.rut_empresa ?? ""} ${e.grupo_codigo ?? ""} ${e.grupo_nombre ?? ""}`.toLowerCase();
         if (!t.includes(q)) return false;
       }
       if (estadoF && e.onboarding_estado !== estadoF) return false;
@@ -494,7 +514,8 @@ export function OnboardingClient({
             <Table stickyHeader>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[260px]">Empresa</TableHead>
+                  <TableHead className="w-[170px]">Cliente</TableHead>
+                  <TableHead className="w-[240px]">Empresa</TableHead>
                   <TableHead>RUT</TableHead>
                   <TableHead>Etapa</TableHead>
                   <TableHead className="text-center">% Ficha</TableHead>
@@ -508,7 +529,7 @@ export function OnboardingClient({
                 {empresasFiltradas.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={8}
+                      colSpan={9}
                       className="py-10 text-center text-muted-foreground"
                     >
                       Sin resultados.
@@ -521,9 +542,30 @@ export function OnboardingClient({
                       className="cursor-pointer"
                       onClick={() => abrirEmpresa(e)}
                     >
+                      <TableCell>
+                        {e.grupo_codigo || e.grupo_nombre ? (
+                          <span
+                            className="block max-w-[170px] truncate text-sm"
+                            title={`${e.grupo_codigo ?? ""} ${e.grupo_nombre ?? ""}`.trim()}
+                          >
+                            {e.grupo_codigo ? (
+                              <span className="font-medium">
+                                {e.grupo_codigo}
+                              </span>
+                            ) : null}{" "}
+                            <span className="text-muted-foreground">
+                              {e.grupo_nombre}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Sin cliente
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell className="font-medium">
                         <span
-                          className="block max-w-[260px] truncate"
+                          className="block max-w-[240px] truncate"
                           title={e.razon_social}
                         >
                           {e.razon_social}
@@ -916,28 +958,62 @@ export function OnboardingClient({
           <DialogHeader>
             <DialogTitle className="font-heading">Nueva empresa</DialogTitle>
             <DialogDescription>
-              Datos de primera necesidad. Queda en{" "}
-              <span className="font-medium">pendiente de contacto</span> y la
-              carpeta OneDrive se crea automáticamente con el correlativo del
-              grupo.
+              Toda empresa cuelga de un <span className="font-medium">cliente</span>{" "}
+              (que puede tener varias). Si el cliente es nuevo, se le asigna el
+              correlativo siguiente de su letra y su carpeta OneDrive se crea
+              automáticamente; la empresa queda en{" "}
+              <span className="font-medium">pendiente de contacto</span>.
             </DialogDescription>
           </DialogHeader>
           <div className="grid max-h-[60vh] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="ne-grupo">Grupo de cartera *</Label>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="ne-cliente">Cliente *</Label>
               <select
-                id="ne-grupo"
+                id="ne-cliente"
                 className={selectCls}
-                value={nueva.grupo_cartera}
-                onChange={(e) => setN("grupo_cartera", e.target.value)}
+                value={clienteSel}
+                onChange={(e) => setClienteSel(e.target.value)}
               >
-                {GRUPOS_CARTERA.map((g) => (
-                  <option key={g.codigo} value={g.codigo}>
-                    {g.etiqueta}
+                <option value="">— Elegir cliente —</option>
+                <option value="__nuevo__">➕ Cliente nuevo…</option>
+                {grupos.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.codigo ? `${g.codigo} — ` : ""}
+                    {g.nombre}
                   </option>
                 ))}
               </select>
             </div>
+            {clienteSel === "__nuevo__" ? (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="ne-cliente-nombre">
+                    Nombre del cliente nuevo *
+                  </Label>
+                  <Input
+                    id="ne-cliente-nombre"
+                    placeholder="Ej.: Domingo Undurraga"
+                    value={nueva.nuevo_cliente_nombre ?? ""}
+                    onChange={(e) => setN("nuevo_cliente_nombre", e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="ne-letra">Letra de cartera *</Label>
+                  <select
+                    id="ne-letra"
+                    className={selectCls}
+                    value={nueva.nuevo_cliente_letra}
+                    onChange={(e) => setN("nuevo_cliente_letra", e.target.value)}
+                  >
+                    {GRUPOS_CARTERA.map((g) => (
+                      <option key={g.codigo} value={g.codigo}>
+                        {g.etiqueta}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            ) : null}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="ne-rut">RUT empresa *</Label>
               <Input
@@ -947,7 +1023,7 @@ export function OnboardingClient({
                 onChange={(e) => setN("rut_empresa", e.target.value)}
               />
             </div>
-            <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <div className="flex flex-col gap-1.5">
               <Label htmlFor="ne-razon">Razón social *</Label>
               <Input
                 id="ne-razon"
@@ -1060,6 +1136,7 @@ export function OnboardingClient({
             <Button
               disabled={
                 creando ||
+                !clienteListo ||
                 !nueva.razon_social.trim() ||
                 !nueva.rut_empresa.trim()
               }

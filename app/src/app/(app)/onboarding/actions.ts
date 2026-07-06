@@ -125,7 +125,11 @@ export async function guardarCampo(
 }
 
 export type NuevaEmpresaInput = {
-  grupo_cartera: string;
+  /** Cliente existente (grupos_cliente.id)… */
+  grupo_id?: string;
+  /** …o cliente nuevo: nombre + letra de cartera (el correlativo se asigna solo). */
+  nuevo_cliente_nombre?: string;
+  nuevo_cliente_letra?: string;
   rut_empresa: string;
   razon_social: string;
   nombre_fantasia?: string;
@@ -140,16 +144,17 @@ export type NuevaEmpresaInput = {
 };
 
 /**
- * Crea una empresa nueva: queda en `pendiente_contacto` y con la carpeta
- * OneDrive solicitada (la crea el proceso local con el correlativo del grupo).
+ * Crea una empresa colgando de un cliente (grupo) existente o nuevo.
+ * Cliente nuevo: se le asigna el correlativo siguiente de su letra
+ * ("D" → D.47) y queda con la carpeta OneDrive solicitada; la empresa
+ * queda en `pendiente_contacto` y con su subcarpeta solicitada (ambas
+ * las crea el proceso local del equipo).
  */
 export async function crearEmpresa(
   input: NuevaEmpresaInput,
 ): Promise<Resp & { id?: string }> {
   const razon = input.razon_social?.trim();
   if (!razon) return { ok: false, error: "La razón social es obligatoria" };
-  if (!GRUPOS_CARTERA.some((g) => g.codigo === input.grupo_cartera))
-    return { ok: false, error: "Grupo de cartera no válido" };
   if (!validarRut(input.rut_empresa))
     return { ok: false, error: "RUT inválido (dígito verificador)" };
   const rut = formatearRut(input.rut_empresa);
@@ -162,6 +167,48 @@ export async function crearEmpresa(
     .maybeSingle();
   if (dup)
     return { ok: false, error: `Ese RUT ya existe: ${dup.razon_social}` };
+
+  // Resolver el cliente (grupo): existente o nuevo.
+  let grupoId = input.grupo_id || null;
+  if (!grupoId) {
+    const nombre = input.nuevo_cliente_nombre?.trim();
+    const letra = input.nuevo_cliente_letra;
+    if (!nombre)
+      return { ok: false, error: "Indique el cliente (existente o nuevo)" };
+    if (!GRUPOS_CARTERA.some((g) => g.codigo === letra))
+      return { ok: false, error: "Letra de cartera no válida" };
+
+    // Correlativo siguiente de la letra según los códigos ya asignados.
+    const { data: codigos } = await supabase
+      .from("grupos_cliente")
+      .select("codigo")
+      .like("codigo", `${letra}.%`);
+    let max = 0;
+    for (const c of codigos ?? []) {
+      const n = Number(c.codigo?.split(".")[1]);
+      if (Number.isInteger(n) && n > max) max = n;
+    }
+    const codigo = `${letra}.${max + 1}`;
+
+    const { data: g, error: eg } = await supabase
+      .from("grupos_cliente")
+      .insert({
+        codigo,
+        nombre,
+        carpeta_solicitada_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    if (eg) return { ok: false, error: eg.message };
+    grupoId = g.id;
+  } else {
+    const { data: g } = await supabase
+      .from("grupos_cliente")
+      .select("id")
+      .eq("id", grupoId)
+      .maybeSingle();
+    if (!g) return { ok: false, error: "Cliente no encontrado" };
+  }
 
   // Selectores opcionales: si vienen, deben estar en catálogo.
   const selectores: Array<[string, string | undefined]> = [
@@ -189,7 +236,7 @@ export async function crearEmpresa(
     .insert({
       razon_social: razon,
       rut_empresa: rut,
-      grupo_cartera: input.grupo_cartera,
+      grupo_id: grupoId,
       nombre_fantasia: input.nombre_fantasia?.trim() || null,
       tipo_sociedad: input.tipo_sociedad || null,
       regimen_tributario: input.regimen_tributario || null,

@@ -3,6 +3,7 @@ import { OnboardingClient } from "./onboarding-client";
 import type {
   Catalogos,
   EmpresaOnboardingRow,
+  GrupoClienteOpcion,
   PorCampoRow,
   CambioPropuestoRow,
 } from "@/lib/onboarding";
@@ -12,7 +13,7 @@ export const metadata = { title: "Onboarding — RS Tax & Legal" };
 export default async function OnboardingPage() {
   const supabase = await createClient();
 
-  const [empresasRes, porCampoRes, cambiosRes, catRes, defsRes] =
+  const [empresasRes, porCampoRes, cambiosRes, catRes, defsRes, gruposRes, vinculosRes] =
     await Promise.all([
       supabase
         .from("v_onboarding_empresas")
@@ -34,6 +35,11 @@ export default async function OnboardingPage() {
         .from("onboarding_campos")
         .select("entidad, campo, selector")
         .eq("activo", true),
+      supabase
+        .from("grupos_cliente")
+        .select("id, codigo, nombre")
+        .order("codigo"),
+      supabase.from("clientes").select("id, grupo_id"),
     ]);
 
   // Opciones de selectores cerrados + qué selector usa cada campo.
@@ -44,6 +50,15 @@ export default async function OnboardingPage() {
   const selectores: Record<string, string | null> = {};
   for (const d of defsRes.data ?? []) {
     selectores[`${d.entidad}:${d.campo}`] = d.selector;
+  }
+
+  // Cliente (grupo) de cada empresa, para mostrar y agrupar.
+  const grupos: GrupoClienteOpcion[] = gruposRes.data ?? [];
+  const grupoPorId = new Map(grupos.map((g) => [g.id, g]));
+  const grupoDeEmpresa = new Map<string, GrupoClienteOpcion>();
+  for (const v of vinculosRes.data ?? []) {
+    const g = v.grupo_id ? grupoPorId.get(v.grupo_id) : undefined;
+    if (g) grupoDeEmpresa.set(v.id, g);
   }
 
   // PostgREST devuelve numeric/bigint como string → coerción explícita.
@@ -57,6 +72,8 @@ export default async function OnboardingPage() {
     n_trab: Number(e.n_trab) || 0,
     pct_trab: e.pct_trab === null ? null : Number(e.pct_trab),
     faltan_trab: Number(e.faltan_trab) || 0,
+    grupo_codigo: grupoDeEmpresa.get(e.cliente_id)?.codigo ?? null,
+    grupo_nombre: grupoDeEmpresa.get(e.cliente_id)?.nombre ?? null,
   }));
 
   const porCampo: PorCampoRow[] = (porCampoRes.data ?? []).map((r) => ({
@@ -114,6 +131,7 @@ export default async function OnboardingPage() {
         cambios={cambios}
         catalogos={catalogos}
         selectores={selectores}
+        grupos={grupos}
         errorCarga={empresasRes.error?.message ?? null}
       />
     </main>
