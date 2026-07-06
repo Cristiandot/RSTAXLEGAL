@@ -72,6 +72,7 @@ export default async function OnboardingPage() {
     n_trab: Number(e.n_trab) || 0,
     pct_trab: e.pct_trab === null ? null : Number(e.pct_trab),
     faltan_trab: Number(e.faltan_trab) || 0,
+    grupo_id: grupoDeEmpresa.get(e.cliente_id)?.id ?? null,
     grupo_codigo: grupoDeEmpresa.get(e.cliente_id)?.codigo ?? null,
     grupo_nombre: grupoDeEmpresa.get(e.cliente_id)?.nombre ?? null,
   }));

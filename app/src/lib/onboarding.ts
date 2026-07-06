@@ -115,6 +115,7 @@ export type EmpresaOnboardingRow = {
   n_trab: number;
   pct_trab: number | null;
   faltan_trab: number;
+  grupo_id: string | null;
   grupo_codigo: string | null;
   grupo_nombre: string | null;
 };

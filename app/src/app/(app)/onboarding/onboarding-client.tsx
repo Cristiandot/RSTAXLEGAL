@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Search, Check, Undo2, ChevronRight, Plus, UserPlus } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
+import { ThSort } from "@/components/th-sort";
+import { comparar, type Orden } from "@/lib/ordenar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -253,6 +255,8 @@ export function OnboardingClient({
   const [tab, setTab] = useState<Tab>("empresas");
   const [buscar, setBuscar] = useState("");
   const [estadoF, setEstadoF] = useState("");
+  const [clienteF, setClienteF] = useState(""); // "" todos · "__sin__" sin cliente · uuid
+  const [orden, setOrden] = useState<Orden>(null);
   const [entidadF, setEntidadF] = useState("");
   const [marcando, startMarcar] = useTransition();
   const [accionando, startAccion] = useTransition();
@@ -372,16 +376,43 @@ export function OnboardingClient({
 
   const empresasFiltradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return empresas.filter((e) => {
+    const filtradas = empresas.filter((e) => {
       if (q) {
         const t =
           `${e.razon_social} ${e.rut_empresa ?? ""} ${e.grupo_codigo ?? ""} ${e.grupo_nombre ?? ""}`.toLowerCase();
         if (!t.includes(q)) return false;
       }
       if (estadoF && e.onboarding_estado !== estadoF) return false;
+      if (clienteF === "__sin__" && e.grupo_id) return false;
+      if (clienteF && clienteF !== "__sin__" && e.grupo_id !== clienteF)
+        return false;
       return true;
     });
-  }, [empresas, buscar, estadoF]);
+    if (!orden) return filtradas; // orden del servidor: menor completitud primero
+    const val = (e: EmpresaOnboardingRow): unknown => {
+      switch (orden.col) {
+        case "cliente":
+          return e.grupo_codigo
+            ? `${e.grupo_codigo} ${e.grupo_nombre ?? ""}`
+            : (e.grupo_nombre ?? null);
+        case "empresa":
+          return e.razon_social;
+        case "etapa":
+          return LABEL_ESTADO[e.onboarding_estado] ?? e.onboarding_estado;
+        case "pct":
+          return e.pct_empresa;
+        case "ntrab":
+          return e.n_trab;
+        case "pcttrab":
+          return e.pct_trab;
+        case "faltan":
+          return e.faltan_empresa + e.faltan_trab;
+        default:
+          return null;
+      }
+    };
+    return [...filtradas].sort((a, b) => comparar(val(a), val(b), orden.dir));
+  }, [empresas, buscar, estadoF, clienteF, orden]);
 
   const camposFiltrados = useMemo(() => {
     const out = porCampo.filter((c) => !entidadF || c.entidad === entidadF);
@@ -530,6 +561,21 @@ export function OnboardingClient({
               />
             </div>
             <select
+              aria-label="Cliente"
+              className={`${selectCls} max-w-[220px]`}
+              value={clienteF}
+              onChange={(e) => setClienteF(e.target.value)}
+            >
+              <option value="">Todos los clientes</option>
+              <option value="__sin__">Sin cliente asignado</option>
+              {grupos.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.codigo ? `${g.codigo} — ` : ""}
+                  {g.nombre}
+                </option>
+              ))}
+            </select>
+            <select
               aria-label="Etapa"
               className={selectCls}
               value={estadoF}
@@ -562,14 +608,28 @@ export function OnboardingClient({
             <Table stickyHeader>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[170px]">Cliente</TableHead>
-                  <TableHead className="w-[240px]">Empresa</TableHead>
+                  <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[170px]">
+                    Cliente
+                  </ThSort>
+                  <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[240px]">
+                    Empresa
+                  </ThSort>
                   <TableHead>RUT</TableHead>
-                  <TableHead>Etapa</TableHead>
-                  <TableHead className="text-center">% Ficha</TableHead>
-                  <TableHead className="text-center">Trab.</TableHead>
-                  <TableHead className="text-center">% Trab.</TableHead>
-                  <TableHead className="text-center">Campos faltan</TableHead>
+                  <ThSort col="etapa" orden={orden} setOrden={setOrden}>
+                    Etapa
+                  </ThSort>
+                  <ThSort col="pct" orden={orden} setOrden={setOrden} className="text-center">
+                    % Ficha
+                  </ThSort>
+                  <ThSort col="ntrab" orden={orden} setOrden={setOrden} className="text-center">
+                    Trab.
+                  </ThSort>
+                  <ThSort col="pcttrab" orden={orden} setOrden={setOrden} className="text-center">
+                    % Trab.
+                  </ThSort>
+                  <ThSort col="faltan" orden={orden} setOrden={setOrden} className="text-center">
+                    Campos faltan
+                  </ThSort>
                   <TableHead className="w-8" />
                 </TableRow>
               </TableHeader>
