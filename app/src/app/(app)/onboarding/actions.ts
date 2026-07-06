@@ -124,6 +124,69 @@ export async function guardarCampo(
   return { ok: true };
 }
 
+/**
+ * Inserta un cliente (grupo) nuevo asignándole el correlativo siguiente de
+ * su letra según los códigos ya usados, con la carpeta OneDrive solicitada
+ * (la crea el proceso local; si el código chocara con una carpeta existente,
+ * el script lo reasigna — OneDrive manda).
+ */
+async function insertarGrupo(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  nombre: string | undefined,
+  letra: string | undefined,
+): Promise<{ ok: true; id: string; codigo: string } | { ok: false; error: string }> {
+  const n = nombre?.trim();
+  if (!n) return { ok: false, error: "El nombre del cliente es obligatorio" };
+  if (!GRUPOS_CARTERA.some((g) => g.codigo === letra))
+    return { ok: false, error: "Letra de cartera no válida" };
+
+  const { data: dup } = await supabase
+    .from("grupos_cliente")
+    .select("codigo")
+    .ilike("nombre", n)
+    .maybeSingle();
+  if (dup)
+    return { ok: false, error: `Ya existe un cliente "${n}" (${dup.codigo})` };
+
+  const { data: codigos } = await supabase
+    .from("grupos_cliente")
+    .select("codigo")
+    .like("codigo", `${letra}.%`);
+  let max = 0;
+  for (const c of codigos ?? []) {
+    const num = Number(c.codigo?.split(".")[1]);
+    if (Number.isInteger(num) && num > max) max = num;
+  }
+  const codigo = `${letra}.${max + 1}`;
+
+  const { data: g, error } = await supabase
+    .from("grupos_cliente")
+    .insert({
+      codigo,
+      nombre: n,
+      carpeta_solicitada_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, id: g.id, codigo };
+}
+
+/**
+ * Crea un cliente nuevo (sin empresas todavía): queda con su código
+ * correlativo y la carpeta OneDrive se crea automáticamente.
+ */
+export async function crearCliente(
+  nombre: string,
+  letra: string,
+): Promise<Resp & { codigo?: string }> {
+  const supabase = await createClient();
+  const g = await insertarGrupo(supabase, nombre, letra);
+  if (!g.ok) return g;
+  revalidatePath("/onboarding");
+  return { ok: true, codigo: g.codigo };
+}
+
 export type NuevaEmpresaInput = {
   /** Cliente existente (grupos_cliente.id)… */
   grupo_id?: string;
@@ -171,35 +234,12 @@ export async function crearEmpresa(
   // Resolver el cliente (grupo): existente o nuevo.
   let grupoId = input.grupo_id || null;
   if (!grupoId) {
-    const nombre = input.nuevo_cliente_nombre?.trim();
-    const letra = input.nuevo_cliente_letra;
-    if (!nombre)
-      return { ok: false, error: "Indique el cliente (existente o nuevo)" };
-    if (!GRUPOS_CARTERA.some((g) => g.codigo === letra))
-      return { ok: false, error: "Letra de cartera no válida" };
-
-    // Correlativo siguiente de la letra según los códigos ya asignados.
-    const { data: codigos } = await supabase
-      .from("grupos_cliente")
-      .select("codigo")
-      .like("codigo", `${letra}.%`);
-    let max = 0;
-    for (const c of codigos ?? []) {
-      const n = Number(c.codigo?.split(".")[1]);
-      if (Number.isInteger(n) && n > max) max = n;
-    }
-    const codigo = `${letra}.${max + 1}`;
-
-    const { data: g, error: eg } = await supabase
-      .from("grupos_cliente")
-      .insert({
-        codigo,
-        nombre,
-        carpeta_solicitada_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
-    if (eg) return { ok: false, error: eg.message };
+    const g = await insertarGrupo(
+      supabase,
+      input.nuevo_cliente_nombre,
+      input.nuevo_cliente_letra,
+    );
+    if (!g.ok) return g;
     grupoId = g.id;
   } else {
     const { data: g } = await supabase

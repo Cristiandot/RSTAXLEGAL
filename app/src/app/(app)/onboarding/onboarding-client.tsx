@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Check, Undo2, ChevronRight, Plus } from "lucide-react";
+import { Search, Check, Undo2, ChevronRight, Plus, UserPlus } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,7 @@ import {
   devolverCambio,
   guardarCampo,
   crearEmpresa,
+  crearCliente,
   type NuevaEmpresaInput,
 } from "./actions";
 
@@ -293,6 +294,26 @@ export function OnboardingClient({
       ? Boolean(nueva.nuevo_cliente_nombre?.trim())
       : Boolean(clienteSel);
 
+  // Nuevo cliente (solo, sin empresa todavía)
+  const [nuevoCliOpen, setNuevoCliOpen] = useState(false);
+  const [nuevoCliNombre, setNuevoCliNombre] = useState("");
+  const [nuevoCliLetra, setNuevoCliLetra] = useState("D");
+  const [creandoCli, startCrearCli] = useTransition();
+
+  function crearClienteSolo() {
+    startCrearCli(async () => {
+      const res = await crearCliente(nuevoCliNombre, nuevoCliLetra);
+      if (res.ok) {
+        toast.success(
+          `Cliente creado como ${res.codigo}. Su carpeta OneDrive se creará automáticamente en unos minutos.`,
+        );
+        setNuevoCliOpen(false);
+        setNuevoCliNombre("");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al crear el cliente");
+    });
+  }
+
   function crear() {
     startCrear(async () => {
       const input: NuevaEmpresaInput = {
@@ -502,6 +523,14 @@ export function OnboardingClient({
                 </option>
               ))}
             </select>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9"
+              onClick={() => setNuevoCliOpen(true)}
+            >
+              <UserPlus className="size-4" /> Nuevo cliente
+            </Button>
             <Button size="sm" className="h-9" onClick={() => setNuevaOpen(true)}>
               <Plus className="size-4" /> Nueva empresa
             </Button>
@@ -950,6 +979,62 @@ export function OnboardingClient({
             </DialogFooter>
           </DialogContent>
         ) : null}
+      </Dialog>
+
+      {/* ============ Diálogo: nuevo cliente ============ */}
+      <Dialog open={nuevoCliOpen} onOpenChange={setNuevoCliOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Nuevo cliente</DialogTitle>
+            <DialogDescription>
+              El cliente agrupa una o más empresas. Se le asigna el
+              correlativo siguiente de su letra y su carpeta OneDrive se crea
+              automáticamente; las empresas se agregan después con &ldquo;Nueva
+              empresa&rdquo;.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="nc-nombre">Nombre del cliente *</Label>
+              <Input
+                id="nc-nombre"
+                placeholder="Ej.: Domingo Undurraga"
+                value={nuevoCliNombre}
+                onChange={(e) => setNuevoCliNombre(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && nuevoCliNombre.trim())
+                    crearClienteSolo();
+                }}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="nc-letra">Letra de cartera *</Label>
+              <select
+                id="nc-letra"
+                className={selectCls}
+                value={nuevoCliLetra}
+                onChange={(e) => setNuevoCliLetra(e.target.value)}
+              >
+                {GRUPOS_CARTERA.map((g) => (
+                  <option key={g.codigo} value={g.codigo}>
+                    {g.etiqueta}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNuevoCliOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={creandoCli || !nuevoCliNombre.trim()}
+              onClick={crearClienteSolo}
+            >
+              {creandoCli ? "Creando…" : "Crear cliente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
       {/* ============ Diálogo: nueva empresa ============ */}
