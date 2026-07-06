@@ -298,17 +298,26 @@ export function OnboardingClient({
   const [nuevoCliOpen, setNuevoCliOpen] = useState(false);
   const [nuevoCliNombre, setNuevoCliNombre] = useState("");
   const [nuevoCliLetra, setNuevoCliLetra] = useState("D");
+  const [nuevoCliCorreo, setNuevoCliCorreo] = useState("");
+  const [nuevoCliFono, setNuevoCliFono] = useState("");
   const [creandoCli, startCrearCli] = useTransition();
 
   function crearClienteSolo() {
     startCrearCli(async () => {
-      const res = await crearCliente(nuevoCliNombre, nuevoCliLetra);
+      const res = await crearCliente(
+        nuevoCliNombre,
+        nuevoCliLetra,
+        nuevoCliCorreo,
+        nuevoCliFono,
+      );
       if (res.ok) {
         toast.success(
           `Cliente creado como ${res.codigo}. Su carpeta OneDrive se creará automáticamente en unos minutos.`,
         );
         setNuevoCliOpen(false);
         setNuevoCliNombre("");
+        setNuevoCliCorreo("");
+        setNuevoCliFono("");
         router.refresh();
       } else toast.error(res.error ?? "Error al crear el cliente");
     });
@@ -1022,6 +1031,27 @@ export function OnboardingClient({
                 ))}
               </select>
             </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="nc-correo">Correo</Label>
+                <Input
+                  id="nc-correo"
+                  type="email"
+                  placeholder="correo@dominio.cl"
+                  value={nuevoCliCorreo}
+                  onChange={(e) => setNuevoCliCorreo(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="nc-fono">Teléfono</Label>
+                <Input
+                  id="nc-fono"
+                  placeholder="+56 9 …"
+                  value={nuevoCliFono}
+                  onChange={(e) => setNuevoCliFono(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNuevoCliOpen(false)}>
@@ -1096,6 +1126,25 @@ export function OnboardingClient({
                       </option>
                     ))}
                   </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="ne-cli-correo">Correo del cliente</Label>
+                  <Input
+                    id="ne-cli-correo"
+                    type="email"
+                    placeholder="correo@dominio.cl"
+                    value={nueva.nuevo_cliente_correo ?? ""}
+                    onChange={(e) => setN("nuevo_cliente_correo", e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="ne-cli-fono">Teléfono del cliente</Label>
+                  <Input
+                    id="ne-cli-fono"
+                    placeholder="+56 9 …"
+                    value={nueva.nuevo_cliente_telefono ?? ""}
+                    onChange={(e) => setN("nuevo_cliente_telefono", e.target.value)}
+                  />
                 </div>
               </>
             ) : null}

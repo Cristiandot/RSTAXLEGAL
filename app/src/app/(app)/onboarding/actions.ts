@@ -134,11 +134,15 @@ async function insertarGrupo(
   supabase: Awaited<ReturnType<typeof createClient>>,
   nombre: string | undefined,
   letra: string | undefined,
+  correo?: string,
+  telefono?: string,
 ): Promise<{ ok: true; id: string; codigo: string } | { ok: false; error: string }> {
   const n = nombre?.trim();
   if (!n) return { ok: false, error: "El nombre del cliente es obligatorio" };
   if (!GRUPOS_CARTERA.some((g) => g.codigo === letra))
     return { ok: false, error: "Letra de cartera no válida" };
+  if (correo?.trim() && !/^\S+@\S+\.\S+$/.test(correo.trim()))
+    return { ok: false, error: "Correo del cliente inválido" };
 
   const { data: dup } = await supabase
     .from("grupos_cliente")
@@ -164,6 +168,8 @@ async function insertarGrupo(
     .insert({
       codigo,
       nombre: n,
+      correo: correo?.trim() || null,
+      telefono: telefono?.trim() || null,
       carpeta_solicitada_at: new Date().toISOString(),
     })
     .select("id")
@@ -179,9 +185,11 @@ async function insertarGrupo(
 export async function crearCliente(
   nombre: string,
   letra: string,
+  correo?: string,
+  telefono?: string,
 ): Promise<Resp & { codigo?: string }> {
   const supabase = await createClient();
-  const g = await insertarGrupo(supabase, nombre, letra);
+  const g = await insertarGrupo(supabase, nombre, letra, correo, telefono);
   if (!g.ok) return g;
   revalidatePath("/onboarding");
   return { ok: true, codigo: g.codigo };
@@ -193,6 +201,8 @@ export type NuevaEmpresaInput = {
   /** …o cliente nuevo: nombre + letra de cartera (el correlativo se asigna solo). */
   nuevo_cliente_nombre?: string;
   nuevo_cliente_letra?: string;
+  nuevo_cliente_correo?: string;
+  nuevo_cliente_telefono?: string;
   rut_empresa: string;
   razon_social: string;
   nombre_fantasia?: string;
@@ -238,6 +248,8 @@ export async function crearEmpresa(
       supabase,
       input.nuevo_cliente_nombre,
       input.nuevo_cliente_letra,
+      input.nuevo_cliente_correo,
+      input.nuevo_cliente_telefono,
     );
     if (!g.ok) return g;
     grupoId = g.id;
