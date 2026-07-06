@@ -21,7 +21,7 @@ export default async function OnboardingPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("grupos_cliente")
-      .select("id, codigo, nombre")
+      .select("id, codigo, nombre, carpeta_onedrive")
       .order("codigo"),
     supabase
       .from("cambios_propuestos")
@@ -36,8 +36,13 @@ export default async function OnboardingPage() {
       .order("etiqueta"),
   ]);
 
-  const grupos: GrupoClienteOpcion[] = gruposRes.data ?? [];
-  const grupoPorId = new Map(grupos.map((g) => [g.id, g]));
+  const gruposRaw = gruposRes.data ?? [];
+  const grupos: GrupoClienteOpcion[] = gruposRaw.map((g) => ({
+    id: g.id,
+    codigo: g.codigo,
+    nombre: g.nombre,
+  }));
+  const grupoPorId = new Map(gruposRaw.map((g) => [g.id, g]));
 
   const empresas: AltaEmpresaRow[] = (empresasRes.data ?? []).map((e) => {
     const g = e.grupo_id ? grupoPorId.get(e.grupo_id) : undefined;
@@ -50,6 +55,7 @@ export default async function OnboardingPage() {
       grupo_nombre: g?.nombre ?? null,
       carpeta_onedrive: e.carpeta_onedrive,
       carpeta_solicitada_at: e.carpeta_solicitada_at,
+      grupo_carpeta: g?.carpeta_onedrive ?? null,
       created_at: e.created_at,
     };
   });

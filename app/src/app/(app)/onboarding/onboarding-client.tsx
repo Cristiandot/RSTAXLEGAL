@@ -49,17 +49,17 @@ const selectCls =
 
 type Tab = "altas" | "validacion";
 
-/** Estado de la carpeta OneDrive de una empresa dada de alta. */
-function CarpetaBadge({ e }: { e: AltaEmpresaRow }) {
+/** Carpeta OneDrive de la empresa: nombre real, o el de su cliente, o pendiente. */
+function CarpetaCell({ e }: { e: AltaEmpresaRow }) {
   if (e.carpeta_onedrive)
     return (
-      <Badge
-        variant="outline"
-        className="border-emerald-200 bg-emerald-50 text-emerald-700"
+      <span
+        className="flex max-w-[340px] items-center gap-1.5 text-sm"
         title={e.carpeta_onedrive}
       >
-        <FolderCheck className="size-3.5" /> Creada
-      </Badge>
+        <FolderCheck className="size-3.5 shrink-0 text-emerald-600" />
+        <span className="truncate">{e.carpeta_onedrive}</span>
+      </span>
     );
   if (e.carpeta_solicitada_at)
     return (
@@ -70,6 +70,16 @@ function CarpetaBadge({ e }: { e: AltaEmpresaRow }) {
       >
         <FolderClock className="size-3.5" /> Pendiente
       </Badge>
+    );
+  if (e.grupo_carpeta)
+    return (
+      <span
+        className="flex max-w-[340px] items-center gap-1.5 text-sm text-muted-foreground"
+        title={`Carpeta del cliente: ${e.grupo_carpeta} (subcarpeta de la empresa no identificada)`}
+      >
+        <FolderClock className="size-3.5 shrink-0 text-amber-500" />
+        <span className="truncate">{e.grupo_carpeta}\…</span>
+      </span>
     );
   return <span className="text-xs text-muted-foreground">—</span>;
 }
@@ -387,7 +397,7 @@ export function OnboardingClient({
                         <RutCopiable rut={e.rut_empresa} />
                       </TableCell>
                       <TableCell>
-                        <CarpetaBadge e={e} />
+                        <CarpetaCell e={e} />
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatFecha(e.created_at)}

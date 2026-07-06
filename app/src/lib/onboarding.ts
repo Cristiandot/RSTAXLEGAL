@@ -114,6 +114,8 @@ export type AltaEmpresaRow = {
   grupo_nombre: string | null;
   carpeta_onedrive: string | null;
   carpeta_solicitada_at: string | null;
+  /** Carpeta raíz del cliente (fallback si la subcarpeta de la empresa no está identificada). */
+  grupo_carpeta: string | null;
   created_at: string;
 };
 
@@ -129,6 +131,7 @@ export type ClienteResumenRow = {
   /** % de completitud (promedio de fichas + trabajadores de sus empresas). */
   pct: number | null;
   faltan: number;
+  carpeta_onedrive: string | null;
 };
 
 /** Empresa de un cliente (para el detalle del checklist). */

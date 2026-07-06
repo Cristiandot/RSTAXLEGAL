@@ -450,6 +450,14 @@ export function ClientesClient({
                 <div className="mb-2 text-sm font-semibold">
                   Datos del cliente
                 </div>
+                {cliSel.carpeta_onedrive ? (
+                  <p
+                    className="mb-2 truncate text-xs text-muted-foreground"
+                    title={cliSel.carpeta_onedrive}
+                  >
+                    Carpeta OneDrive: {cliSel.carpeta_onedrive}
+                  </p>
+                ) : null}
                 <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_1fr_auto]">
                   <div className="flex flex-col gap-1">
                     <Label htmlFor="cli-correo" className="text-xs">

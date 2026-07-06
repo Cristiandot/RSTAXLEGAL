@@ -16,7 +16,7 @@ export default async function ClientesPage() {
     await Promise.all([
       supabase
         .from("grupos_cliente")
-        .select("id, codigo, nombre, correo, telefono")
+        .select("id, codigo, nombre, correo, telefono, carpeta_onedrive")
         .order("codigo"),
       supabase.from("clientes").select("id, grupo_id, razon_social"),
       supabase.from("v_onboarding_empresas").select("*"),
@@ -80,6 +80,7 @@ export default async function ClientesPage() {
         ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length)
         : null,
       faltan: stats.reduce((a, s) => a + s.faltan, 0),
+      carpeta_onedrive: g.carpeta_onedrive,
     };
   });
 
