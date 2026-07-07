@@ -28,7 +28,7 @@ export default async function EmpresasPage() {
         .select("cliente_id, pct_empresa, faltan_empresa"),
       supabase
         .from("onboarding_campos")
-        .select("campo, etiqueta, grupo, fuente, selector, obligatorio")
+        .select("campo, etiqueta, grupo, fuente, selector, obligatorio, inmutable")
         .eq("entidad", "cliente")
         .eq("activo", true)
         .order("orden"),

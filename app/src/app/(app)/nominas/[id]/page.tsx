@@ -29,7 +29,7 @@ export default async function EmpresaNominaPage({
       .maybeSingle(),
     supabase
       .from("onboarding_campos")
-      .select("campo, etiqueta, grupo, fuente, selector, obligatorio")
+      .select("campo, etiqueta, grupo, fuente, selector, obligatorio, inmutable")
       .eq("entidad", "trabajador")
       .eq("activo", true)
       .neq("campo", "rut")

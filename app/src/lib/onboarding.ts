@@ -112,6 +112,7 @@ export type CampoDef = {
   fuente: string;
   selector: string | null;
   obligatorio: boolean;
+  inmutable: boolean;
 };
 
 /** Fila de la grilla de altas de /onboarding (empresa recién incorporada). */

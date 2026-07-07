@@ -8,7 +8,7 @@ import { ArrowLeft, Search, Users, Plus, X } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
 import { TextoCopiable } from "@/components/texto-copiable";
 import { Progreso } from "@/components/progreso";
-import { EditorCampo } from "@/components/campos-editables";
+import { CampoConValor } from "@/components/campos-editables";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -480,21 +480,7 @@ export function EmpresaNominaClient({
                     <div className="mb-2 text-sm font-semibold">{grupo}</div>
                     <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 xl:grid-cols-3">
                       {visiblesDefs.map((def) => {
-                        const v = sel.valores[def.campo];
-                        if (v !== null && v !== undefined) {
-                          return (
-                            <div key={def.campo}>
-                              <div className="text-xs text-muted-foreground">
-                                {def.etiqueta}
-                              </div>
-                              <div className="text-sm">
-                                {tipoCampo(def.campo) === "fecha"
-                                  ? formatFecha(v)
-                                  : v}
-                              </div>
-                            </div>
-                          );
-                        }
+                        const v = sel.valores[def.campo] ?? null;
                         const item: FaltanteRow = {
                           entidad: "trabajador",
                           registro_id: sel.id,
@@ -510,9 +496,9 @@ export function EmpresaNominaClient({
                           <div key={def.campo} className="flex flex-col gap-1">
                             <div className="text-xs text-muted-foreground">
                               {def.etiqueta}
-                              {def.obligatorio ? " *" : ""}
+                              {def.obligatorio && v === null ? " *" : ""}
                             </div>
-                            <EditorCampo
+                            <CampoConValor
                               item={item}
                               selector={def.selector}
                               opciones={
@@ -520,6 +506,13 @@ export function EmpresaNominaClient({
                                   ? catalogos[def.selector]
                                   : undefined
                               }
+                              valor={v}
+                              textoMostrar={
+                                v !== null && tipoCampo(def.campo) === "fecha"
+                                  ? formatFecha(v)
+                                  : undefined
+                              }
+                              inmutable={def.inmutable}
                               onSaved={recargar}
                             />
                           </div>

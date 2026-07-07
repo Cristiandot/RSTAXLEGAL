@@ -7,7 +7,7 @@ import { Search, ChevronRight, Plus, X } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
 import { ThSort } from "@/components/th-sort";
 import { Progreso } from "@/components/progreso";
-import { EditorCampo } from "@/components/campos-editables";
+import { CampoConValor } from "@/components/campos-editables";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -410,17 +410,7 @@ export function EmpresasClient({
                     <div className="mb-2 text-sm font-semibold">{grupo}</div>
                     <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                     {defs.map((def) => {
-                      const v = empSel.valores[def.campo];
-                      if (v !== null && v !== undefined) {
-                        return (
-                          <div key={def.campo}>
-                            <div className="text-xs text-muted-foreground">
-                              {def.etiqueta}
-                            </div>
-                            <div className="text-sm">{mostrar(def, v)}</div>
-                          </div>
-                        );
-                      }
+                      const v = empSel.valores[def.campo] ?? null;
                       const item: FaltanteRow = {
                         entidad: "cliente",
                         registro_id: empSel.id,
@@ -436,14 +426,17 @@ export function EmpresasClient({
                         <div key={def.campo} className="flex flex-col gap-1">
                           <div className="text-xs text-muted-foreground">
                             {def.etiqueta}
-                            {def.obligatorio ? " *" : ""}
+                            {def.obligatorio && v === null ? " *" : ""}
                           </div>
-                          <EditorCampo
+                          <CampoConValor
                             item={item}
                             selector={def.selector}
                             opciones={
                               def.selector ? catalogos[def.selector] : undefined
                             }
+                            valor={v}
+                            textoMostrar={v !== null ? mostrar(def, v) : undefined}
+                            inmutable={def.inmutable}
                             onSaved={() => router.refresh()}
                           />
                         </div>
