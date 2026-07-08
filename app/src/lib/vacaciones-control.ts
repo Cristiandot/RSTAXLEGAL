@@ -173,3 +173,62 @@ export function fechaCl(iso: string | null | undefined): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
+
+/* ---------------- Regla dual de períodos (cierre Nubox) ----------------
+ * Inasistencias, permisos y atrasos se asignan al cierre comercial Nubox
+ * (21 del mes anterior al 20 del mes). Vacaciones y licencias médicas se
+ * computan por mes calendario natural. */
+
+/** Ventana del cierre Nubox de un mes 'YYYY-MM': 21 del mes anterior al 20. */
+export function ventanaCierreNubox(mes: string): { desde: string; hasta: string } {
+  const [a, m] = mes.split("-").map(Number);
+  const prevA = m === 1 ? a - 1 : a;
+  const prevM = m === 1 ? 12 : m - 1;
+  return {
+    desde: `${prevA}-${String(prevM).padStart(2, "0")}-21`,
+    hasta: `${a}-${String(m).padStart(2, "0")}-20`,
+  };
+}
+
+/** Rango del mes calendario 'YYYY-MM'. */
+export function ventanaMes(mes: string): { desde: string; hasta: string } {
+  const [a, m] = mes.split("-").map(Number);
+  const ultimo = new Date(Date.UTC(a, m, 0)).getUTCDate();
+  return { desde: `${mes}-01`, hasta: `${mes}-${String(ultimo).padStart(2, "0")}` };
+}
+
+/** true si iso cae dentro de [desde, hasta] (comparación lexicográfica ISO). */
+export function fechaEnRango(iso: string | null | undefined, desde: string, hasta: string): boolean {
+  return !!iso && iso >= desde && iso <= hasta;
+}
+
+/**
+ * Días corridos del rango [desdeIso, hastaIso] que caen dentro de [vDesde,
+ * vHasta]. Para el promedio Art. 71 CT el pago se calcula sobre días corridos
+ * del feriado dentro del período de cierre, no sobre días hábiles.
+ */
+export function diasCorridosEnVentana(
+  desdeIso: string | null,
+  hastaIso: string | null,
+  vDesde: string,
+  vHasta: string,
+): number {
+  if (!desdeIso || !hastaIso) return 0;
+  const ini = desdeIso > vDesde ? desdeIso : vDesde;
+  const fin = hastaIso < vHasta ? hastaIso : vHasta;
+  if (ini > fin) return 0;
+  const ms = Date.parse(fin + "T00:00:00Z") - Date.parse(ini + "T00:00:00Z");
+  return Math.round(ms / 86_400_000) + 1;
+}
+
+/**
+ * Aniversario del contrato en un año dado y período que devenga.
+ * El período "YYYY-(YYYY+1)" se devenga AL CUMPLIRSE el aniversario del
+ * segundo año (nomenclatura INICIO RAPIDO sección 2).
+ */
+export function aniversarioDe(fechaIngresoIso: string, anio: number): { fecha: string; periodo: string } {
+  return {
+    fecha: `${anio}-${fechaIngresoIso.slice(5, 10)}`,
+    periodo: `${anio - 1}-${anio}`,
+  };
+}

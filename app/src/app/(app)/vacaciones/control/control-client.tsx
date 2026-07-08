@@ -5,11 +5,16 @@ import { toast } from "sonner";
 import { Ban, CalendarPlus, ClipboardList, FileDown, Pencil, Plus, RefreshCw, Search, Award } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import {
+  aniversarioDe,
   calcularDiasHabilesRB,
   desgloseATexto,
+  diasCorridosEnVentana,
+  fechaEnRango,
   formatDias,
   redondear2,
   sugerirDesglose,
+  ventanaCierreNubox,
+  ventanaMes,
   PERIODO_PROGRESIVOS,
   PERIODOS_BASE,
   TIPOS_ASISTENCIA,
@@ -68,6 +73,7 @@ type AsistenciaRow = {
 
 type AnticipoRow = {
   id: string;
+  trabajadorId: string;
   trabajador: string;
   periodo: string;
   diasAnticipados: number;
@@ -77,6 +83,13 @@ type AnticipoRow = {
   notas: string | null;
 };
 
+type AjusteRow = {
+  trabajadorId: string;
+  periodo: string;
+  motivo: string;
+  fecha: string;
+};
+
 type Props = {
   cliente: { id: string; razon_social: string; rut_empresa: string };
   trabajadores: SaldoTrabajador[];
@@ -84,6 +97,8 @@ type Props = {
   correlativos: Record<string, number>;
   asistencia: AsistenciaRow[];
   anticipos: AnticipoRow[];
+  movilizacion: Record<string, { movilizacion: number | null; colacion: number | null }>;
+  ajustes: AjusteRow[];
 };
 
 const hoyIso = () => new Date().toISOString().slice(0, 10);
@@ -103,8 +118,8 @@ function claseTipoDoc(tipo: string): string {
   }
 }
 
-export function ControlClient({ cliente, trabajadores, documentos, correlativos, asistencia, anticipos }: Props) {
-  const [tab, setTab] = useState<"saldos" | "documentos" | "asistencia" | "anticipos">("saldos");
+export function ControlClient({ cliente, trabajadores, documentos, correlativos, asistencia, anticipos, movilizacion, ajustes }: Props) {
+  const [tab, setTab] = useState<"saldos" | "documentos" | "cierre" | "devengos" | "asistencia" | "anticipos">("saldos");
   const [pending, startTransition] = useTransition();
 
   // ---- diálogos ----
@@ -112,6 +127,7 @@ export function ControlClient({ cliente, trabajadores, documentos, correlativos,
     | { tipo: "PAP" | "PER" | "REC" | "ajuste"; trab: SaldoTrabajador }
     | { tipo: "anular"; doc: DocumentoRow }
     | { tipo: "asistencia" }
+    | { tipo: "devengo"; trab: SaldoTrabajador; periodo: string; sugerido: number; aniversario: string; notaAnticipo: string | null }
     | null
   >(null);
 
@@ -225,9 +241,11 @@ export function ControlClient({ cliente, trabajadores, documentos, correlativos,
         </CardContent></Card>
       </div>
 
-      <div className="flex w-fit gap-1 rounded-lg border bg-card p-1">
+      <div className="flex w-fit flex-wrap gap-1 rounded-lg border bg-card p-1">
         {tabBtn("saldos", "Saldos", <ClipboardList className="h-4 w-4" />)}
         {tabBtn("documentos", "Documentos", <FileDown className="h-4 w-4" />)}
+        {tabBtn("cierre", "Cierre", <CalendarPlus className="h-4 w-4" />)}
+        {tabBtn("devengos", "Devengos", <Award className="h-4 w-4" />)}
         {tabBtn("asistencia", "Asistencia", <CalendarPlus className="h-4 w-4" />)}
         {tabBtn("anticipos", "Anticipos", <Award className="h-4 w-4" />)}
       </div>
@@ -387,6 +405,21 @@ export function ControlClient({ cliente, trabajadores, documentos, correlativos,
         </div>
       )}
 
+      {tab === "cierre" && (
+        <TabCierre documentos={documentos} asistencia={asistencia} trabajadores={trabajadores} movilizacion={movilizacion} />
+      )}
+
+      {tab === "devengos" && (
+        <TabDevengos
+          trabajadores={activos}
+          anticipos={anticipos}
+          ajustes={ajustes}
+          onDevengar={(trab, periodo, sugerido, aniversario, notaAnticipo) =>
+            setDialogo({ tipo: "devengo", trab, periodo, sugerido, aniversario, notaAnticipo })
+          }
+        />
+      )}
+
       {tab === "asistencia" && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -470,6 +503,385 @@ export function ControlClient({ cliente, trabajadores, documentos, correlativos,
       {dialogo?.tipo === "ajuste" && <DialogoAjuste clienteId={cliente.id} trab={dialogo.trab} onClose={() => setDialogo(null)} />}
       {dialogo?.tipo === "anular" && <DialogoAnular doc={dialogo.doc} onClose={() => setDialogo(null)} />}
       {dialogo?.tipo === "asistencia" && <DialogoAsistencia clienteId={cliente.id} trabajadores={activos} onClose={() => setDialogo(null)} />}
+      {dialogo?.tipo === "devengo" && (
+        <DialogoDevengo
+          clienteId={cliente.id}
+          trab={dialogo.trab}
+          periodo={dialogo.periodo}
+          sugerido={dialogo.sugerido}
+          aniversario={dialogo.aniversario}
+          notaAnticipo={dialogo.notaAnticipo}
+          onClose={() => setDialogo(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* --------------------- Pestaña Cierre (regla dual) --------------------- */
+
+/**
+ * Detalle de eventos del mes para preparar el cierre de remuneraciones:
+ * - Vacaciones (PAP) y licencias médicas → mes calendario natural, con días
+ *   corridos para el promedio Art. 71 CT (comisiones / bonos variables).
+ * - Permisos sin goce e inasistencias/atrasos → ventana Nubox 21-20.
+ * El cálculo del bono proporcional / comisión promedio se hace fuera del
+ * panel; esta vista entrega el insumo consolidado.
+ */
+function TabCierre({
+  documentos,
+  asistencia,
+  trabajadores,
+  movilizacion,
+}: {
+  documentos: DocumentoRow[];
+  asistencia: AsistenciaRow[];
+  trabajadores: SaldoTrabajador[];
+  movilizacion: Record<string, { movilizacion: number | null; colacion: number | null }>;
+}) {
+  const [mes, setMes] = useState(() => new Date().toISOString().slice(0, 7));
+  const vMes = useMemo(() => ventanaMes(mes), [mes]);
+  const vCierre = useMemo(() => ventanaCierreNubox(mes), [mes]);
+
+  // Vacaciones del mes calendario (PAP vigentes que tocan el mes)
+  const vacaciones = useMemo(
+    () =>
+      documentos
+        .filter((d) => d.tipo === "PAP" && d.estado === "vigente" && d.fechaDesde && d.fechaHasta)
+        .map((d) => ({ ...d, corridos: diasCorridosEnVentana(d.fechaDesde, d.fechaHasta, vMes.desde, vMes.hasta) }))
+        .filter((d) => d.corridos > 0)
+        .sort((a, b) => a.trabajadorNombre.localeCompare(b.trabajadorNombre)),
+    [documentos, vMes],
+  );
+
+  // Licencias médicas del mes calendario (desde Asistencia)
+  const licencias = useMemo(
+    () =>
+      asistencia.filter(
+        (a) => a.tipo === "Licencia médica" && (a.fecha === null || fechaEnRango(a.fecha, vMes.desde, vMes.hasta)),
+      ),
+    [asistencia, vMes],
+  );
+
+  // Descuentos del cierre Nubox 21-20: permisos sin goce + inasistencias/atrasos
+  const permisosSinGoce = useMemo(
+    () =>
+      documentos
+        .filter(
+          (d) =>
+            d.tipo === "PER" &&
+            d.estado === "vigente" &&
+            d.conGoce === false &&
+            fechaEnRango(d.fechaDesde, vCierre.desde, vCierre.hasta),
+        )
+        .sort((a, b) => a.trabajadorNombre.localeCompare(b.trabajadorNombre)),
+    [documentos, vCierre],
+  );
+  const inasistencias = useMemo(
+    () =>
+      asistencia.filter(
+        (a) =>
+          a.tipo !== "Licencia médica" &&
+          !a.convertidaA &&
+          fechaEnRango(a.fecha, vCierre.desde, vCierre.hasta),
+      ),
+    [asistencia, vCierre],
+  );
+
+  // Resumen por trabajador (para prorrateo de movilización/colación y bonos)
+  const resumen = useMemo(() => {
+    const m = new Map<string, { nombre: string; rut: string; vacCorridos: number; sinGoceDias: number; sinGoceHoras: number; ausenciasDias: number; atrasosHoras: number; licencia: boolean }>();
+    const fila = (rut: string, nombre: string) => {
+      const k = rut || nombre;
+      if (!m.has(k)) m.set(k, { nombre, rut, vacCorridos: 0, sinGoceDias: 0, sinGoceHoras: 0, ausenciasDias: 0, atrasosHoras: 0, licencia: false });
+      return m.get(k)!;
+    };
+    for (const v of vacaciones) fila(v.trabajadorRut, v.trabajadorNombre).vacCorridos += v.corridos;
+    for (const p of permisosSinGoce) {
+      const f = fila(p.trabajadorRut, p.trabajadorNombre);
+      if (p.unidad === "Horas") f.sinGoceHoras += p.cantidad ?? 0;
+      else f.sinGoceDias += p.cantidad ?? 0;
+    }
+    for (const a of inasistencias) {
+      const f = fila(a.trabajadorRut ?? "", a.trabajadorNombre);
+      if (a.unidad === "horas") f.atrasosHoras += a.cantidad;
+      else f.ausenciasDias += a.cantidad;
+    }
+    for (const l of licencias) fila(l.trabajadorRut ?? "", l.trabajadorNombre).licencia = true;
+    return [...m.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [vacaciones, permisosSinGoce, inasistencias, licencias]);
+
+  const movDe = (rut: string) => {
+    const t = trabajadores.find((x) => x.rut === rut);
+    return t ? movilizacion[t.trabajadorId] : undefined;
+  };
+  const clp = (n: number | null | undefined) =>
+    n === null || n === undefined ? "—" : "$" + Math.round(n).toLocaleString("es-CL");
+
+  const seccion = (titulo: string, sub: string) => (
+    <div className="pt-1">
+      <h3 className="text-sm font-semibold">{titulo}</h3>
+      <p className="text-xs text-muted-foreground">{sub}</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Mes de cierre</label>
+          <Input type="month" className="w-44" value={mes} onChange={(e) => e.target.value && setMes(e.target.value)} />
+        </div>
+        <p className="pt-4 text-sm text-muted-foreground">
+          Vacaciones y licencias: mes calendario {formatFecha(vMes.desde)} → {formatFecha(vMes.hasta)}.
+          Descuentos: cierre Nubox {formatFecha(vCierre.desde)} → {formatFecha(vCierre.hasta)}.
+        </p>
+      </div>
+
+      {seccion("Vacaciones del mes (Art. 71 CT)", "Días corridos dentro del mes calendario — base para COMISIONES PROM.VAC. / PROM. VACACIONES OBJETIVOS (promedio 3 meses ÷ 30 × días corridos).")}
+      <div className="overflow-x-auto rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>N°</TableHead>
+              <TableHead>Trabajador</TableHead>
+              <TableHead>Rango</TableHead>
+              <TableHead className="text-right">Días hábiles</TableHead>
+              <TableHead className="text-right">Corridos en el mes</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {vacaciones.length === 0 && (
+              <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">Sin vacaciones en el mes.</TableCell></TableRow>
+            )}
+            {vacaciones.map((v) => (
+              <TableRow key={v.id}>
+                <TableCell><Badge variant="outline" className={claseTipoDoc("PAP")}>{v.correlativo}</Badge></TableCell>
+                <TableCell className="font-medium">{v.trabajadorNombre}<span className="ml-2 text-xs text-muted-foreground">{v.trabajadorRut}</span></TableCell>
+                <TableCell className="whitespace-nowrap">{formatFecha(v.fechaDesde)} → {formatFecha(v.fechaHasta)}</TableCell>
+                <TableCell className="text-right tabular-nums">{v.dias !== null ? formatDias(v.dias) : "—"}</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">{v.corridos}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {seccion("Licencias médicas del mes", "Mes calendario. Recordar: mes con licencia > 15 días se sustituye en el promedio Art. 71 (Dictamen Ord. N° 4081/189, DT, 30-08-2005). SIL por Caja/Isapre.")}
+      <div className="overflow-x-auto rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Trabajador</TableHead>
+              <TableHead>Fecha</TableHead>
+              <TableHead className="text-right">Cantidad</TableHead>
+              <TableHead>Observación</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {licencias.length === 0 && (
+              <TableRow><TableCell colSpan={4} className="text-center text-sm text-muted-foreground">Sin licencias registradas en el mes.</TableCell></TableRow>
+            )}
+            {licencias.map((l) => (
+              <TableRow key={l.id}>
+                <TableCell className="font-medium">{l.trabajadorNombre}<span className="ml-2 text-xs text-muted-foreground">{l.trabajadorRut}</span></TableCell>
+                <TableCell>{l.fecha ? formatFecha(l.fecha) : "por confirmar"}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatDias(l.cantidad)} {l.unidad}</TableCell>
+                <TableCell className="max-w-[380px] text-xs text-muted-foreground">{l.observacion ?? "—"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {seccion("Descuentos del cierre Nubox (21 → 20)", "Permisos sin goce e inasistencias/atrasos del ciclo comercial. Los eventos convertidos a PER/PAP se muestran solo por el documento formal (sin doble descuento).")}
+      <div className="overflow-x-auto rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Origen</TableHead>
+              <TableHead>Trabajador</TableHead>
+              <TableHead>Detalle</TableHead>
+              <TableHead>Fecha(s)</TableHead>
+              <TableHead className="text-right">Cantidad</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {permisosSinGoce.length === 0 && inasistencias.length === 0 && (
+              <TableRow><TableCell colSpan={5} className="text-center text-sm text-muted-foreground">Sin descuentos en el cierre.</TableCell></TableRow>
+            )}
+            {permisosSinGoce.map((p) => (
+              <TableRow key={p.id}>
+                <TableCell><Badge variant="outline" className={claseTipoDoc("PER")}>{p.correlativo}</Badge></TableCell>
+                <TableCell className="font-medium">{p.trabajadorNombre}<span className="ml-2 text-xs text-muted-foreground">{p.trabajadorRut}</span></TableCell>
+                <TableCell className="text-sm">{p.permisoTipo}</TableCell>
+                <TableCell className="whitespace-nowrap">{formatFecha(p.fechaDesde)}{p.fechaHasta && p.fechaHasta !== p.fechaDesde ? ` → ${formatFecha(p.fechaHasta)}` : ""}</TableCell>
+                <TableCell className="text-right tabular-nums">{p.cantidad !== null ? formatDias(p.cantidad) : "—"} {p.unidad === "Horas" ? "hrs" : "días"}</TableCell>
+              </TableRow>
+            ))}
+            {inasistencias.map((a) => (
+              <TableRow key={a.id}>
+                <TableCell><Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">Asistencia</Badge></TableCell>
+                <TableCell className="font-medium">{a.trabajadorNombre}<span className="ml-2 text-xs text-muted-foreground">{a.trabajadorRut}</span></TableCell>
+                <TableCell className="text-sm">{a.tipo}</TableCell>
+                <TableCell className="whitespace-nowrap">{a.fecha ? formatFecha(a.fecha) : "por confirmar"}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatDias(a.cantidad)} {a.unidad}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {seccion("Resumen por trabajador", "Insumo para prorratear movilización/colación (Art. 41 CT — descontar ausencias, atrasos, licencias y vacaciones) y calcular bonos proporcionales.")}
+      <div className="overflow-x-auto rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Trabajador</TableHead>
+              <TableHead className="text-right">Vac. corridos (mes)</TableHead>
+              <TableHead className="text-right">Sin goce</TableHead>
+              <TableHead className="text-right">Ausencias</TableHead>
+              <TableHead className="text-right">Atrasos (hrs)</TableHead>
+              <TableHead>Licencia</TableHead>
+              <TableHead className="text-right">Movilización 100%</TableHead>
+              <TableHead className="text-right">Colación 100%</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {resumen.length === 0 && (
+              <TableRow><TableCell colSpan={8} className="text-center text-sm text-muted-foreground">Sin eventos en el período.</TableCell></TableRow>
+            )}
+            {resumen.map((r) => {
+              const mov = movDe(r.rut);
+              return (
+                <TableRow key={r.rut || r.nombre}>
+                  <TableCell className="font-medium">{r.nombre}<span className="ml-2 text-xs text-muted-foreground">{r.rut}</span></TableCell>
+                  <TableCell className="text-right tabular-nums">{r.vacCorridos || "·"}</TableCell>
+                  <TableCell className="text-right tabular-nums">{r.sinGoceDias ? `${formatDias(r.sinGoceDias)} d` : ""}{r.sinGoceHoras ? ` ${formatDias(r.sinGoceHoras)} h` : r.sinGoceDias ? "" : "·"}</TableCell>
+                  <TableCell className="text-right tabular-nums">{r.ausenciasDias ? formatDias(r.ausenciasDias) : "·"}</TableCell>
+                  <TableCell className="text-right tabular-nums">{r.atrasosHoras ? formatDias(r.atrasosHoras) : "·"}</TableCell>
+                  <TableCell>{r.licencia ? <Badge variant="outline" className="border-red-200 bg-red-50 text-red-600">SÍ</Badge> : "·"}</TableCell>
+                  <TableCell className="text-right tabular-nums">{clp(mov?.movilizacion)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{clp(mov?.colacion)}</TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------- Pestaña Devengos (aniversarios) ------------------- */
+
+/**
+ * Devengamiento del feriado en la fecha de aniversario del contrato: 15 días
+ * hábiles del período que se cumple (Art. 67 CT), menos lo ya anticipado
+ * (hoja Anticipos). Los progresivos habilitados por trienio también se
+ * incorporan al feriado en el aniversario (criterio INICIO RAPIDO sección 3)
+ * — esos se ajustan a mano o vía REC según respaldo.
+ */
+function TabDevengos({
+  trabajadores,
+  anticipos,
+  ajustes,
+  onDevengar,
+}: {
+  trabajadores: SaldoTrabajador[];
+  anticipos: AnticipoRow[];
+  ajustes: AjusteRow[];
+  onDevengar: (trab: SaldoTrabajador, periodo: string, sugerido: number, aniversario: string, notaAnticipo: string | null) => void;
+}) {
+  const hoy = hoyIso();
+  const anioActual = Number(hoy.slice(0, 4));
+
+  const filas = useMemo(() => {
+    return trabajadores
+      .filter((t) => t.fechaIngreso)
+      .map((t) => {
+        const a = aniversarioDe(t.fechaIngreso!, anioActual);
+        // si el aniversario de este año aún no llega, el pendiente es el de este año;
+        // si ya pasó, mostramos el de este año (por devengar) y el próximo es el del año siguiente
+        const pasado = a.fecha <= hoy;
+        const anticipo = anticipos.find(
+          (x) => x.trabajadorId === t.trabajadorId && x.estado === "pendiente" && x.periodo.startsWith(a.periodo),
+        );
+        const sugerido = anticipo?.diasASumar ?? 15;
+        const devengado = ajustes.some(
+          (j) =>
+            j.trabajadorId === t.trabajadorId &&
+            j.periodo === a.periodo &&
+            j.motivo.toLowerCase().startsWith("devengamiento") &&
+            j.fecha.slice(0, 10) >= a.fecha,
+        );
+        return { t, aniversario: a.fecha, periodo: a.periodo, pasado, anticipo, sugerido, devengado };
+      })
+      .sort((x, y) => {
+        // primero los pasados sin devengar (urgentes), luego por cercanía
+        const ux = x.pasado && !x.devengado ? 0 : 1;
+        const uy = y.pasado && !y.devengado ? 0 : 1;
+        if (ux !== uy) return ux - uy;
+        return x.aniversario.slice(5).localeCompare(y.aniversario.slice(5));
+      });
+  }, [trabajadores, anticipos, ajustes, anioActual, hoy]);
+
+  const pendientes = filas.filter((f) => f.pasado && !f.devengado).length;
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        El período se devenga AL CUMPLIRSE el aniversario del contrato (15 días hábiles, menos lo anticipado).
+        {pendientes > 0 && <span className="font-medium text-amber-700"> {pendientes} aniversario(s) del año ya cumplidos sin devengo registrado desde el panel — verificar si el saldo ya lo incluye antes de devengar.</span>}
+      </p>
+      <div className="overflow-x-auto rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Trabajador</TableHead>
+              <TableHead>Ingreso</TableHead>
+              <TableHead>Aniversario {anioActual}</TableHead>
+              <TableHead>Período que devenga</TableHead>
+              <TableHead className="text-right">Saldo actual período</TableHead>
+              <TableHead className="text-right">Sugerido a sumar</TableHead>
+              <TableHead>Anticipo</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Acción</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filas.map(({ t, aniversario, periodo, pasado, anticipo, sugerido, devengado }) => (
+              <TableRow key={t.trabajadorId} className={pasado && !devengado ? "bg-amber-50/50" : ""}>
+                <TableCell className="font-medium">{t.nombre}<span className="ml-2 text-xs text-muted-foreground">{t.sucursal}</span></TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground">{formatFecha(t.fechaIngreso)}</TableCell>
+                <TableCell className="whitespace-nowrap">{formatFecha(aniversario)}</TableCell>
+                <TableCell>{periodo}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatDias(t.saldos[periodo] ?? 0)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatDias(sugerido)}</TableCell>
+                <TableCell className="max-w-[220px] text-xs text-muted-foreground">
+                  {anticipo ? `${formatDias(anticipo.diasAnticipados)} días anticipados — sumar solo ${formatDias(anticipo.diasASumar ?? 15)}` : "·"}
+                </TableCell>
+                <TableCell>
+                  {devengado ? (
+                    <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">devengado</Badge>
+                  ) : pasado ? (
+                    <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">por devengar</Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">próximo</Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  {!devengado && (
+                    <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => onDevengar(t, periodo, sugerido, aniversario, anticipo?.notas ?? null)}>
+                      Devengar
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
@@ -886,6 +1298,84 @@ function DialogoAnular({ doc, onClose }: { doc: DocumentoRow; onClose: () => voi
       </DialogContent>
     </Dialog>
   );
+}
+
+function DialogoDevengo({
+  clienteId,
+  trab,
+  periodo,
+  sugerido,
+  aniversario,
+  notaAnticipo,
+  onClose,
+}: {
+  clienteId: string;
+  trab: SaldoTrabajador;
+  periodo: string;
+  sugerido: number;
+  aniversario: string;
+  notaAnticipo: string | null;
+  onClose: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const actual = trab.saldos[periodo] ?? 0;
+  const [sumar, setSumar] = useState(String(sugerido));
+  const nuevo = redondear2(actual + Number(sumar.replace(",", ".") || 0));
+
+  function devengar() {
+    startTransition(async () => {
+      const res = await ajustarSaldo({
+        clienteId,
+        trabajadorId: trab.trabajadorId,
+        periodo,
+        dias: nuevo,
+        motivo: `Devengamiento aniversario ${fechaClCorta(aniversario)} — período ${periodo}: +${sumar} días (Art. 67 CT)${notaAnticipo ? " [anticipo previo descontado]" : ""}`,
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(`Devengado: ${trab.nombre} período ${periodo} ${formatDias(actual)} → ${formatDias(nuevo)}.`);
+      onClose();
+    });
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Devengar período {periodo}</DialogTitle>
+          <DialogDescription>
+            {trab.nombre} · aniversario {formatFecha(aniversario)}. Saldo actual del período: {formatDias(actual)} días.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {notaAnticipo && (
+            <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">{notaAnticipo}</p>
+          )}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Días a sumar (15 estándar, menos lo anticipado)</label>
+            <Input inputMode="decimal" value={sumar} onChange={(e) => setSumar(e.target.value)} />
+          </div>
+          <p className="text-sm">
+            Saldo resultante del período: <b>{formatDias(nuevo)}</b> días. Queda registrado en la bitácora de ajustes.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={devengar} disabled={pending || !(Number(sumar.replace(",", ".")) > 0)}>
+            {pending ? "Devengando…" : "Devengar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** DD-MM-AAAA corto para motivos de bitácora. */
+function fechaClCorta(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : iso;
 }
 
 function DialogoAsistencia({ clienteId, trabajadores, onClose }: { clienteId: string; trabajadores: SaldoTrabajador[]; onClose: () => void }) {

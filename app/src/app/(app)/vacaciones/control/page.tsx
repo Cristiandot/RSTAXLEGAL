@@ -27,7 +27,7 @@ export default async function ControlVacacionesPage() {
     );
   }
 
-  const [trabRes, saldosRes, docsRes, corrRes, asisRes, antRes] = await Promise.all([
+  const [trabRes, saldosRes, docsRes, corrRes, asisRes, antRes, movRes, ajustesRes] = await Promise.all([
     supabase
       .from("trabajadores")
       .select("id, nombres, apellidos, rut, cargo, sucursal, fecha_ingreso, activo")
@@ -55,6 +55,16 @@ export default async function ControlVacacionesPage() {
       .eq("cliente_id", cliente.id)
       .order("estado")
       .order("proximo_aniversario"),
+    supabase
+      .from("vac_movilizacion")
+      .select("trabajador_id, movilizacion_100, colacion_100")
+      .eq("cliente_id", cliente.id),
+    supabase
+      .from("vac_ajustes")
+      .select("trabajador_id, periodo, motivo, created_at")
+      .eq("cliente_id", cliente.id)
+      .order("created_at", { ascending: false })
+      .limit(500),
   ]);
 
   const saldosPorTrab = new Map<string, Record<string, number>>();
@@ -135,6 +145,7 @@ export default async function ControlVacacionesPage() {
           const t = trabajadores.find((x) => x.trabajadorId === a.trabajador_id);
           return {
             id: a.id,
+            trabajadorId: a.trabajador_id,
             trabajador: t?.nombre ?? "—",
             periodo: a.periodo,
             diasAnticipados: Number(a.dias_anticipados),
@@ -144,6 +155,21 @@ export default async function ControlVacacionesPage() {
             notas: a.notas,
           };
         })}
+        movilizacion={Object.fromEntries(
+          (movRes.data ?? []).map((m) => [
+            m.trabajador_id,
+            {
+              movilizacion: m.movilizacion_100 === null ? null : Number(m.movilizacion_100),
+              colacion: m.colacion_100 === null ? null : Number(m.colacion_100),
+            },
+          ]),
+        )}
+        ajustes={(ajustesRes.data ?? []).map((a) => ({
+          trabajadorId: a.trabajador_id,
+          periodo: a.periodo,
+          motivo: a.motivo,
+          fecha: a.created_at,
+        }))}
       />
     </main>
   );
