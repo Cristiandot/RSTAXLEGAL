@@ -131,7 +131,7 @@ export const MODULOS: SeccionModulos[] = [
         key: "vacaciones",
         label: "Vacaciones",
         descripcion:
-          "Papeletas de vacaciones solicitadas por los clientes desde su portal.",
+          "Solicitudes del portal y control de saldos, papeletas y permisos Red Barrera.",
         href: "/vacaciones",
         icon: CalendarDays,
         estado: "activo",

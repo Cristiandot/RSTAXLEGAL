@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { GestionesClient, type GestionRow } from "../gestiones/gestiones-client";
+import { VacacionesTabs } from "./tabs-nav";
 
 export const metadata = { title: "Vacaciones — RS Tax & Legal" };
 
@@ -31,6 +32,7 @@ export default async function VacacionesPage() {
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
+      <VacacionesTabs activa="solicitudes" />
       <GestionesClient
         filas={filas}
         errorCarga={error?.message ?? null}
