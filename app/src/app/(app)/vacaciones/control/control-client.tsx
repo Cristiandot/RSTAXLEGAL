@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Ban, CalendarPlus, ClipboardList, FileDown, Pencil, Plus, RefreshCw, Search, Award } from "lucide-react";
+import { Ban, CalendarPlus, ClipboardList, Clock4, FileDown, History, Pencil, Plus, RefreshCw, Search, Award } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import {
   aniversarioDe,
@@ -119,12 +119,14 @@ function claseTipoDoc(tipo: string): string {
 }
 
 export function ControlClient({ cliente, trabajadores, documentos, correlativos, asistencia, anticipos, movilizacion, ajustes }: Props) {
-  const [tab, setTab] = useState<"saldos" | "documentos" | "cierre" | "devengos" | "asistencia" | "anticipos">("saldos");
+  const [tab, setTab] = useState<"saldos" | "documentos" | "permisos" | "cierre" | "devengos" | "asistencia" | "anticipos">("saldos");
   const [pending, startTransition] = useTransition();
 
   // ---- diálogos ----
   const [dialogo, setDialogo] = useState<
-    | { tipo: "PAP" | "PER" | "REC" | "ajuste"; trab: SaldoTrabajador }
+    | { tipo: "PAP" | "REC" | "ajuste"; trab: SaldoTrabajador }
+    | { tipo: "PER"; trab: SaldoTrabajador | null }
+    | { tipo: "historial"; trab: SaldoTrabajador }
     | { tipo: "anular"; doc: DocumentoRow }
     | { tipo: "asistencia" }
     | { tipo: "devengo"; trab: SaldoTrabajador; periodo: string; sugerido: number; aniversario: string; notaAnticipo: string | null }
@@ -243,7 +245,8 @@ export function ControlClient({ cliente, trabajadores, documentos, correlativos,
 
       <div className="flex w-fit flex-wrap gap-1 rounded-lg border bg-card p-1">
         {tabBtn("saldos", "Saldos", <ClipboardList className="h-4 w-4" />)}
-        {tabBtn("documentos", "Documentos", <FileDown className="h-4 w-4" />)}
+        {tabBtn("documentos", "Historial", <History className="h-4 w-4" />)}
+        {tabBtn("permisos", "Permisos", <Clock4 className="h-4 w-4" />)}
         {tabBtn("cierre", "Cierre", <CalendarPlus className="h-4 w-4" />)}
         {tabBtn("devengos", "Devengos", <Award className="h-4 w-4" />)}
         {tabBtn("asistencia", "Asistencia", <CalendarPlus className="h-4 w-4" />)}
@@ -297,6 +300,9 @@ export function ControlClient({ cliente, trabajadores, documentos, correlativos,
                           <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setDialogo({ tipo: "PAP", trab: t })}>PAP</Button>
                           <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setDialogo({ tipo: "PER", trab: t })}>PER</Button>
                           <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setDialogo({ tipo: "REC", trab: t })}>REC</Button>
+                          <Button size="sm" variant="ghost" className="h-7 px-2" title="Historial de documentos" onClick={() => setDialogo({ tipo: "historial", trab: t })}>
+                            <History className="h-3.5 w-3.5" />
+                          </Button>
                           <Button size="sm" variant="ghost" className="h-7 px-2" title="Ajustar saldo" onClick={() => setDialogo({ tipo: "ajuste", trab: t })}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -405,6 +411,16 @@ export function ControlClient({ cliente, trabajadores, documentos, correlativos,
         </div>
       )}
 
+      {tab === "permisos" && (
+        <TabPermisos
+          documentos={documentos}
+          pending={pending}
+          abrirPdf={abrirPdf}
+          onEmitir={() => setDialogo({ tipo: "PER", trab: null })}
+          onAnular={(doc) => setDialogo({ tipo: "anular", doc })}
+        />
+      )}
+
       {tab === "cierre" && (
         <TabCierre documentos={documentos} asistencia={asistencia} trabajadores={trabajadores} movilizacion={movilizacion} />
       )}
@@ -498,7 +514,10 @@ export function ControlClient({ cliente, trabajadores, documentos, correlativos,
       )}
 
       {dialogo?.tipo === "PAP" && <DialogoPapeleta trab={dialogo.trab} onClose={() => setDialogo(null)} />}
-      {dialogo?.tipo === "PER" && <DialogoPermiso trab={dialogo.trab} onClose={() => setDialogo(null)} />}
+      {dialogo?.tipo === "PER" && <DialogoPermiso trab={dialogo.trab} trabajadores={activos} onClose={() => setDialogo(null)} />}
+      {dialogo?.tipo === "historial" && (
+        <DialogoHistorial trab={dialogo.trab} documentos={documentos} pending={pending} abrirPdf={abrirPdf} onClose={() => setDialogo(null)} />
+      )}
       {dialogo?.tipo === "REC" && <DialogoReconocimiento trab={dialogo.trab} onClose={() => setDialogo(null)} />}
       {dialogo?.tipo === "ajuste" && <DialogoAjuste clienteId={cliente.id} trab={dialogo.trab} onClose={() => setDialogo(null)} />}
       {dialogo?.tipo === "anular" && <DialogoAnular doc={dialogo.doc} onClose={() => setDialogo(null)} />}
@@ -514,6 +533,125 @@ export function ControlClient({ cliente, trabajadores, documentos, correlativos,
           onClose={() => setDialogo(null)}
         />
       )}
+    </div>
+  );
+}
+
+/* -------------------------- Pestaña Permisos --------------------------- */
+
+/** Bitácora de permisos PER (equivalente a la hoja "Permisos" del Excel). */
+function TabPermisos({
+  documentos,
+  pending,
+  abrirPdf,
+  onEmitir,
+  onAnular,
+}: {
+  documentos: DocumentoRow[];
+  pending: boolean;
+  abrirPdf: (doc: DocumentoRow) => void;
+  onEmitir: () => void;
+  onAnular: (doc: DocumentoRow) => void;
+}) {
+  const [buscar, setBuscar] = useState("");
+  const [fGoce, setFGoce] = useState("");
+  const [fEstado, setFEstado] = useState("vigente");
+
+  const permisos = useMemo(() => {
+    const q = buscar.trim().toLowerCase();
+    return documentos.filter(
+      (d) =>
+        d.tipo === "PER" &&
+        (!fEstado || d.estado === fEstado) &&
+        (!fGoce || (fGoce === "con" ? d.conGoce === true : d.conGoce === false)) &&
+        (!q || d.trabajadorNombre.toLowerCase().includes(q) || d.trabajadorRut.toLowerCase().includes(q) || d.correlativo.toLowerCase().includes(q)),
+    );
+  }, [documentos, buscar, fGoce, fEstado]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Correlativo, trabajador o RUT…" value={buscar} onChange={(e) => setBuscar(e.target.value)} className="pl-8" />
+        </div>
+        <select className={`${selectCls} w-32`} value={fGoce} onChange={(e) => setFGoce(e.target.value)} aria-label="Goce">
+          <option value="">Con y sin goce</option>
+          <option value="sin">Sin goce</option>
+          <option value="con">Con goce</option>
+        </select>
+        <select className={`${selectCls} w-32`} value={fEstado} onChange={(e) => setFEstado(e.target.value)} aria-label="Estado">
+          <option value="vigente">Vigentes</option>
+          <option value="anulado">Anulados</option>
+          <option value="">Todos</option>
+        </select>
+        <span className="text-sm text-muted-foreground">{permisos.length} permisos</span>
+        <div className="grow" />
+        <Button size="sm" onClick={onEmitir}>
+          <Plus className="mr-1 h-4 w-4" /> Emitir permiso
+        </Button>
+      </div>
+      <div className="overflow-x-auto rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>N°</TableHead>
+              <TableHead>Emisión</TableHead>
+              <TableHead>Trabajador</TableHead>
+              <TableHead>Tipo de permiso</TableHead>
+              <TableHead>Goce</TableHead>
+              <TableHead>Fecha(s)</TableHead>
+              <TableHead className="text-right">Cantidad</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {permisos.length === 0 && (
+              <TableRow><TableCell colSpan={9} className="text-center text-sm text-muted-foreground">Sin permisos con los filtros actuales.</TableCell></TableRow>
+            )}
+            {permisos.map((d) => (
+              <TableRow key={d.id} className={d.estado === "anulado" ? "opacity-55" : ""}>
+                <TableCell><Badge variant="outline" className={claseTipoDoc("PER")}>{d.correlativo}</Badge></TableCell>
+                <TableCell className="whitespace-nowrap text-muted-foreground">{formatFecha(d.fechaEmision)}</TableCell>
+                <TableCell>
+                  <p className="font-medium">{d.trabajadorNombre}</p>
+                  <p className="text-xs text-muted-foreground">{d.trabajadorRut}{d.sucursal ? ` · ${d.sucursal}` : ""}</p>
+                </TableCell>
+                <TableCell className="max-w-[240px] text-sm">{d.permisoTipo ?? "—"}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={d.conGoce ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}>
+                    {d.conGoce ? "Con goce" : "Sin goce"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="whitespace-nowrap">
+                  {formatFecha(d.fechaDesde)}{d.fechaHasta && d.fechaHasta !== d.fechaDesde ? ` → ${formatFecha(d.fechaHasta)}` : ""}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {d.cantidad !== null ? `${formatDias(d.cantidad)} ${d.unidad === "Horas" ? "hrs" : d.cantidad === 1 ? "día" : "días"}` : "—"}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={d.estado === "vigente" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-red-200 bg-red-50 text-red-600"}>
+                    {d.estado}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-1">
+                    <Button size="sm" variant="ghost" className="h-7 px-2" title={d.origen === "excel" && !d.pdfPath ? "PDF histórico en OneDrive" : "Descargar PDF"} disabled={pending} onClick={() => abrirPdf(d)}>
+                      <FileDown className="h-3.5 w-3.5" />
+                    </Button>
+                    {d.estado === "vigente" && (
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-red-600 hover:text-red-700" title="Anular" onClick={() => onAnular(d)}>
+                        <Ban className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
@@ -1041,8 +1179,18 @@ function DialogoPapeleta({ trab, onClose }: { trab: SaldoTrabajador; onClose: ()
   );
 }
 
-function DialogoPermiso({ trab, onClose }: { trab: SaldoTrabajador; onClose: () => void }) {
+function DialogoPermiso({
+  trab: trabInicial,
+  trabajadores,
+  onClose,
+}: {
+  trab: SaldoTrabajador | null;
+  trabajadores: SaldoTrabajador[];
+  onClose: () => void;
+}) {
   const [pending, startTransition] = useTransition();
+  const [trabajadorId, setTrabajadorId] = useState(trabInicial?.trabajadorId ?? "");
+  const trab = trabajadores.find((t) => t.trabajadorId === trabajadorId) ?? trabInicial;
   const [fechaEmision, setFechaEmision] = useState(hoyIso());
   const [tipo, setTipo] = useState(TIPOS_PERMISO[0]);
   const [conGoce, setConGoce] = useState(false);
@@ -1059,6 +1207,7 @@ function DialogoPermiso({ trab, onClose }: { trab: SaldoTrabajador; onClose: () 
   }
 
   function emitir() {
+    if (!trab) return;
     startTransition(async () => {
       const res = await emitirPermiso({
         trabajadorId: trab.trabajadorId,
@@ -1087,9 +1236,22 @@ function DialogoPermiso({ trab, onClose }: { trab: SaldoTrabajador; onClose: () 
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Emitir permiso</DialogTitle>
-          <DialogDescription>{trab.nombre} · {trab.rut} · {trab.sucursal}</DialogDescription>
+          <DialogDescription>
+            {trab ? `${trab.nombre} · ${trab.rut} · ${trab.sucursal}` : "Los permisos no descuentan saldo de feriado."}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          {!trabInicial && (
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Trabajador</label>
+              <select className={selectCls} value={trabajadorId} onChange={(e) => setTrabajadorId(e.target.value)}>
+                <option value="">Elegir trabajador…</option>
+                {trabajadores.map((t) => (
+                  <option key={t.trabajadorId} value={t.trabajadorId}>{t.nombre} — {t.sucursal}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">Tipo de permiso</label>
             <select className={selectCls} value={tipo} onChange={(e) => cambiarTipo(e.target.value)}>
@@ -1125,7 +1287,7 @@ function DialogoPermiso({ trab, onClose }: { trab: SaldoTrabajador; onClose: () 
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={emitir} disabled={pending || !desde || !(Number(cantidad.replace(",", ".")) > 0)}>
+          <Button onClick={emitir} disabled={pending || !trab || !desde || !(Number(cantidad.replace(",", ".")) > 0)}>
             {pending ? "Emitiendo…" : "Emitir permiso"}
           </Button>
         </DialogFooter>
@@ -1379,6 +1541,80 @@ function DialogoDevengo({
 function fechaClCorta(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   return m ? `${m[3]}-${m[2]}-${m[1]}` : iso;
+}
+
+/** Ficha cronológica de todos los documentos de un trabajador. */
+function DialogoHistorial({
+  trab,
+  documentos,
+  pending,
+  abrirPdf,
+  onClose,
+}: {
+  trab: SaldoTrabajador;
+  documentos: DocumentoRow[];
+  pending: boolean;
+  abrirPdf: (doc: DocumentoRow) => void;
+  onClose: () => void;
+}) {
+  const rutNorm = trab.rut.replace(/[.\s]/g, "").toUpperCase();
+  const docs = useMemo(
+    () =>
+      documentos
+        .filter((d) => d.trabajadorRut.replace(/[.\s]/g, "").toUpperCase() === rutNorm)
+        .sort((a, b) => b.fechaEmision.localeCompare(a.fechaEmision) || b.correlativo.localeCompare(a.correlativo)),
+    [documentos, rutNorm],
+  );
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Historial — {trab.nombre}</DialogTitle>
+          <DialogDescription>
+            {trab.rut} · {trab.sucursal} · ingreso {formatFecha(trab.fechaIngreso)} · saldo total {formatDias(redondear2(trab.total))} días · {docs.length} documento(s)
+          </DialogDescription>
+        </DialogHeader>
+        {docs.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">Sin documentos emitidos.</p>
+        ) : (
+          <div className="space-y-2">
+            {docs.map((d) => (
+              <div key={d.id} className={`flex items-start justify-between gap-3 rounded-md border p-2.5 ${d.estado === "anulado" ? "opacity-55" : ""}`}>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className={claseTipoDoc(d.tipo)}>{d.correlativo}</Badge>
+                    <span className="text-xs text-muted-foreground">{formatFecha(d.fechaEmision)}</span>
+                    {d.estado === "anulado" && (
+                      <Badge variant="outline" className="border-red-200 bg-red-50 text-red-600">anulado</Badge>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm">
+                    {d.tipo === "PER"
+                      ? `${d.permisoTipo ?? "Permiso"} (${d.conGoce ? "con goce" : "sin goce"}) — ${d.cantidad !== null ? `${formatDias(d.cantidad)} ${d.unidad === "Horas" ? "hrs" : "día(s)"}` : ""}`
+                      : d.tipo === "REC"
+                        ? `Reconocimiento de ${d.dias !== null ? formatDias(d.dias) : "?"} días progresivos — ${d.respaldo ?? ""}`
+                        : `Vacaciones ${d.dias !== null ? formatDias(d.dias) : "?"} días hábiles — ${d.desgloseTexto ?? ""}`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {(d.fechaDesde || d.fechaHasta) && <>{formatFecha(d.fechaDesde)} → {formatFecha(d.fechaHasta)} · </>}
+                    {d.saldoAnterior !== null && <>saldo {formatDias(d.saldoAnterior)} → {formatDias(d.saldoFinal ?? 0)} · </>}
+                    {d.estado === "anulado" ? (d.anulacionMotivo ?? "") : (d.observacion ?? "")}
+                  </p>
+                </div>
+                <Button size="sm" variant="ghost" className="h-7 shrink-0 px-2" title="Descargar PDF" disabled={pending} onClick={() => abrirPdf(d)}>
+                  <FileDown className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cerrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function DialogoAsistencia({ clienteId, trabajadores, onClose }: { clienteId: string; trabajadores: SaldoTrabajador[]; onClose: () => void }) {
