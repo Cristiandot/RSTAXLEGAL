@@ -807,7 +807,10 @@ function TabDevengos({
         const anticipo = anticipos.find(
           (x) => x.trabajadorId === t.trabajadorId && x.estado === "pendiente" && x.periodo.startsWith(a.periodo),
         );
-        const sugerido = anticipo?.diasASumar ?? 15;
+        // los anticipos de PROGRESIVOS no reducen los 15 días del período normal:
+        // se descuentan del devengo de progresivos (la nota del anticipo lo explica)
+        const esProgresivo = anticipo?.periodo.toLowerCase().includes("progresiv") ?? false;
+        const sugerido = anticipo && !esProgresivo ? (anticipo.diasASumar ?? 15) : 15;
         const devengado = ajustes.some(
           (j) =>
             j.trabajadorId === t.trabajadorId &&
