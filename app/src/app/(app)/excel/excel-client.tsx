@@ -127,6 +127,12 @@ function FormNovedad({
             <Label className="text-xs">Hasta</Label>
             <Input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
           </div>
+          {def.requiereRima && (
+            <div className="flex flex-col gap-1">
+              <Label className="text-xs">RIMA — renta imponible mes anterior ($) *</Label>
+              <Input type="number" min={1} value={monto} onChange={(e) => setMonto(e.target.value)} placeholder="obligatoria" />
+            </div>
+          )}
         </>
       ) : (
         <>

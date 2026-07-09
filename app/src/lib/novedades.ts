@@ -13,6 +13,8 @@ export type TipoNovedad = {
   hint?: string;
   /** false = no se ofrece en el desplegable del portal del cliente. */
   enPortal?: boolean;
+  /** true = exige la RIMA (renta imponible del mes anterior) en el campo monto. */
+  requiereRima?: boolean;
 };
 
 export const TIPOS_NOVEDAD: TipoNovedad[] = [
@@ -40,8 +42,9 @@ export const TIPOS_NOVEDAD: TipoNovedad[] = [
     value: "licencia",
     label: "Licencia médica",
     campos: "rango",
-    hint: "Indica desde y hasta según el documento de la licencia.",
+    hint: "Indica desde y hasta según el documento de la licencia, y la RIMA: renta imponible del trabajador en el mes ANTERIOR al inicio de la licencia (obligatoria — Previred la exige para el movimiento de subsidios y de ella dependen SIS, AFC y mutual del período).",
     enPortal: false,
+    requiereRima: true,
   },
   {
     value: "ausencia",

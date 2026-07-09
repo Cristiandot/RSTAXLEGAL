@@ -535,12 +535,15 @@ export async function descargarNominaPrevired(
     supabase.from("contratos").select("trabajador_id, remuneracion, jornada, estado, created_at").in("trabajador_id", ids).neq("estado", "anulado").order("created_at", { ascending: false }),
   ]);
   // Movimientos de personal del período desde novedades: licencia → 3 (subsidios), ausencia → 4 (permiso sin goce).
+  // La RIMA ingresada junto a la licencia (campo obligatorio) es la referencia de mayor prioridad.
   const movsMap = new Map<string, { codigo: string; desde: string | null; hasta: string | null }[]>();
-  for (const n of (novRes.data ?? []) as { trabajador_id: string; tipo: string; fecha?: string | null; fecha_hasta?: string | null }[]) {
+  const rimaNovedadMap = new Map<string, number>();
+  for (const n of (novRes.data ?? []) as { trabajador_id: string; tipo: string; fecha?: string | null; fecha_hasta?: string | null; monto?: number | string | null }[]) {
     if ((n.tipo === "ausencia" || n.tipo === "licencia") && n.fecha) {
       const lista = movsMap.get(n.trabajador_id) ?? [];
       lista.push({ codigo: n.tipo === "licencia" ? "3" : "4", desde: n.fecha, hasta: n.fecha_hasta ?? n.fecha });
       movsMap.set(n.trabajador_id, lista);
+      if (n.tipo === "licencia" && Number(n.monto ?? 0) > 0) rimaNovedadMap.set(n.trabajador_id, Number(n.monto));
     }
   }
   // RIMA (campo 92, movimientos 3/6): renta imponible del mes anterior si está liquidado en el sistema.
@@ -643,9 +646,10 @@ export async function descargarNominaPrevired(
       fechaIngreso: t.fecha_ingreso,
       fechaTermino: t.fecha_termino_contrato,
       movimientos: movsMap.get(t.id) ?? [],
-      // Renta mensual de referencia para la RIMA, en orden: (1) renta promedio fijada en la
-      // ficha (equivale al campo RIMA de KAME), (2) mes anterior liquidado, (3) mensualizada.
-      rima: Number(t.rima_renta_promedio ?? 0) || rimaMap.get(t.id) || Math.round((r.baseImponible * 30) / Math.max(1, dias)),
+      // Renta mensual de referencia para la RIMA, en orden: (1) la ingresada junto a la
+      // licencia (campo obligatorio de la novedad), (2) renta promedio de la ficha
+      // (equivale al campo RIMA de KAME), (3) mes anterior liquidado, (4) mensualizada.
+      rima: rimaNovedadMap.get(t.id) || Number(t.rima_renta_promedio ?? 0) || rimaMap.get(t.id) || Math.round((r.baseImponible * 30) / Math.max(1, dias)),
       r,
     };
   });

@@ -32,6 +32,9 @@ export async function agregarNovedadInterna(
   if (def.campos === "monto" && (!n.monto || Number(n.monto) <= 0)) {
     return { ok: false, error: "Indica el monto en pesos (mayor a 0)." };
   }
+  if (def.requiereRima && (!n.monto || Number(n.monto) <= 0)) {
+    return { ok: false, error: "Indica la RIMA: renta imponible del trabajador en el mes ANTERIOR al inicio de la licencia (obligatoria para Previred)." };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.from("novedades_remuneraciones").insert({
@@ -42,7 +45,7 @@ export async function agregarNovedadInterna(
     fecha: n.fecha || null,
     fecha_hasta: def.campos === "rango" ? n.fecha_hasta || null : null,
     cantidad: def.campos === "horas" ? Number(n.cantidad) : null,
-    monto: def.campos === "monto" ? Number(n.monto) : null,
+    monto: def.campos === "monto" || def.requiereRima ? Number(n.monto) : null,
     comentario: n.comentario || null,
     origen: "equipo",
   });
