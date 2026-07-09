@@ -864,6 +864,7 @@ function FichaDialog({
       cargas_maternales: Number(fd.get("cargas_maternales") ?? 0),
       cargas_invalidas: Number(fd.get("cargas_invalidas") ?? 0),
       tramo_asignacion: String(fd.get("tramo_asignacion") ?? "") || null,
+      rima_renta_promedio: numOrNull(fd.get("rima_renta_promedio")),
       fecha_ingreso: String(fd.get("fecha_ingreso") ?? "") || null,
     };
     start(async () => {
@@ -986,6 +987,11 @@ function FichaDialog({
               {["A", "B", "C", "D"].map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
+          {campo("RIMA renta promedio (subsidios)", "rima_renta_promedio", {
+            type: "number",
+            defaultValue: g("rima_renta_promedio"),
+            placeholder: "Vacío = mes anterior",
+          })}
           <label className="col-span-2 flex items-center gap-2 pt-2 text-sm sm:col-span-3">
             <input type="checkbox" name="sueldo_empresarial" defaultChecked={trabajador?.sueldo_empresarial === true} /> Sueldo empresarial (socio/dueño — sin gratificación ni AFC; SIS de su cargo junto a la AFP; mutual sí cotiza)
           </label>

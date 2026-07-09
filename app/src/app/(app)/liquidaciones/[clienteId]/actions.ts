@@ -136,6 +136,7 @@ export type FichaTrabajadorInput = {
   cargas_maternales: number;
   cargas_invalidas: number;
   tramo_asignacion: string | null;
+  rima_renta_promedio: number | null;
   fecha_ingreso: string | null;
 };
 
@@ -177,6 +178,7 @@ export async function guardarFichaTrabajador(
     cargas_maternales: t.cargas_maternales,
     cargas_invalidas: t.cargas_invalidas,
     tramo_asignacion: t.tramo_asignacion,
+    rima_renta_promedio: t.rima_renta_promedio,
     fecha_ingreso: t.fecha_ingreso,
   };
   const { error } = t.id
@@ -641,8 +643,9 @@ export async function descargarNominaPrevired(
       fechaIngreso: t.fecha_ingreso,
       fechaTermino: t.fecha_termino_contrato,
       movimientos: movsMap.get(t.id) ?? [],
-      // Renta mensual de referencia para la RIMA: mes anterior liquidado, o la renta del mes mensualizada.
-      rima: rimaMap.get(t.id) || Math.round((r.baseImponible * 30) / Math.max(1, dias)),
+      // Renta mensual de referencia para la RIMA, en orden: (1) renta promedio fijada en la
+      // ficha (equivale al campo RIMA de KAME), (2) mes anterior liquidado, (3) mensualizada.
+      rima: Number(t.rima_renta_promedio ?? 0) || rimaMap.get(t.id) || Math.round((r.baseImponible * 30) / Math.max(1, dias)),
       r,
     };
   });
