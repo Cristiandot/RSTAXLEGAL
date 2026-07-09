@@ -346,8 +346,9 @@ export function calcularLiquidacion(e: EntradaLiquidacion): ResultadoLiquidacion
   else if (e.tipoContrato === "plazo_fijo" || e.tipoContrato === "casa_particular") tasaAfcEmpleador = 0.03;
   else if (e.tipoContrato === "indefinido") tasaAfcEmpleador = e.mas11Anios ? 0.008 : 0.024;
   const afcEmpleador = pesos(baseImponibleAfc * tasaAfcEmpleador);
-  // Mutual (accidentes del trabajo): no aplica al socio con sueldo empresarial (sin subordinación).
-  const mutualEmpleador = e.sueldoEmpresarial ? 0 : pesos((baseImponible * e.mutualTasa) / 100);
+  // Mutual: el socio con sueldo empresarial SÍ cotiza (confirmado contra KAME y el
+  // validador Previred, 2026-07-09 — se había excluido por error).
+  const mutualEmpleador = pesos((baseImponible * e.mutualTasa) / 100);
 
   return {
     sueldoBase,

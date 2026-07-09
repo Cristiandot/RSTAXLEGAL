@@ -987,7 +987,7 @@ function FichaDialog({
             </select>
           </div>
           <label className="col-span-2 flex items-center gap-2 pt-2 text-sm sm:col-span-3">
-            <input type="checkbox" name="sueldo_empresarial" defaultChecked={trabajador?.sueldo_empresarial === true} /> Sueldo empresarial (socio/dueño — sin gratificación ni AFC; SIS de su cargo junto a la AFP; sin mutual)
+            <input type="checkbox" name="sueldo_empresarial" defaultChecked={trabajador?.sueldo_empresarial === true} /> Sueldo empresarial (socio/dueño — sin gratificación ni AFC; SIS de su cargo junto a la AFP; mutual sí cotiza)
           </label>
           <p className="col-span-2 text-xs text-muted-foreground sm:col-span-3">
             Los 11 años de antigüedad se calculan solos desde la fecha de ingreso.

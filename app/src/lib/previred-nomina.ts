@@ -52,8 +52,9 @@ export type DatosPreviredTrabajador = {
   monedaPlan: string | null; // 'UF' | '$'
   valorPlan: number; // en $ (si UF, ya convertido a $)
   valorPlanUf: number; // valor del plan en UF (0 si el plan es en pesos)
-  sueldoEmpresarial: boolean; // socio/dueño: SIS de su cargo, sin AFC ni mutual
+  sueldoEmpresarial: boolean; // socio/dueño: SIS de su cargo, sin AFC (mutual sí cotiza)
   tasaSis: number; // % SIS del período (campo 29 cuando el SIS no es costo del empleador)
+  tasaAfcEmpleador: number; // fracción AFC empleador vigente en el período (0.024 / 0.03 / 0.008 / 0)
   tramoAsignacion: string | null; // A/B/C/D
   cargasSimples: number;
   cargasMaternales: number;
@@ -179,9 +180,14 @@ export function lineaPrevired(
   N(28, esAfp ? Math.round(r.baseImponible * (t.afpTasaTotal || 0) / 100) : 0); // Cotización Obligatoria AFP (tasa TOTAL)
   // SIS: se declara siempre que cotice AFP. Con sueldo empresarial el monto es de
   // cargo del socio (no es costo del empleador), pero Previred lo exige informado.
-  const sisMonto = r.sisEmpleador > 0
+  // En períodos con subsidio (mov. 3) el empleador además entera SIS sobre la RIMA.
+  const rimaSubsidios = movimientosDelMes(periodo, t)
+    .filter((m) => m.codigo === "3" || m.codigo === "6")
+    .reduce((s, m) => s + rimaDe(m, t.rima), 0);
+  const sisMonto = (r.sisEmpleador > 0
     ? r.sisEmpleador
-    : t.sueldoEmpresarial ? Math.round(r.baseImponible * (t.tasaSis || 0) / 100) : 0;
+    : t.sueldoEmpresarial ? Math.round(r.baseImponible * (t.tasaSis || 0) / 100) : 0)
+    + Math.round(rimaSubsidios * (t.tasaSis || 0) / 100);
   N(29, esAfp ? sisMonto : 0);
   // 30..39 cuenta ahorro / sustitutiva / trabajo pesado: 0 (no aplica)
 
@@ -235,9 +241,12 @@ export function lineaPrevired(
   A(99, ""); // sucursal
 
   // 10- Seguro de Cesantía (100..102): sin cotizaciones (socio/pensionado) la renta va en 0.
-  N(100, r.afcTrabajador > 0 || r.afcEmpleador > 0 ? r.baseImponibleAfc : 0);
+  // Durante subsidios el empleador sigue pagando su AFC sobre la RIMA — la renta SC
+  // incluye la RIMA para mantener la proporción tasa × renta que valida Previred.
+  const afcEmpleadorTotal = r.afcEmpleador + Math.round(rimaSubsidios * (t.tasaAfcEmpleador || 0));
+  N(100, r.afcTrabajador > 0 || afcEmpleadorTotal > 0 ? r.baseImponibleAfc + (afcEmpleadorTotal > r.afcEmpleador ? rimaSubsidios : 0) : 0);
   N(101, r.afcTrabajador);
-  N(102, r.afcEmpleador);
+  N(102, afcEmpleadorTotal);
 
   // 11- Pagador de Subsidios (103..104): no aplica
   A(103, "0"); A(104, "");

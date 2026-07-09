@@ -513,7 +513,7 @@ export async function descargarNominaPrevired(
   const [cliRes, indRes, liqRes, concRes, cpRes] = await Promise.all([
     supabase.from("clientes").select("razon_social, mutual_institucion, caja_compensacion, mutual_tasa, sabado_habil").eq("id", clienteId).maybeSingle(),
     supabase.from("indicadores_previred").select(COLS_IND).eq("periodo", periodo).maybeSingle(),
-    supabase.from("liquidacion").select("trabajador_id, dias_trabajados, dias_licencia").eq("cliente_id", clienteId).eq("periodo", periodo),
+    supabase.from("liquidacion").select("trabajador_id, dias_trabajados, dias_licencia, total_imponible, detalle").eq("cliente_id", clienteId).eq("periodo", periodo),
     supabase.from("concepto_remuneracion").select("id, naturaleza, proporcional, tributable, nombre").eq("cliente_id", clienteId),
     supabase.from("concepto_periodo").select("concepto_id, considerado").eq("cliente_id", clienteId).eq("periodo", periodo),
   ]);
@@ -549,8 +549,9 @@ export async function descargarNominaPrevired(
   const contMap = new Map<string, ContratoRow>();
   for (const c of contRes.data ?? []) if (!contMap.has(c.trabajador_id)) contMap.set(c.trabajador_id, c as ContratoRow);
   const diasMap = new Map((liqRes.data ?? []).map((l) => [l.trabajador_id, { trab: (l.dias_trabajados as number) ?? 30 }]));
+  const detalleMap = new Map((liqRes.data ?? []).map((l) => [l.trabajador_id as string, l.detalle as Record<string, unknown> | null]));
   const conceptos = filtrarConsiderados((concRes.data ?? []) as ConceptoRow[], cpRes.data);
-  const indData = indRes.data as { uf_ultimo_dia?: number; tasa_seguro_social?: number | string; tasa_sis?: number | string; afp?: { nombre: string; tasa_total?: number }[] };
+  const indData = indRes.data as { uf_ultimo_dia?: number; tope_uf_afp?: number | string; tope_uf_afc?: number | string; tasa_seguro_social?: number | string; tasa_sis?: number | string; afp?: { nombre: string; tasa_total?: number }[] };
   const uf = Number(indData.uf_ultimo_dia ?? 0);
   const tasaSeguroSocial = Number(indData.tasa_seguro_social ?? 0);
   const tasaSis = Number(indData.tasa_sis ?? 0);
@@ -572,7 +573,42 @@ export async function descargarNominaPrevired(
       periodo,
       diasTrabajados: dias,
     });
-    const r = calcularLiquidacion(entrada);
+    let r = calcularLiquidacion(entrada);
+    // Si el período ya está liquidado en el sistema, el archivo se ancla a las RENTAS
+    // REALES de esa liquidación (incluyen novedades: extras, recargos, bonos) en vez
+    // del recálculo; los costos del empleador se recomputan sobre la base real.
+    const det = detalleMap.get(t.id);
+    const esSocio = t.sueldo_empresarial === true;
+    // Tasa AFC del empleador VIGENTE EN EL PERÍODO: con liquidación anclada se infiere
+    // de la cotización real del trabajador (un indefinido <11 años siempre cotiza 0,6%;
+    // si cotizó 0 y no es socio, era plazo fijo aunque hoy la ficha diga indefinido).
+    let tasaAfcEmp = esSocio ? 0
+      : t.tipo_contrato === "plazo_fijo" || t.tipo_contrato === "casa_particular" ? 0.03
+      : t.mas_11_anios === true ? 0.008 : 0.024;
+    if (det && Number(det.baseImponible ?? 0) > 0) {
+      if (!esSocio) {
+        tasaAfcEmp = Number(det.afcTrabajador ?? 0) > 0 ? 0.024 : t.mas_11_anios === true ? 0.008 : 0.03;
+      }
+      const topeAfpSalud = Math.round(Number(indData.tope_uf_afp ?? 0) * uf);
+      const topeAfcPesos = Math.round(Number(indData.tope_uf_afc ?? 0) * uf);
+      const baseReal = topeAfpSalud > 0 ? Math.min(Number(det.baseImponible), topeAfpSalud) : Number(det.baseImponible);
+      const baseAfcReal = topeAfcPesos > 0 ? Math.min(Number(det.baseImponible), topeAfcPesos) : Number(det.baseImponible);
+      r = {
+        ...r,
+        baseImponible: baseReal,
+        baseImponibleAfc: baseAfcReal,
+        afpMonto: Number(det.afpMonto ?? r.afpMonto),
+        saludLegal: Number(det.saludLegal ?? r.saludLegal),
+        saludAdicional: Number(det.saludAdicional ?? r.saludAdicional),
+        saludMonto: Number(det.saludMonto ?? r.saludMonto),
+        afcTrabajador: Number(det.afcTrabajador ?? r.afcTrabajador),
+        impuestoUnico: Number(det.impuestoUnico ?? r.impuestoUnico),
+        asignacionFamiliar: Number(det.asignacionFamiliar ?? r.asignacionFamiliar),
+        sisEmpleador: esSocio ? 0 : Math.round((baseReal * tasaSis) / 100),
+        afcEmpleador: Math.round(baseAfcReal * tasaAfcEmp),
+        mutualEmpleador: Math.round((baseReal * Number(cliRes.data?.mutual_tasa ?? 0)) / 100),
+      };
+    }
     const { num, dv } = partirRut(t.rut);
     const planUf = t.salud_plan_unidad === "UF" ? Number(t.salud_plan_valor ?? 0) * uf : Number(t.salud_plan_valor ?? 0);
     return {
@@ -593,8 +629,9 @@ export async function descargarNominaPrevired(
       monedaPlan: t.salud_plan_unidad,
       valorPlan: Math.round(planUf),
       valorPlanUf: t.salud_plan_unidad === "UF" ? Number(t.salud_plan_valor ?? 0) : 0,
-      sueldoEmpresarial: t.sueldo_empresarial === true,
+      sueldoEmpresarial: esSocio,
       tasaSis,
+      tasaAfcEmpleador: tasaAfcEmp,
       tramoAsignacion: t.tramo_asignacion,
       cargasSimples: t.cargas_simples ?? 0,
       cargasMaternales: t.cargas_maternales ?? 0,
