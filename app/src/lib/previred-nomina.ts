@@ -180,7 +180,15 @@ export function lineaPrevired(
   // 2- Datos de la AFP
   A(26, esAfp ? (codigoDe(AFP_COD, t.afp) ?? "00") : "00");
   N(27, esAfp ? r.baseImponible : 0); // Renta Imponible AFP/Seguro Social
-  N(28, esAfp ? Math.round(r.baseImponible * (t.afpTasaTotal || 0) / 100) : 0); // Cotización Obligatoria AFP (tasa TOTAL)
+  // Cotización Obligatoria AFP: cotización del trabajador (ya redondeada en la
+  // liquidación) + 0,1% del empleador redondeado APARTE — así la entera KAME/Previred
+  // (dos redondeos separados, verificado contra planillas pagadas jun-2026).
+  // Con sueldo empresarial, afpMonto trae el SIS incluido (de cargo del socio): se resta
+  // porque el SIS se declara en el campo 29.
+  const afpTrabajadorMonto = t.sueldoEmpresarial
+    ? r.afpMonto - Math.round(r.baseImponible * (t.tasaSis || 0) / 100)
+    : r.afpMonto;
+  N(28, esAfp ? afpTrabajadorMonto + Math.round(r.baseImponible * 0.001) : 0);
   // SIS: se declara siempre que cotice AFP. Con sueldo empresarial el monto es de
   // cargo del socio (no es costo del empleador), pero Previred lo exige informado.
   // En períodos con subsidio (mov. 3) el empleador además entera SIS sobre la RIMA.
