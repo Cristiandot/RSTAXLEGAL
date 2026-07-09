@@ -64,7 +64,7 @@ export type DatosPreviredTrabajador = {
   fechaTermino: string | null; // ISO yyyy-mm-dd — para movimiento de personal 2 (retiro)
   /** Movimientos del mes desde novedades: licencia → 3 (subsidios), ausencia → 4 (permiso sin goce). */
   movimientos: MovimientoPersonal[];
-  /** Renta imponible del mes anterior (campo 92) — obligatoria para movimiento 3/6. */
+  /** Renta imponible MENSUAL de referencia para la RIMA (mes anterior si está liquidado; si no, la renta del mes mensualizada). El campo 92 se prorratea por los días del movimiento. */
   rima: number;
   r: ResultadoLiquidacion;
 };
@@ -118,6 +118,15 @@ function movimientosDelMes(periodo: string, t: DatosPreviredTrabajador): Movimie
   for (const m of t.movimientos ?? []) if (en(m.desde)) movs.push(m);
   movs.sort((a, b) => (a.desde ?? "").localeCompare(b.desde ?? ""));
   return movs;
+}
+
+/** RIMA (campo 92): renta imponible de los DÍAS del movimiento — renta mensual de referencia prorrateada. */
+function rimaDe(mov: MovimientoPersonal, rimaMensual: number): number {
+  const d0 = Date.parse((mov.desde ?? "").slice(0, 10));
+  const d1 = Date.parse((mov.hasta ?? mov.desde ?? "").slice(0, 10));
+  if (!Number.isFinite(d0) || !Number.isFinite(d1)) return 0;
+  const dias = Math.max(1, Math.round((d1 - d0) / 86400000) + 1);
+  return Math.round((rimaMensual * Math.min(30, dias)) / 30);
 }
 
 /** Una línea de 105 campos (línea principal, tipo 00). */
@@ -209,9 +218,12 @@ export function lineaPrevired(
   // 84,85,87..91 montos CCAF: 0
 
   // RIMA / Jornada / Expectativa / Rentabilidad (92..95)
-  N(92, m0 && (m0.codigo === "3" || m0.codigo === "6") ? t.rima : 0); // RIMA (solo mov. 3/6)
+  const rimaLinea = m0 && (m0.codigo === "3" || m0.codigo === "6") ? rimaDe(m0, t.rima) : 0;
+  N(92, rimaLinea); // RIMA: renta de los días del movimiento (solo mov. 3/6)
   A(93, t.jornada === "parcial" ? "2" : "1"); // Tipo de jornada (obligatorio)
-  N(94, esAfp && t.tipoTrabajador === "activo" ? Math.round(r.baseImponible * (t.tasaSeguroSocial || 0) / 100) : 0); // Cotización 0,9% seguro social
+  // Cotización 0,9% seguro social (expectativa de vida): sobre la renta del mes MÁS la
+  // RIMA — durante el subsidio el empleador sigue enterando esta cotización.
+  N(94, esAfp && t.tipoTrabajador === "activo" ? Math.round((r.baseImponible + rimaLinea) * (t.tasaSeguroSocial || 0) / 100) : 0);
   A(95, "1"); // Rentabilidad protegida
 
   // 9- Mutualidad (96..99)
@@ -271,8 +283,10 @@ function lineaAdicionalPrevired(
   A(62, "0"); A(67, "");
   A(75, "00"); A(76, ""); A(78, "1");
   A(83, "00"); A(86, "");
-  N(92, mov.codigo === "3" || mov.codigo === "6" ? t.rima : 0);
+  const rimaMov = mov.codigo === "3" || mov.codigo === "6" ? rimaDe(mov, t.rima) : 0;
+  N(92, rimaMov);
   A(93, t.jornada === "parcial" ? "2" : "1");
+  N(94, rimaMov > 0 ? Math.round(rimaMov * (t.tasaSeguroSocial || 0) / 100) : 0); // seguro social sobre la RIMA del movimiento
   A(95, "1");
   A(96, mutualCod); A(99, "");
   A(103, "0"); A(104, "");

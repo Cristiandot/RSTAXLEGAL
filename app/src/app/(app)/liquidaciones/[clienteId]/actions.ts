@@ -604,7 +604,8 @@ export async function descargarNominaPrevired(
       fechaIngreso: t.fecha_ingreso,
       fechaTermino: t.fecha_termino_contrato,
       movimientos: movsMap.get(t.id) ?? [],
-      rima: rimaMap.get(t.id) || r.baseImponible, // sin mes anterior en el sistema: se usa la renta del mes
+      // Renta mensual de referencia para la RIMA: mes anterior liquidado, o la renta del mes mensualizada.
+      rima: rimaMap.get(t.id) || Math.round((r.baseImponible * 30) / Math.max(1, dias)),
       r,
     };
   });
