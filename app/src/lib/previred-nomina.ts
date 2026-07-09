@@ -117,7 +117,10 @@ function movimientosDelMes(periodo: string, t: DatosPreviredTrabajador): Movimie
     movs.push({ codigo: "1", desde: t.fechaIngreso, hasta: null });
   }
   for (const m of t.movimientos ?? []) if (en(m.desde)) movs.push(m);
-  movs.sort((a, b) => (a.desde ?? "").localeCompare(b.desde ?? ""));
+  // Los movimientos 3/6 van PRIMERO: la RIMA (campo 92) y la cotización del campo 94
+  // solo se aceptan en la línea principal (00), así que el subsidio debe ocuparla.
+  const prio = (m: MovimientoPersonal): number => (m.codigo === "3" || m.codigo === "6" ? 0 : 1);
+  movs.sort((a, b) => prio(a) - prio(b) || (a.desde ?? "").localeCompare(b.desde ?? ""));
   return movs;
 }
 
@@ -224,12 +227,11 @@ export function lineaPrevired(
   // 84,85,87..91 montos CCAF: 0
 
   // RIMA / Jornada / Expectativa / Rentabilidad (92..95)
-  const rimaLinea = m0 && (m0.codigo === "3" || m0.codigo === "6") ? rimaDe(m0, t.rima) : 0;
-  N(92, rimaLinea); // RIMA: renta de los días del movimiento (solo mov. 3/6)
+  N(92, rimaSubsidios); // RIMA total de los subsidios del mes — SOLO en la línea principal
   A(93, t.jornada === "parcial" ? "2" : "1"); // Tipo de jornada (obligatorio)
   // Cotización 0,9% seguro social (expectativa de vida): sobre la renta del mes MÁS la
   // RIMA — durante el subsidio el empleador sigue enterando esta cotización.
-  N(94, esAfp && t.tipoTrabajador === "activo" ? Math.round((r.baseImponible + rimaLinea) * (t.tasaSeguroSocial || 0) / 100) : 0);
+  N(94, esAfp && t.tipoTrabajador === "activo" ? Math.round((r.baseImponible + rimaSubsidios) * (t.tasaSeguroSocial || 0) / 100) : 0);
   A(95, "1"); // Rentabilidad protegida
 
   // 9- Mutualidad (96..99)
@@ -294,10 +296,9 @@ function lineaAdicionalPrevired(
   A(62, "0"); A(67, "");
   A(75, "00"); A(76, ""); A(78, "1");
   A(83, "00"); A(86, "");
-  const rimaMov = mov.codigo === "3" || mov.codigo === "6" ? rimaDe(mov, t.rima) : 0;
-  N(92, rimaMov);
+  N(92, 0); // la RIMA NO se informa en líneas adicionales (solo línea 00 o 02)
   A(93, t.jornada === "parcial" ? "2" : "1");
-  N(94, rimaMov > 0 ? Math.round(rimaMov * (t.tasaSeguroSocial || 0) / 100) : 0); // seguro social sobre la RIMA del movimiento
+  N(94, 0); // la cotización expectativa de vida tampoco va en líneas adicionales
   A(95, "1");
   A(96, mutualCod); A(99, "");
   A(103, "0"); A(104, "");
