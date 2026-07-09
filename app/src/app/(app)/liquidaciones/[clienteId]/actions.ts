@@ -529,9 +529,16 @@ export async function descargarNominaPrevired(
 
   const ids = trabajadores.map((t) => t.id);
   const [novRes, contRes] = await Promise.all([
-    supabase.from("novedades_remuneraciones").select("trabajador_id, tipo, cantidad, monto, concepto_id").eq("periodo", periodo).in("trabajador_id", ids),
+    supabase.from("novedades_remuneraciones").select("trabajador_id, tipo, cantidad, monto, concepto_id, fecha, fecha_hasta").eq("periodo", periodo).in("trabajador_id", ids),
     supabase.from("contratos").select("trabajador_id, remuneracion, jornada, estado, created_at").in("trabajador_id", ids).neq("estado", "anulado").order("created_at", { ascending: false }),
   ]);
+  // Ausencias sin goce del período (movimiento de personal 4 en Previred).
+  const ausenciaMap = new Map<string, { desde: string | null; hasta: string | null }>();
+  for (const n of (novRes.data ?? []) as { trabajador_id: string; tipo: string; fecha?: string | null; fecha_hasta?: string | null }[]) {
+    if (n.tipo === "ausencia" && n.fecha && !ausenciaMap.has(n.trabajador_id)) {
+      ausenciaMap.set(n.trabajador_id, { desde: n.fecha, hasta: n.fecha_hasta ?? n.fecha });
+    }
+  }
   const contMap = new Map<string, ContratoRow>();
   for (const c of contRes.data ?? []) if (!contMap.has(c.trabajador_id)) contMap.set(c.trabajador_id, c as ContratoRow);
   const diasMap = new Map((liqRes.data ?? []).map((l) => [l.trabajador_id, { trab: (l.dias_trabajados as number) ?? 30 }]));
@@ -585,6 +592,8 @@ export async function descargarNominaPrevired(
       centroCosto: t.sucursal,
       fechaIngreso: t.fecha_ingreso,
       fechaTermino: t.fecha_termino_contrato,
+      ausenciaDesde: ausenciaMap.get(t.id)?.desde ?? null,
+      ausenciaHasta: ausenciaMap.get(t.id)?.hasta ?? null,
       r,
     };
   });

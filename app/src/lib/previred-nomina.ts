@@ -59,6 +59,8 @@ export type DatosPreviredTrabajador = {
   centroCosto: string | null;
   fechaIngreso: string | null; // ISO yyyy-mm-dd — para movimiento de personal 1 (contratación)
   fechaTermino: string | null; // ISO yyyy-mm-dd — para movimiento de personal 2 (retiro)
+  ausenciaDesde: string | null; // ISO yyyy-mm-dd — para movimiento de personal 4 (permiso/ausencia sin goce)
+  ausenciaHasta: string | null;
   r: ResultadoLiquidacion;
 };
 
@@ -129,10 +131,13 @@ export function lineaPrevired(
   };
   const ingresoMes = enPeriodo(t.fechaIngreso);
   const retiroMes = enPeriodo(t.fechaTermino);
+  const ausenciaMes = enPeriodo(t.ausenciaDesde) && enPeriodo(t.ausenciaHasta);
   if (retiroMes) {
     A(15, "2"); A(16, ingresoMes ? fmtFechaPrev(t.fechaIngreso) : ""); A(17, fmtFechaPrev(t.fechaTermino));
   } else if (ingresoMes) {
     A(15, "1"); A(16, fmtFechaPrev(t.fechaIngreso)); A(17, "");
+  } else if (ausenciaMes) {
+    A(15, "4"); A(16, fmtFechaPrev(t.ausenciaDesde)); A(17, fmtFechaPrev(t.ausenciaHasta)); // permiso/ausencia sin goce
   } else {
     A(15, "0"); A(16, ""); A(17, ""); // sin movimiento en el mes
   }

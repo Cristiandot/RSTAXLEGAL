@@ -44,6 +44,12 @@ export const TIPOS_NOVEDAD: TipoNovedad[] = [
     enPortal: false,
   },
   {
+    value: "ausencia",
+    label: "Ausencia / inasistencia (días sin goce)",
+    campos: "rango",
+    hint: "Días completos no trabajados sin goce de sueldo. Se informan a Previred como movimiento de personal (código 4) con el rango de fechas.",
+  },
+  {
     value: "anticipo",
     label: "Anticipo de sueldo",
     campos: "monto",
