@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Loader2, Lock, RefreshCw, Scale, TrendingUp, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cargarGestionesFR } from "@/components/gestiones-fr/actions";
 import { ModuloCausas } from "@/components/gestiones-fr/modulo-causas";
 import { ModuloComercial } from "@/components/gestiones-fr/modulo-comercial";
@@ -21,6 +29,7 @@ type Datos = {
 };
 
 export default function GestionesFelipe() {
+  const router = useRouter();
   const [desbloqueado, setDesbloqueado] = useState(false);
   const [clave, setClave] = useState("");
   const [error, setError] = useState(false);
@@ -84,19 +93,38 @@ export default function GestionesFelipe() {
           Gestiones Felipe Rodriguez
         </h2>
         <Card className="card-soft border-transparent">
-          <CardContent className="flex flex-col items-center gap-3 py-8">
+          <CardContent className="flex flex-col items-center gap-3 py-16">
             <span className="flex size-11 items-center justify-center rounded-xl bg-muted text-muted-foreground">
               <Lock className="size-5" />
             </span>
-            <p className="text-sm text-muted-foreground">
-              Sección protegida. Ingresa la clave de 4 dígitos.
-            </p>
-            <div className="flex items-center gap-2">
+            <p className="text-sm text-muted-foreground">Sección protegida.</p>
+          </CardContent>
+        </Card>
+
+        {/* Pop-up de clave: se abre solo al entrar; cerrarlo devuelve al dashboard */}
+        <Dialog
+          open
+          onOpenChange={(abierto) => {
+            if (!abierto) router.push("/");
+          }}
+        >
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Lock className="size-4" />
+                Gestiones Felipe Rodríguez
+              </DialogTitle>
+              <DialogDescription>
+                Ingresa la clave de 4 dígitos para entrar.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col items-center gap-3 py-2">
               <Input
                 ref={inputRef}
                 type="password"
                 inputMode="numeric"
                 autoComplete="off"
+                autoFocus
                 maxLength={4}
                 value={clave}
                 onChange={(e) => {
@@ -107,15 +135,21 @@ export default function GestionesFelipe() {
                 }}
                 onKeyDown={(e) => e.key === "Enter" && intentar(clave)}
                 placeholder="••••"
-                className="w-28 text-center text-lg tracking-[0.5em]"
+                className="h-12 w-40 text-center !text-2xl tracking-[0.6em]"
               />
-              <Button onClick={() => intentar(clave)} disabled={clave.length < 4}>
+              {error ? (
+                <p className="text-sm text-red-600">Clave incorrecta.</p>
+              ) : null}
+              <Button
+                className="w-40"
+                onClick={() => intentar(clave)}
+                disabled={clave.length < 4}
+              >
                 Entrar
               </Button>
             </div>
-            {error ? <p className="text-sm text-red-600">Clave incorrecta.</p> : null}
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
       </section>
     );
   }
