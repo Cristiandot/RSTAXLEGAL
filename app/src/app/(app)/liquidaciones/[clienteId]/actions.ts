@@ -583,6 +583,8 @@ export async function descargarNominaPrevired(
       cargasInvalidas: t.cargas_invalidas ?? 0,
       jornada: t.jornada_tipo,
       centroCosto: t.sucursal,
+      fechaIngreso: t.fecha_ingreso,
+      fechaTermino: t.fecha_termino_contrato,
       r,
     };
   });

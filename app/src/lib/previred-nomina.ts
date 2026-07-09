@@ -57,6 +57,8 @@ export type DatosPreviredTrabajador = {
   cargasInvalidas: number;
   jornada: string | null; // 'completa' | 'parcial'
   centroCosto: string | null;
+  fechaIngreso: string | null; // ISO yyyy-mm-dd — para movimiento de personal 1 (contratación)
+  fechaTermino: string | null; // ISO yyyy-mm-dd — para movimiento de personal 2 (retiro)
   r: ResultadoLiquidacion;
 };
 
@@ -69,6 +71,22 @@ const ent = (n: number): string => String(Math.max(0, Math.round(n || 0)));
 // Alfanumérico: sin tildes/diacríticos (Previred/KAME no los aceptan) y sin espacios extremos.
 const alfa = (s: string | null | undefined): string =>
   (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+
+// Búsqueda tolerante en los mapas de códigos: sin mayúsculas/tildes/espacios ni
+// prefijo "AFP" ("Planvital", "AFP Plan Vital" y "PlanVital" son el mismo código).
+const clave = (s: string | null | undefined): string =>
+  (s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, "").replace(/^afp/, "");
+const codigoDe = (mapa: Record<string, string>, nombre: string | null | undefined): string | undefined => {
+  const k = clave(nombre);
+  if (!k) return undefined;
+  for (const [n, cod] of Object.entries(mapa)) if (clave(n) === k) return cod;
+  return undefined;
+};
+
+const fmtFechaPrev = (iso: string | null | undefined): string => {
+  const s = (iso ?? "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : "";
+};
 
 /** Una línea de 105 campos (línea principal, tipo 00). */
 export function lineaPrevired(
@@ -100,15 +118,31 @@ export function lineaPrevired(
   A(12, TIPO_TRAB_COD[t.tipoTrabajador] ?? "0");
   N(13, Math.min(30, Math.max(0, t.diasTrabajados)));
   A(14, "00"); // Línea principal
-  A(15, "0"); // Sin movimiento en el mes
-  A(16, ""); A(17, ""); // fechas movimiento
+  // Movimiento de personal: 1 = contratación (fecha desde) / 2 = retiro (fecha hasta).
+  // Sin fechas de ausentismo en la BD, los días <30 por inasistencia van sin movimiento
+  // (Previred lo acepta con advertencia). CONFIRMAR códigos 3-8 cuando se modelen.
+  const pIni = `${periodo}-01`;
+  const pFin = `${periodo}-31`;
+  const enPeriodo = (iso: string | null): boolean => {
+    const s = (iso ?? "").slice(0, 10);
+    return !!s && s >= pIni && s <= pFin;
+  };
+  const ingresoMes = enPeriodo(t.fechaIngreso);
+  const retiroMes = enPeriodo(t.fechaTermino);
+  if (retiroMes) {
+    A(15, "2"); A(16, ingresoMes ? fmtFechaPrev(t.fechaIngreso) : ""); A(17, fmtFechaPrev(t.fechaTermino));
+  } else if (ingresoMes) {
+    A(15, "1"); A(16, fmtFechaPrev(t.fechaIngreso)); A(17, "");
+  } else {
+    A(15, "0"); A(16, ""); A(17, ""); // sin movimiento en el mes
+  }
   A(18, t.tramoAsignacion ?? "D"); // tramo asig. familiar (D = sin derecho)
   N(19, t.cargasSimples); N(20, t.cargasMaternales); N(21, t.cargasInvalidas);
   N(22, r.asignacionFamiliar);
   N(23, 0); N(24, 0); A(25, "N"); // retroactiva / reintegro / subsidio joven (N=No)
 
   // 2- Datos de la AFP
-  A(26, esAfp ? (AFP_COD[t.afp ?? ""] ?? "00") : "00");
+  A(26, esAfp ? (codigoDe(AFP_COD, t.afp) ?? "00") : "00");
   N(27, esAfp ? r.baseImponible : 0); // Renta Imponible AFP/Seguro Social
   N(28, esAfp ? Math.round(r.baseImponible * (t.afpTasaTotal || 0) / 100) : 0); // Cotización Obligatoria AFP (tasa TOTAL)
   N(29, esAfp ? r.sisEmpleador : 0); // SIS (cargo empleador)
@@ -129,7 +163,7 @@ export function lineaPrevired(
   N(71, esIsl ? r.mutualEmpleador : 0); // Acc. trabajo ISL (si no hay mutual privada)
 
   // 7- Datos Salud (75..82)
-  A(75, esIsapre ? (SALUD_COD[t.salud ?? ""] ?? "00") : esFonasa ? "07" : "00");
+  A(75, esIsapre ? (codigoDe(SALUD_COD, t.salud) ?? "00") : esFonasa ? "07" : "00");
   A(76, ""); // N° FUN
   N(77, esFonasa || esIsapre ? r.baseImponible : 0); // Renta imponible (KAME la informa también para Fonasa)
   A(78, esIsapre && t.monedaPlan === "UF" ? "2" : "1"); // moneda plan (1 = pesos por defecto)
