@@ -184,10 +184,10 @@ export function lineaPrevired(
   const rimaSubsidios = movimientosDelMes(periodo, t)
     .filter((m) => m.codigo === "3" || m.codigo === "6")
     .reduce((s, m) => s + rimaDe(m, t.rima), 0);
-  const sisMonto = (r.sisEmpleador > 0
-    ? r.sisEmpleador
-    : t.sueldoEmpresarial ? Math.round(r.baseImponible * (t.tasaSis || 0) / 100) : 0)
-    + Math.round(rimaSubsidios * (t.tasaSis || 0) / 100);
+  // Una sola multiplicación sobre (base + RIMA): Previred valida monto = tasa × renta
+  // total y el redondeo por partes puede diferir en $1.
+  const cotizaSis = r.sisEmpleador > 0 || t.sueldoEmpresarial;
+  const sisMonto = cotizaSis ? Math.round((r.baseImponible + rimaSubsidios) * (t.tasaSis || 0) / 100) : 0;
   N(29, esAfp ? sisMonto : 0);
   // 30..39 cuenta ahorro / sustitutiva / trabajo pesado: 0 (no aplica)
 
@@ -243,8 +243,10 @@ export function lineaPrevired(
   // 10- Seguro de Cesantía (100..102): sin cotizaciones (socio/pensionado) la renta va en 0.
   // Durante subsidios el empleador sigue pagando su AFC sobre la RIMA — la renta SC
   // incluye la RIMA para mantener la proporción tasa × renta que valida Previred.
-  const afcEmpleadorTotal = r.afcEmpleador + Math.round(rimaSubsidios * (t.tasaAfcEmpleador || 0));
-  N(100, r.afcTrabajador > 0 || afcEmpleadorTotal > 0 ? r.baseImponibleAfc + (afcEmpleadorTotal > r.afcEmpleador ? rimaSubsidios : 0) : 0);
+  const afcEmpleadorTotal = r.afcEmpleador > 0
+    ? Math.round((r.baseImponibleAfc + rimaSubsidios) * (t.tasaAfcEmpleador || 0))
+    : 0;
+  N(100, r.afcTrabajador > 0 || afcEmpleadorTotal > 0 ? r.baseImponibleAfc + (rimaSubsidios > 0 && afcEmpleadorTotal > 0 ? rimaSubsidios : 0) : 0);
   N(101, r.afcTrabajador);
   N(102, afcEmpleadorTotal);
 
