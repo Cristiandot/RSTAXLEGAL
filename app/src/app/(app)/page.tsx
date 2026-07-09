@@ -16,7 +16,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import GestionesFelipe from "@/components/gestiones-felipe";
 
 function saludoPorHora(): string {
   const hora = new Date().getHours();
@@ -170,8 +169,6 @@ export default async function HomePage() {
           </section>
         ))}
       </div>
-
-      <GestionesFelipe />
     </main>
   );
 }

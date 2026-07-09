@@ -23,6 +23,7 @@ import {
   HardHat,
   ScrollText,
   Home,
+  Scale,
   type LucideIcon,
 } from "lucide-react";
 
@@ -321,6 +322,15 @@ export const MODULOS: SeccionModulos[] = [
           "Facturas emitidas por la oficina a los clientes: descarga por cliente y carga mensual.",
         href: "/facturacion",
         icon: Receipt,
+        estado: "activo",
+      },
+      {
+        key: "gestiones-fr",
+        label: "Gestiones Felipe Rodríguez",
+        descripcion:
+          "Causas judiciales (audiencias, plazos fatales, hitos) y prospección/cotizaciones. Sección protegida con clave.",
+        href: "/gestiones-fr",
+        icon: Scale,
         estado: "activo",
       },
     ],
