@@ -244,10 +244,12 @@ export function lineaPrevired(
 
   // 9- Mutualidad (96..99)
   A(96, mutualCod);
-  // Mutual privada: renta y cotización solo si efectivamente cotiza (el socio con
-  // sueldo empresarial no cotiza accidentes del trabajo — renta en 0).
+  // Mutual privada: renta solo si efectivamente cotiza. La cotización suma un 0,03%
+  // sobre la RIMA en períodos de subsidio (SANNA sobre la renta de la licencia —
+  // verificado al peso contra planilla IST pagada por KAME, jun-2026). CONFIRMAR el
+  // mismo tratamiento para ISL (campo 71) en el primer cliente adherido al ISL.
   N(97, esIsl || r.mutualEmpleador === 0 ? 0 : r.baseImponible);
-  N(98, esIsl ? 0 : r.mutualEmpleador); // cotización accidente mutual privada
+  N(98, esIsl || r.mutualEmpleador === 0 ? 0 : r.mutualEmpleador + Math.round(rimaSubsidios * 0.0003));
   A(99, ""); // sucursal
 
   // 10- Seguro de Cesantía (100..102): sin cotizaciones (socio/pensionado) la renta va en 0.
