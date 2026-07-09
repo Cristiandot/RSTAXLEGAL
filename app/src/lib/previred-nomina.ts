@@ -51,6 +51,9 @@ export type DatosPreviredTrabajador = {
   salud: string | null; // 'Fonasa' o nombre de isapre
   monedaPlan: string | null; // 'UF' | '$'
   valorPlan: number; // en $ (si UF, ya convertido a $)
+  valorPlanUf: number; // valor del plan en UF (0 si el plan es en pesos)
+  sueldoEmpresarial: boolean; // socio/dueño: SIS de su cargo, sin AFC ni mutual
+  tasaSis: number; // % SIS del período (campo 29 cuando el SIS no es costo del empleador)
   tramoAsignacion: string | null; // A/B/C/D
   cargasSimples: number;
   cargasMaternales: number;
@@ -165,7 +168,12 @@ export function lineaPrevired(
   A(26, esAfp ? (codigoDe(AFP_COD, t.afp) ?? "00") : "00");
   N(27, esAfp ? r.baseImponible : 0); // Renta Imponible AFP/Seguro Social
   N(28, esAfp ? Math.round(r.baseImponible * (t.afpTasaTotal || 0) / 100) : 0); // Cotización Obligatoria AFP (tasa TOTAL)
-  N(29, esAfp ? r.sisEmpleador : 0); // SIS (cargo empleador)
+  // SIS: se declara siempre que cotice AFP. Con sueldo empresarial el monto es de
+  // cargo del socio (no es costo del empleador), pero Previred lo exige informado.
+  const sisMonto = r.sisEmpleador > 0
+    ? r.sisEmpleador
+    : t.sueldoEmpresarial ? Math.round(r.baseImponible * (t.tasaSis || 0) / 100) : 0;
+  N(29, esAfp ? sisMonto : 0);
   // 30..39 cuenta ahorro / sustitutiva / trabajo pesado: 0 (no aplica)
 
   // 3- APVI (40..44) / 4- APVC (45..49): no aplica (KAME deja N° contrato APVI = 1)
@@ -187,7 +195,10 @@ export function lineaPrevired(
   A(76, ""); // N° FUN
   N(77, esFonasa || esIsapre ? r.baseImponible : 0); // Renta imponible (KAME la informa también para Fonasa)
   A(78, esIsapre && t.monedaPlan === "UF" ? "2" : "1"); // moneda plan (1 = pesos por defecto)
-  N(79, esIsapre ? t.valorPlan : 0); // cotización pactada (plan, en $)
+  // Cotización pactada: si la moneda es UF, el valor va EN UF con 2 decimales
+  // (Previred topea en 99 UF); en pesos va el monto entero.
+  if (esIsapre && t.monedaPlan === "UF") A(79, (t.valorPlanUf || 0).toFixed(2));
+  else N(79, esIsapre ? t.valorPlan : 0);
   N(80, esIsapre ? r.saludLegal : 0); // cotización obligatoria isapre (7%)
   N(81, esIsapre ? r.saludAdicional : 0); // cotización adicional isapre
   // 82 GES: 0 (uso futuro)
@@ -205,12 +216,14 @@ export function lineaPrevired(
 
   // 9- Mutualidad (96..99)
   A(96, mutualCod);
-  N(97, esIsl ? 0 : r.baseImponible); // renta imponible mutual (privada)
+  // Mutual privada: renta y cotización solo si efectivamente cotiza (el socio con
+  // sueldo empresarial no cotiza accidentes del trabajo — renta en 0).
+  N(97, esIsl || r.mutualEmpleador === 0 ? 0 : r.baseImponible);
   N(98, esIsl ? 0 : r.mutualEmpleador); // cotización accidente mutual privada
   A(99, ""); // sucursal
 
-  // 10- Seguro de Cesantía (100..102)
-  N(100, r.baseImponibleAfc); // renta imponible seguro cesantía (con tope)
+  // 10- Seguro de Cesantía (100..102): sin cotizaciones (socio/pensionado) la renta va en 0.
+  N(100, r.afcTrabajador > 0 || r.afcEmpleador > 0 ? r.baseImponibleAfc : 0);
   N(101, r.afcTrabajador);
   N(102, r.afcEmpleador);
 
