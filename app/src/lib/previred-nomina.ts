@@ -59,9 +59,17 @@ export type DatosPreviredTrabajador = {
   centroCosto: string | null;
   fechaIngreso: string | null; // ISO yyyy-mm-dd — para movimiento de personal 1 (contratación)
   fechaTermino: string | null; // ISO yyyy-mm-dd — para movimiento de personal 2 (retiro)
-  ausenciaDesde: string | null; // ISO yyyy-mm-dd — para movimiento de personal 4 (permiso/ausencia sin goce)
-  ausenciaHasta: string | null;
+  /** Movimientos del mes desde novedades: licencia → 3 (subsidios), ausencia → 4 (permiso sin goce). */
+  movimientos: MovimientoPersonal[];
+  /** Renta imponible del mes anterior (campo 92) — obligatoria para movimiento 3/6. */
+  rima: number;
   r: ResultadoLiquidacion;
+};
+
+export type MovimientoPersonal = {
+  codigo: string; // '3' subsidios (licencia) | '4' permiso sin goce (ausencia)
+  desde: string | null; // ISO yyyy-mm-dd
+  hasta: string | null;
 };
 
 export type DatosPreviredEmpresa = {
@@ -89,6 +97,25 @@ const fmtFechaPrev = (iso: string | null | undefined): string => {
   const s = (iso ?? "").slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : "";
 };
+
+/** Movimientos de personal del mes, en orden cronológico: retiro (2) / contratación (1) automáticos desde el contrato + licencias (3) y ausencias (4) desde novedades. */
+function movimientosDelMes(periodo: string, t: DatosPreviredTrabajador): MovimientoPersonal[] {
+  const pIni = `${periodo}-01`;
+  const pFin = `${periodo}-31`;
+  const en = (iso: string | null): boolean => {
+    const s = (iso ?? "").slice(0, 10);
+    return !!s && s >= pIni && s <= pFin;
+  };
+  const movs: MovimientoPersonal[] = [];
+  if (en(t.fechaTermino)) {
+    movs.push({ codigo: "2", desde: en(t.fechaIngreso) ? t.fechaIngreso : null, hasta: t.fechaTermino });
+  } else if (en(t.fechaIngreso)) {
+    movs.push({ codigo: "1", desde: t.fechaIngreso, hasta: null });
+  }
+  for (const m of t.movimientos ?? []) if (en(m.desde)) movs.push(m);
+  movs.sort((a, b) => (a.desde ?? "").localeCompare(b.desde ?? ""));
+  return movs;
+}
 
 /** Una línea de 105 campos (línea principal, tipo 00). */
 export function lineaPrevired(
@@ -120,24 +147,12 @@ export function lineaPrevired(
   A(12, TIPO_TRAB_COD[t.tipoTrabajador] ?? "0");
   N(13, Math.min(30, Math.max(0, t.diasTrabajados)));
   A(14, "00"); // Línea principal
-  // Movimiento de personal: 1 = contratación (fecha desde) / 2 = retiro (fecha hasta).
-  // Sin fechas de ausentismo en la BD, los días <30 por inasistencia van sin movimiento
-  // (Previred lo acepta con advertencia). CONFIRMAR códigos 3-8 cuando se modelen.
-  const pIni = `${periodo}-01`;
-  const pFin = `${periodo}-31`;
-  const enPeriodo = (iso: string | null): boolean => {
-    const s = (iso ?? "").slice(0, 10);
-    return !!s && s >= pIni && s <= pFin;
-  };
-  const ingresoMes = enPeriodo(t.fechaIngreso);
-  const retiroMes = enPeriodo(t.fechaTermino);
-  const ausenciaMes = enPeriodo(t.ausenciaDesde) && enPeriodo(t.ausenciaHasta);
-  if (retiroMes) {
-    A(15, "2"); A(16, ingresoMes ? fmtFechaPrev(t.fechaIngreso) : ""); A(17, fmtFechaPrev(t.fechaTermino));
-  } else if (ingresoMes) {
-    A(15, "1"); A(16, fmtFechaPrev(t.fechaIngreso)); A(17, "");
-  } else if (ausenciaMes) {
-    A(15, "4"); A(16, fmtFechaPrev(t.ausenciaDesde)); A(17, fmtFechaPrev(t.ausenciaHasta)); // permiso/ausencia sin goce
+  // Movimiento de personal (campos 15-17): el primero del mes va en la línea
+  // principal; los demás salen como líneas adicionales (tipo 01) en lineasPrevired.
+  const movs = movimientosDelMes(periodo, t);
+  const m0 = movs[0];
+  if (m0) {
+    A(15, m0.codigo); A(16, fmtFechaPrev(m0.desde)); A(17, fmtFechaPrev(m0.hasta));
   } else {
     A(15, "0"); A(16, ""); A(17, ""); // sin movimiento en el mes
   }
@@ -183,7 +198,7 @@ export function lineaPrevired(
   // 84,85,87..91 montos CCAF: 0
 
   // RIMA / Jornada / Expectativa / Rentabilidad (92..95)
-  N(92, 0); // RIMA (solo mov. 3/6)
+  N(92, m0 && (m0.codigo === "3" || m0.codigo === "6") ? t.rima : 0); // RIMA (solo mov. 3/6)
   A(93, t.jornada === "parcial" ? "2" : "1"); // Tipo de jornada (obligatorio)
   N(94, esAfp && t.tipoTrabajador === "activo" ? Math.round(r.baseImponible * (t.tasaSeguroSocial || 0) / 100) : 0); // Cotización 0,9% seguro social
   A(95, "1"); // Rentabilidad protegida
@@ -208,11 +223,68 @@ export function lineaPrevired(
   return f.slice(1, 106).join(";");
 }
 
-/** Archivo completo: una línea por trabajador, separadas por salto de línea. */
+/**
+ * Línea adicional (tipo 01) para el 2° y siguientes movimientos de personal del
+ * mes: identifica al trabajador y lleva solo el movimiento con sus fechas (los
+ * montos y cotizaciones van únicamente en la línea principal). CONFIRMAR contra
+ * archivo KAME en la primera carga con multi-movimiento.
+ */
+function lineaAdicionalPrevired(
+  periodo: string,
+  emp: DatosPreviredEmpresa,
+  t: DatosPreviredTrabajador,
+  mov: MovimientoPersonal,
+): string {
+  const mmaaaa = `${periodo.slice(5, 7)}${periodo.slice(0, 4)}`;
+  const mutualCod = codigoDe(MUTUAL_COD, emp.mutual) ?? MUTUAL_COD[emp.mutual ?? ""] ?? "00";
+  const f: string[] = new Array(106).fill("0");
+  const A = (i: number, v: string) => { f[i] = v; };
+  const N = (i: number, v: number) => { f[i] = ent(v); };
+  A(1, t.rutSinDv); A(2, t.dv.toUpperCase());
+  A(3, alfa(t.apellidoPaterno)); A(4, alfa(t.apellidoMaterno)); A(5, alfa(t.nombres));
+  A(6, (t.sexo ?? "").toLowerCase().startsWith("f") ? "F" : "M");
+  A(7, (t.nacionalidad ?? "").toLowerCase().startsWith("chil") || (t.nacionalidad ?? "") === "" ? "0" : "1");
+  A(8, "1"); A(9, mmaaaa); A(10, "0");
+  A(11, REGIMEN_COD[t.regimen] ?? "AFP");
+  A(12, TIPO_TRAB_COD[t.tipoTrabajador] ?? "0");
+  N(13, 0); // los días trabajados van solo en la línea principal
+  A(14, "01"); // línea adicional
+  A(15, mov.codigo); A(16, fmtFechaPrev(mov.desde)); A(17, fmtFechaPrev(mov.hasta));
+  A(18, t.tramoAsignacion ?? "D");
+  A(25, "N");
+  A(41, "1"); A(46, "");
+  A(51, ""); A(52, ""); A(53, ""); A(54, "");
+  A(56, "01/01/1900"); A(57, "01/01/1900"); A(58, ""); A(61, "1");
+  A(62, "0"); A(67, "");
+  A(75, "00"); A(76, ""); A(78, "1");
+  A(83, "00"); A(86, "");
+  N(92, mov.codigo === "3" || mov.codigo === "6" ? t.rima : 0);
+  A(93, t.jornada === "parcial" ? "2" : "1");
+  A(95, "1");
+  A(96, mutualCod); A(99, "");
+  A(103, "0"); A(104, "");
+  A(105, alfa(t.centroCosto));
+  return f.slice(1, 106).join(";");
+}
+
+/** Todas las líneas de un trabajador: principal + una adicional por cada movimiento extra. */
+export function lineasPrevired(
+  periodo: string,
+  emp: DatosPreviredEmpresa,
+  t: DatosPreviredTrabajador,
+): string[] {
+  const movs = movimientosDelMes(periodo, t);
+  return [
+    lineaPrevired(periodo, emp, t),
+    ...movs.slice(1).map((m) => lineaAdicionalPrevired(periodo, emp, t, m)),
+  ];
+}
+
+/** Archivo completo: una o más líneas por trabajador, separadas por salto de línea. */
 export function generarNominaPrevired(
   periodo: string,
   emp: DatosPreviredEmpresa,
   trabajadores: DatosPreviredTrabajador[],
 ): string {
-  return trabajadores.map((t) => lineaPrevired(periodo, emp, t)).join("\r\n") + "\r\n";
+  return trabajadores.flatMap((t) => lineasPrevired(periodo, emp, t)).join("\r\n") + "\r\n";
 }
