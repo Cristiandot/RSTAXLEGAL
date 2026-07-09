@@ -217,6 +217,10 @@ export function calcularLiquidacion(e: EntradaLiquidacion): ResultadoLiquidacion
   else if (e.gratificacionTipo === "manual") gratificacion = pesos(e.gratificacionMonto ?? 0);
   if (e.gratificacionTipo === "25" && pesos(sueldoBase * 0.25) > topeGratif)
     notas.push("Gratificación topada en 4,75 IMM ÷ 12.");
+  if (e.sueldoEmpresarial && gratificacion > 0) {
+    gratificacion = 0;
+    notas.push("Sueldo empresarial: sin gratificación legal (el socio/dueño no es trabajador dependiente).");
+  }
 
   // Horas extras
   let horasExtras = 0;
@@ -258,8 +262,16 @@ export function calcularLiquidacion(e: EntradaLiquidacion): ResultadoLiquidacion
   const tasaAfp = buscarTasaAfp(e.afp, e.ind.tasasAfp);
   let afpMonto = 0;
   if (cotizaPrevision && e.regimenPrevisional === "afp") {
-    if (tasaAfp) afpMonto = pesos((baseImponible * tasaAfp.tasaTrabajador) / 100);
-    else notas.push(e.afp ? `AFP "${e.afp}" no identificada en indicadores — no se descontó AFP.` : "Sin AFP — no se descontó AFP.");
+    if (tasaAfp) {
+      // Sueldo empresarial: el SIS es de cargo del propio socio (no hay empleador
+      // obligado) y se entera junto a la cotización AFP, como lo declara KAME.
+      const tasaSisSocio = e.sueldoEmpresarial ? e.ind.tasaSis : 0;
+      afpMonto = pesos((baseImponible * (tasaAfp.tasaTrabajador + tasaSisSocio)) / 100);
+      if (tasaSisSocio > 0)
+        notas.push(`Sueldo empresarial: SIS ${e.ind.tasaSis}% de cargo del socio, incluido en la cotización AFP (${(tasaAfp.tasaTrabajador + tasaSisSocio).toFixed(2)}%).`);
+    } else {
+      notas.push(e.afp ? `AFP "${e.afp}" no identificada en indicadores — no se descontó AFP.` : "Sin AFP — no se descontó AFP.");
+    }
   }
 
   // Salud: 7% legal; si es isapre con plan mayor, la diferencia es adicional.
@@ -326,7 +338,7 @@ export function calcularLiquidacion(e: EntradaLiquidacion): ResultadoLiquidacion
 
   // ---------- COSTOS DEL EMPLEADOR ----------
   const sisEmpleador =
-    cotizaPrevision && e.tipoTrabajador !== "pensionado_no_cotiza"
+    cotizaPrevision && e.tipoTrabajador !== "pensionado_no_cotiza" && !e.sueldoEmpresarial
       ? pesos((baseImponible * e.ind.tasaSis) / 100)
       : 0;
   let tasaAfcEmpleador = 0;
@@ -334,7 +346,8 @@ export function calcularLiquidacion(e: EntradaLiquidacion): ResultadoLiquidacion
   else if (e.tipoContrato === "plazo_fijo" || e.tipoContrato === "casa_particular") tasaAfcEmpleador = 0.03;
   else if (e.tipoContrato === "indefinido") tasaAfcEmpleador = e.mas11Anios ? 0.008 : 0.024;
   const afcEmpleador = pesos(baseImponibleAfc * tasaAfcEmpleador);
-  const mutualEmpleador = pesos((baseImponible * e.mutualTasa) / 100);
+  // Mutual (accidentes del trabajo): no aplica al socio con sueldo empresarial (sin subordinación).
+  const mutualEmpleador = e.sueldoEmpresarial ? 0 : pesos((baseImponible * e.mutualTasa) / 100);
 
   return {
     sueldoBase,
