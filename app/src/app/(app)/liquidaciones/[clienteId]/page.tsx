@@ -20,7 +20,7 @@ export default async function ClienteLiquidacionPage({
     supabase
       .from("clientes")
       .select(
-        "id, razon_social, rut_empresa, mutual_institucion, mutual_tasa, caja_compensacion, sabado_habil",
+        "id, razon_social, rut_empresa, previred_rut, mutual_institucion, mutual_tasa, caja_compensacion, sabado_habil",
       )
       .eq("id", clienteId)
       .maybeSingle(),
