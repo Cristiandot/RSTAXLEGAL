@@ -193,7 +193,7 @@ export async function enviarCorreoComunicacion(
     total += montoPrevired;
     cuerpoTabla += filaSeccion(
       "Imposiciones (Previred)",
-      com.plazo_previred ? fechaLarga(com.plazo_previred) : null,
+      com.plazo_previred ? `${fechaLarga(com.plazo_previred)} a las 13:45 hrs` : null,
     );
     if (centros.length > 0) {
       for (const c of centros) {
@@ -219,7 +219,7 @@ export async function enviarCorreoComunicacion(
     total += montoF29;
     cuerpoTabla += filaSeccion(
       "Formulario 29 (SII)",
-      com.plazo_f29 ? fechaLarga(com.plazo_f29) : null,
+      com.plazo_f29 ? `${fechaLarga(com.plazo_f29)} a las 23:59 hrs` : null,
     );
     cuerpoTabla += filaDetalle("Monto a pagar F29", formatMonto(montoF29));
     cuerpoTabla += filaBoton("Pagar el F29 en el SII", URL_PAGO_F29);
