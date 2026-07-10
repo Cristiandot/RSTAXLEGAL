@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Eye, FileText, Search } from "lucide-react";
+import { CLASE_FILA_DESTACADA, useGestionUrl } from "@/hooks/use-gestion-url";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { MOTIVO_AMONESTACION_LABEL } from "@/lib/amonestaciones";
 import { TIPO_PERMISO_LABEL } from "@/lib/permisos";
@@ -195,6 +196,8 @@ export function GestionesClient({
   const [estadoF, setEstadoF] = useState("");
   const [viendo, setViendo] = useState<GestionRow | null>(null);
   const [ocupado, startAccion] = useTransition();
+  // Deep-link desde Inicio y requerimientos: abre el detalle y destaca la fila.
+  const gestionDestacada = useGestionUrl(filas, setViendo);
 
   const selectCls =
     "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -303,7 +306,12 @@ export function GestionesClient({
               </TableRow>
             ) : (
               filtradas.map((f) => (
-                <TableRow key={f.id} onClick={() => setViendo(f)} className="cursor-pointer">
+                <TableRow
+                  key={f.id}
+                  id={`gestion-${f.id}`}
+                  onClick={() => setViendo(f)}
+                  className={`cursor-pointer ${f.id === gestionDestacada ? CLASE_FILA_DESTACADA : ""}`}
+                >
                   <TableCell>
                     <Badge variant="outline" className={claseTipo(f.tipo)}>
                       {TIPO_LABEL[f.tipo] ?? f.tipo}

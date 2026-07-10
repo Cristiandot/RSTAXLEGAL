@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle, Calculator, CheckCircle2, Download, FileSpreadsheet, FileText, Landmark, Mail, Search, Send, Trash2 } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
+import { CLASE_FILA_DESTACADA, useGestionUrl } from "@/hooks/use-gestion-url";
 import {
   diasParaLimite,
   plazoArt177,
@@ -133,6 +134,8 @@ export function FiniquitosClient({
   errorCarga: string | null;
 }) {
   const router = useRouter();
+  // Deep-link desde Inicio y requerimientos: destaca la fila y hace scroll.
+  const gestionDestacada = useGestionUrl(filas);
   const [buscar, setBuscar] = useState("");
   const [estadoF, setEstadoF] = useState("");
   const [borrando, setBorrando] = useState<FiniquitoRow | null>(null);
@@ -364,7 +367,11 @@ export function FiniquitosClient({
               </TableRow>
             ) : (
               filtradas.map((f) => (
-                <TableRow key={f.id}>
+                <TableRow
+                  key={f.id}
+                  id={`gestion-${f.id}`}
+                  className={f.id === gestionDestacada ? CLASE_FILA_DESTACADA : undefined}
+                >
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={seleccionados.has(f.id)}

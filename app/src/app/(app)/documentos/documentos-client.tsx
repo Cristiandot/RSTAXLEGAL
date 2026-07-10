@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { FileText, Calculator } from "lucide-react";
 import { actualizarEstadoDocumento, type EstadoDoc } from "./actions";
 import { formatFecha } from "@/lib/format";
+import { CLASE_FILA_DESTACADA, useGestionUrl } from "@/hooks/use-gestion-url";
 
 export type SolicitudDocRow = {
   id: string;
@@ -50,6 +51,8 @@ export function DocumentosClient({
   const [fArea, setFArea] = useState("todas");
   const [fEstado, setFEstado] = useState("pendientes");
   const [ocupado, startAccion] = useTransition();
+  // Deep-link desde Inicio y requerimientos: destaca la fila y hace scroll.
+  const gestionDestacada = useGestionUrl(filas);
 
   const visibles = useMemo(() => {
     return filas.filter((f) => {
@@ -124,7 +127,11 @@ export function DocumentosClient({
             {visibles.map((f) => {
               const e = ESTADOS.find((x) => x.value === f.estado)!;
               return (
-                <tr key={f.id} className="border-b last:border-0">
+                <tr
+                  key={f.id}
+                  id={`gestion-${f.id}`}
+                  className={`border-b last:border-0 ${f.id === gestionDestacada ? CLASE_FILA_DESTACADA : ""}`}
+                >
                   <td className="px-3 py-2">{f.empresa}</td>
                   <td className="px-3 py-2">
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">

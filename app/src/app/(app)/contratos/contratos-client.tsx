@@ -6,6 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { AlertTriangle, Download, FilePlus2, Pencil, Receipt, Search, Send, Trash2 } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
+import { CLASE_FILA_DESTACADA, useGestionUrl } from "@/hooks/use-gestion-url";
 import {
   calcularLiquidacionEjemplo,
   type LiquidacionEjemplo,
@@ -117,6 +118,8 @@ export function ContratosClient({
   const [buscar, setBuscar] = useState("");
   const [estadoF, setEstadoF] = useState("");
   const [ocupado, startAccion] = useTransition();
+  // Deep-link desde Inicio y requerimientos: destaca la fila y hace scroll.
+  const gestionDestacada = useGestionUrl(filas);
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
@@ -319,7 +322,11 @@ export function ContratosClient({
               </TableRow>
             ) : (
               filtradas.map((f) => (
-                <TableRow key={f.id}>
+                <TableRow
+                  key={f.id}
+                  id={`gestion-${f.id}`}
+                  className={f.id === gestionDestacada ? CLASE_FILA_DESTACADA : undefined}
+                >
                   <TableCell className="font-medium">
                     <span className="block max-w-[200px] truncate" title={f.trabajador}>{f.trabajador}</span>
                   </TableCell>

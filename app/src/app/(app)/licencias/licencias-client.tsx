@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { ClipboardCopy, Plus, Search, Stethoscope } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { formatearRut } from "@/lib/rut";
+import { CLASE_FILA_DESTACADA, useGestionUrl } from "@/hooks/use-gestion-url";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
 import {
@@ -108,6 +109,8 @@ export function LicenciasClient({
   const [orden, setOrden] = useState<Orden>(null);
   const [viendo, setViendo] = useState<LicenciaRow | null>(null);
   const [mostrarForm, setMostrarForm] = useState(true);
+  // Deep-link desde Inicio y requerimientos: abre el detalle y destaca la fila.
+  const gestionDestacada = useGestionUrl(filas, setViendo);
 
   const empresas = useMemo(
     () => [...new Set(filas.map((f) => f.empresa))].sort((a, b) => a.localeCompare(b, "es")),
@@ -267,7 +270,12 @@ export function LicenciasClient({
               filtradas.map((f) => {
                 const vigente = licenciaVigente(f.inicio, f.termino, hoy);
                 return (
-                  <TableRow key={f.id} onClick={() => setViendo(f)} className="cursor-pointer">
+                  <TableRow
+                    key={f.id}
+                    id={`gestion-${f.id}`}
+                    onClick={() => setViendo(f)}
+                    className={`cursor-pointer ${f.id === gestionDestacada ? CLASE_FILA_DESTACADA : ""}`}
+                  >
                     <TableCell className="max-w-[220px] truncate font-medium">
                       {f.empresa}
                     </TableCell>

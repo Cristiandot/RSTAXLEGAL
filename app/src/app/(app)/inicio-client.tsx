@@ -280,7 +280,7 @@ export function InicioClient({
         </TableCell>
         <TableCell>
           <Link
-            href={TIPO_GESTION_HREF[g.tipo] ?? "/"}
+            href={`${TIPO_GESTION_HREF[g.tipo] ?? "/"}?gestion=${g.gestion_id}`}
             className="inline-flex items-center gap-1 text-sm font-medium text-[var(--brand-teal,#17A2B8)] hover:underline"
           >
             Abrir
