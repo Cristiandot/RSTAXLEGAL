@@ -115,6 +115,7 @@ export type ComunicacionRow = {
   estado: string; // 'Enviado' | 'Pendiente'
   grupo_id: string | null; // grupos_cliente: empresas del mismo cliente van en un solo correo
   grupo_nombre: string | null;
+  dnp_declarado: boolean; // el ciclo de Liquidaciones quedó con DNP (declaración sin pago)
 };
 
 /** Centro de costo con su monto Previred (tabla comunicacion_previred). */

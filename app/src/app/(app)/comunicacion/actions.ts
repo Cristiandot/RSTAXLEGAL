@@ -144,6 +144,14 @@ function filaSeccion(
   return `<tr><td colspan="2" style="padding:14px 0 6px;font-weight:bold;color:#0b2545;border-bottom:2px solid #0b2545;">${titulo}${plazo}</td></tr>`;
 }
 
+/**
+ * Aviso de DNP dentro de la sección de imposiciones: el período se declaró
+ * sin pago, con la recomendación de pagarlo dentro del mes.
+ */
+function filaAvisoDnp(): string {
+  return `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #ef9f27;background:#faeeda;border-radius:6px;padding:10px 12px;font-size:12px;color:#633806;line-height:1.55;"><strong style="color:#854f0b;">Cotizaciones declaradas sin pago (DNP).</strong> Las imposiciones de este período quedaron declaradas pero pendientes de pago. Le recomendamos pagarlas dentro del mes, para no tener problemas con las cotizaciones previsionales de sus trabajadores.</div></td></tr>`;
+}
+
 /** Fila con botón de pago directo al portal correspondiente (Previred / SII). */
 function filaBoton(texto: string, url: string): string {
   return `<tr><td colspan="2" style="padding:10px 0 2px;"><a href="${url}" style="display:inline-block;background:#0b2545;color:#ffffff;text-decoration:none;font-weight:bold;font-size:13px;padding:9px 16px;border-radius:6px;">${texto} →</a></td></tr>`;
@@ -283,6 +291,7 @@ export async function enviarCorreoComunicacion(
           formatMonto(montoPrevired),
         );
       }
+      if (emp.dnp_declarado) cuerpoTabla += filaAvisoDnp();
       if (!esGrupo) cuerpoTabla += filaBoton("Pagar en Previred", URL_PREVIRED);
     }
 

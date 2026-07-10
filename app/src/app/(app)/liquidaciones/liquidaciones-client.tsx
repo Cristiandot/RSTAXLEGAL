@@ -49,11 +49,12 @@ const ESTADOS = [
   "DNP declarado",
 ];
 
-// Único paso marcable en la grilla: liquidaciones enviadas al cliente. El
-// aviso de pago Previred al cliente vive en Comunicación mensual, que toma el
-// monto de acá.
+// Pasos marcables en la grilla: liquidaciones enviadas al cliente y si el
+// período quedó con DNP (declaración sin pago). Ambos viajan a Comunicación
+// mensual, que toma el monto de acá y advierte el DNP en el correo.
 const PASOS = [
   { columna: "fecha_liquidaciones_enviadas", label: "Liq. enviadas" },
+  { columna: "fecha_dnp_declarado", label: "DNP" },
 ] satisfies { columna: keyof LiquidacionRow; label: string }[];
 
 const selectCls =
@@ -343,7 +344,7 @@ export function LiquidacionesClient({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={10}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -407,8 +408,10 @@ export function LiquidacionesClient({
                         aria-label={p.label}
                         title={
                           c[p.columna]
-                            ? `Liquidaciones enviadas el ${formatFecha(c[p.columna])}`
-                            : "Marcar liquidaciones enviadas (estampa la fecha de hoy)"
+                            ? `${p.label} · ${formatFecha(c[p.columna])}`
+                            : p.columna === "fecha_dnp_declarado"
+                              ? "Marcar si el período quedó con DNP (declaración sin pago) — se advierte en la Comunicación mensual"
+                              : "Marcar liquidaciones enviadas (estampa la fecha de hoy)"
                         }
                       />
                     </TableCell>

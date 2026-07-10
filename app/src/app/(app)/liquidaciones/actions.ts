@@ -95,6 +95,7 @@ const COLUMNAS_PASO = new Set([
   "fecha_liquidaciones_enviadas",
   "fecha_datos_nomina_ok",
   "fecha_liq_confirmadas",
+  "fecha_dnp_declarado",
 ]);
 
 /**

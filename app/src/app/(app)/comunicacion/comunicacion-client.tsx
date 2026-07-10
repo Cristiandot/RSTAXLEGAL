@@ -335,6 +335,15 @@ export function ComunicacionClient({
                   <TableCell><RutCopiable rut={c.rut_empresa} /></TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatMonto(c.monto_previred)}
+                    {c.dnp_declarado ? (
+                      <Badge
+                        variant="outline"
+                        className="ml-1.5 border-amber-200 bg-amber-50 text-amber-700"
+                        title="Período declarado sin pago (DNP) — el correo incluye la advertencia"
+                      >
+                        DNP
+                      </Badge>
+                    ) : null}
                   </TableCell>
                   <TableCell className="text-center">
                     {c.previred_centros > 0 ? (
@@ -426,6 +435,13 @@ export function ComunicacionClient({
                     {formatMonto(editando.previred_total_ciclo)}
                   </span>
                 </div>
+                {editando.dnp_declarado ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                    Período declarado <strong>sin pago (DNP)</strong> en
+                    Liquidaciones: el correo incluirá la advertencia y la
+                    recomendación de pagar dentro del mes.
+                  </div>
+                ) : null}
                 {centrosEdit.map((c, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <Input
