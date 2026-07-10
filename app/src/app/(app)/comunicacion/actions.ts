@@ -98,6 +98,26 @@ function fechaLarga(iso: string): string {
   return `${DIAS_SEMANA[dow]} ${formatFecha(iso)}`;
 }
 
+/** Días desde hoy (Chile) al plazo: 0 = hoy, 1 = mañana, negativo = vencido. */
+function diasAlPlazo(iso: string): number {
+  const hoy = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+  }).format(new Date());
+  const [y1, m1, d1] = hoy.split("-").map(Number);
+  const [y2, m2, d2] = iso.split("-").map(Number);
+  return Math.round(
+    (Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86400000,
+  );
+}
+
+function etiquetaDiasRestantes(iso: string): string {
+  const n = diasAlPlazo(iso);
+  if (n < 0) return "plazo vencido";
+  if (n === 0) return "vence hoy";
+  if (n === 1) return "queda 1 día";
+  return `quedan ${n} días`;
+}
+
 const tdIzq = `padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;`;
 const tdDer = `padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;`;
 
@@ -105,8 +125,22 @@ function filaDetalle(concepto: string, monto: string, negrita = false): string {
   return `<tr><td style="${tdIzq}${negrita ? "font-weight:bold;color:#0a1a2f;" : ""}">${concepto}</td><td style="${tdDer}${negrita ? "font-weight:bold;" : ""}">${monto}</td></tr>`;
 }
 
-function filaSeccion(titulo: string, plazo: string | null): string {
-  return `<tr><td colspan="2" style="padding:14px 0 6px;font-weight:bold;color:#0b2545;border-bottom:2px solid #0b2545;">${titulo}${plazo ? `<span style="font-weight:normal;color:#64748b;font-size:12px;"> — vence el ${plazo}</span>` : ""}</td></tr>`;
+/**
+ * Encabezado de sección. El plazo se destaca en rojo con la cuenta regresiva
+ * de días calculada al momento del envío (pedido Cristian 10-07-2026).
+ */
+function filaSeccion(
+  titulo: string,
+  plazoIso: string | null,
+  hora?: string,
+): string {
+  let plazo = "";
+  if (plazoIso) {
+    plazo =
+      `<span style="font-weight:bold;color:#a32d2d;font-size:12px;"> — vence el ${fechaLarga(plazoIso)}${hora ? ` a las ${hora}` : ""}</span>` +
+      `<span style="display:inline-block;background:#fcebeb;border:1px solid #f09595;color:#a32d2d;font-weight:bold;font-size:11px;padding:2px 9px;border-radius:10px;margin-left:8px;">${etiquetaDiasRestantes(plazoIso)}</span>`;
+  }
+  return `<tr><td colspan="2" style="padding:14px 0 6px;font-weight:bold;color:#0b2545;border-bottom:2px solid #0b2545;">${titulo}${plazo}</td></tr>`;
 }
 
 /** Fila con botón de pago directo al portal correspondiente (Previred / SII). */
@@ -225,7 +259,8 @@ export async function enviarCorreoComunicacion(
       hayPrevired = true;
       cuerpoTabla += filaSeccion(
         "Imposiciones (Previred)",
-        emp.plazo_previred ? `${fechaLarga(emp.plazo_previred)} a las 13:45 hrs` : null,
+        emp.plazo_previred,
+        "13:45 hrs",
       );
       if (centros.length > 0) {
         for (const c of centros) {
@@ -255,7 +290,8 @@ export async function enviarCorreoComunicacion(
       hayF29 = true;
       cuerpoTabla += filaSeccion(
         "Formulario 29 (SII)",
-        emp.plazo_f29 ? `${fechaLarga(emp.plazo_f29)} a las 23:59 hrs` : null,
+        emp.plazo_f29,
+        "23:59 hrs",
       );
       cuerpoTabla += filaDetalle("Monto a pagar F29", formatMonto(montoF29));
       if (!esGrupo) cuerpoTabla += filaBoton("Pagar el F29 en el SII", URL_PAGO_F29);
