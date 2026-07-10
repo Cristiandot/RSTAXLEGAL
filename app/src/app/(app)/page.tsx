@@ -13,6 +13,17 @@ function saludoPorHora(): string {
   return "Buenas noches";
 }
 
+/** "jueves 10 de julio de 2026" en hora de Chile. */
+function fechaHoyLarga(): string {
+  return new Intl.DateTimeFormat("es-CL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "America/Santiago",
+  }).format(new Date());
+}
+
 export default async function HomePage() {
   const usuario = await getUsuarioActual();
   const primerNombre = usuario.nombre.split(" ")[0];
@@ -44,7 +55,8 @@ export default async function HomePage() {
           {saludoPorHora()}, {primerNombre}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {usuario.nombre} · {usuario.rol} · {usuario.correo}
+          {usuario.nombre} · {usuario.rol} ·{" "}
+          <span className="capitalize">{fechaHoyLarga()}</span>
         </p>
       </header>
 

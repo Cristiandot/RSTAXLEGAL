@@ -37,6 +37,63 @@ import {
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
+/** Color semántico del estado de la gestión (pendiente=ámbar, avanzada=celeste). */
+function claseEstadoGestion(estado: string): string {
+  switch (estado) {
+    case "solicitada":
+    case "solicitado":
+    case "por_tramitar":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "generado":
+    case "en_revision":
+      return "border-sky-200 bg-sky-50 text-sky-700";
+    case "aprobada":
+    case "aprobado":
+    case "enviada":
+    case "enviado":
+    case "tramitada":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "rechazada":
+    case "anulado":
+      return "border-red-200 bg-red-50 text-red-700";
+    default:
+      return "border-slate-200 bg-slate-100 text-slate-600";
+  }
+}
+
+/** Mini indicador de carga de trabajo sobre la bandeja. */
+function KpiTile({
+  label,
+  valor,
+  alerta = false,
+  activo = false,
+  onClick,
+}: {
+  label: string;
+  valor: number;
+  alerta?: boolean;
+  activo?: boolean;
+  onClick?: () => void;
+}) {
+  const Comp = onClick ? "button" : "div";
+  return (
+    <Comp
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={`card-soft rounded-xl bg-card px-4 py-3 text-left transition ${
+        onClick ? "cursor-pointer hover:-translate-y-0.5" : ""
+      } ${activo ? "ring-2 ring-[var(--brand-teal,#17A2B8)]" : ""}`}
+    >
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div
+        className={`mt-0.5 text-2xl font-semibold ${alerta && valor > 0 ? "text-red-600" : ""}`}
+      >
+        {valor}
+      </div>
+    </Comp>
+  );
+}
+
 const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
@@ -130,7 +187,12 @@ function CalendarioGestiones({
       </div>
       <div className="grid grid-cols-7 gap-1.5 text-center">
         {DIAS_SEMANA.map((d, i) => (
-          <div key={i} className="py-1.5 text-xs font-semibold tracking-wide text-muted-foreground">
+          <div
+            key={i}
+            className={`py-1.5 text-xs font-semibold tracking-wide ${
+              i >= 5 ? "text-muted-foreground/60" : "text-muted-foreground"
+            }`}
+          >
             {d}
           </div>
         ))}
@@ -216,6 +278,8 @@ export function InicioClient({
   }, [pendientes, buscar, tipoF, respF, diaSel]);
 
   const sinAsignar = pendientes.filter((g) => g.responsable_id === null).length;
+  const atrasadas = pendientes.filter((g) => diasDesde(g.created_at) > 7).length;
+  const nuevasSemana = pendientes.filter((g) => diasDesde(g.created_at) <= 7).length;
 
   function asignar(g: GestionRow, responsableId: string | null) {
     startAsignar(async () => {
@@ -231,8 +295,13 @@ export function InicioClient({
 
   function filaGestion(g: GestionRow, esHistorial: boolean) {
     const dias = diasDesde(g.created_at);
+    const href = `${TIPO_GESTION_HREF[g.tipo] ?? "/"}?gestion=${g.gestion_id}`;
     return (
-      <TableRow key={`${g.fuente}-${g.gestion_id}`}>
+      <TableRow
+        key={`${g.fuente}-${g.gestion_id}`}
+        onClick={() => router.push(href)}
+        className="cursor-pointer"
+      >
         <TableCell>
           <Badge variant="outline" className={claseTipoGestion(g.tipo)}>
             {TIPO_GESTION_LABEL[g.tipo] ?? g.tipo}
@@ -252,18 +321,24 @@ export function InicioClient({
           </span>
         </TableCell>
         <TableCell>
-          <span className="text-sm">{formatFecha(fechaLocal(g.created_at))}</span>
+          <span className="text-sm tabular-nums">{formatFecha(fechaLocal(g.created_at))}</span>
           {!esHistorial ? (
-            <span
-              className={`ml-1.5 text-xs ${dias > 7 ? "font-semibold text-red-600" : dias > 3 ? "text-amber-600" : "text-muted-foreground"}`}
-            >
-              {dias === 0 ? "hoy" : `hace ${dias} d`}
-            </span>
+            dias > 7 ? (
+              <span className="ml-1.5 inline-flex rounded-full border border-red-200 bg-red-50 px-1.5 py-px text-[11px] font-semibold text-red-700">
+                hace {dias} días
+              </span>
+            ) : (
+              <span
+                className={`ml-1.5 text-xs ${dias > 3 ? "font-medium text-amber-600" : "text-muted-foreground"}`}
+              >
+                {dias === 0 ? "hoy" : `hace ${dias} d`}
+              </span>
+            )
           ) : null}
         </TableCell>
         <TableCell>
-          <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">
-            {g.estado}
+          <Badge variant="outline" className={claseEstadoGestion(g.estado)}>
+            {g.estado.replace(/_/g, " ")}
           </Badge>
         </TableCell>
         <TableCell onClick={(e) => e.stopPropagation()}>
@@ -293,9 +368,9 @@ export function InicioClient({
             </div>
           )}
         </TableCell>
-        <TableCell>
+        <TableCell onClick={(e) => e.stopPropagation()}>
           <Link
-            href={`${TIPO_GESTION_HREF[g.tipo] ?? "/"}?gestion=${g.gestion_id}`}
+            href={href}
             className="inline-flex items-center gap-1 text-sm font-medium text-[var(--brand-teal,#17A2B8)] hover:underline"
           >
             Abrir
@@ -314,13 +389,8 @@ export function InicioClient({
             Requerimientos de la oficina
           </h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">
-              {pendientes.length} gestiones pendientes
-            </span>
-            {sinAsignar > 0 ? (
-              <span className="font-medium text-red-600"> · {sinAsignar} sin asignar</span>
-            ) : null}{" "}
-            — todo lo que llega de los clientes, para asignar y trabajar.
+            Todo lo que llega de los clientes, para asignar y trabajar. Clic en
+            una fila para ir directo a la gestión.
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -348,9 +418,23 @@ export function InicioClient({
         </div>
       ) : null}
 
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <KpiTile label="Gestiones pendientes" valor={pendientes.length} />
+        <KpiTile
+          label="Sin asignar"
+          valor={sinAsignar}
+          alerta
+          activo={respF === "sin"}
+          onClick={() => setRespF(respF === "sin" ? "" : "sin")}
+        />
+        <KpiTile label="Esperando +7 días" valor={atrasadas} alerta />
+        <KpiTile label="Recibidas últimos 7 días" valor={nuevasSemana} />
+      </div>
+
       <div className="grid gap-5 lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_460px]">
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="card-soft rounded-xl bg-card">
+            <div className="flex flex-wrap items-center gap-2 border-b p-3">
             <div className="relative">
               <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -399,9 +483,7 @@ export function InicioClient({
             <span className="ml-auto text-sm text-muted-foreground">
               {filtradas.length} de {pendientes.length}
             </span>
-          </div>
-
-          <div className="card-soft rounded-xl bg-card">
+            </div>
             <Table stickyHeader>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
