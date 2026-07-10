@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getUsuarioActual } from "@/lib/auth";
 import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
+import { correosCopiaCliente } from "@/lib/correos-cliente";
 import { etiquetaPeriodo } from "@/lib/periodos";
 import { formatFecha, formatMonto } from "@/lib/format";
 import type { ComunicacionRow } from "@/lib/ciclos";
@@ -375,6 +376,11 @@ export async function enviarCorreoComunicacion(
   const usuario = await getUsuarioActual();
   const res = await enviarCorreo({
     para: destino,
+    // Copia a los correos adicionales de todas las empresas del cliente.
+    cc: await correosCopiaCliente(
+      empresas.map((e) => e.cliente_id),
+      [destino],
+    ),
     asunto: `Resumen de pagos ${etiqueta} — RS Tax & Legal`,
     html: htmlCorreoDocumento({
       titulo: `Resumen de pagos · ${etiqueta}`,

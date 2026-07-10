@@ -16,7 +16,7 @@ export default async function EmpresasPage() {
       supabase
         .from("clientes")
         .select(
-          "id, razon_social, rut_empresa, grupo_id, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono",
+          "id, razon_social, rut_empresa, grupo_id, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, correos_adicionales, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono",
         )
         .order("razon_social"),
       supabase
@@ -98,6 +98,9 @@ export default async function EmpresasPage() {
       faltan: pctPorEmpresa.get(e.id)?.faltan ?? 0,
       valores,
       socios: Array.isArray(e.socios) ? (e.socios as Socio[]) : [],
+      correos_adicionales: Array.isArray(e.correos_adicionales)
+        ? (e.correos_adicionales as string[])
+        : [],
     };
   });
 

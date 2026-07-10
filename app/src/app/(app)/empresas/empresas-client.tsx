@@ -34,7 +34,13 @@ import {
   type FaltanteRow,
   type GrupoClienteOpcion,
 } from "@/lib/onboarding";
-import { agregarSocio, quitarSocio, type Socio } from "./actions";
+import {
+  agregarCorreoAdicional,
+  agregarSocio,
+  quitarCorreoAdicional,
+  quitarSocio,
+  type Socio,
+} from "./actions";
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -52,7 +58,103 @@ export type EmpresaFichaRow = {
   /** Valor mostrable de cada campo de la ficha; null = falta (editable). */
   valores: Record<string, string | null>;
   socios: Socio[];
+  /** Correos adicionales: todo envío al cliente va con copia a esta lista. */
+  correos_adicionales: string[];
 };
+
+/** Sección dedicada: correos adicionales del cliente, agregables sin límite. */
+function CorreosCard({ empresa }: { empresa: EmpresaFichaRow }) {
+  const router = useRouter();
+  const [correo, setCorreo] = useState("");
+  const [trabajando, start] = useTransition();
+
+  function agregar() {
+    if (!correo.trim() || trabajando) return;
+    start(async () => {
+      const res = await agregarCorreoAdicional(empresa.id, correo);
+      if (res.ok) {
+        toast.success("Correo agregado");
+        setCorreo("");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al agregar el correo");
+    });
+  }
+
+  function quitar(i: number) {
+    start(async () => {
+      const res = await quitarCorreoAdicional(empresa.id, i);
+      if (res.ok) {
+        toast.success("Correo quitado");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al quitar el correo");
+    });
+  }
+
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="mb-1 flex items-center justify-between text-sm font-semibold">
+        <span>Correos adicionales</span>
+        {empresa.correos_adicionales.length ? (
+          <span className="font-normal text-muted-foreground">
+            {empresa.correos_adicionales.length} en copia
+          </span>
+        ) : null}
+      </div>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Todo correo que se envía al cliente (F29, resumen de pagos, facturas,
+        contratos) sale con copia a esta lista, además del correo de la empresa.
+      </p>
+
+      {empresa.correos_adicionales.length ? (
+        <div className="mb-3 space-y-1">
+          {empresa.correos_adicionales.map((c, i) => (
+            <div
+              key={`${c}-${i}`}
+              className="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm"
+            >
+              <span className="min-w-0 flex-1 truncate">{c}</span>
+              <button
+                type="button"
+                className="rounded p-0.5 text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                title="Quitar correo"
+                disabled={trabajando}
+                onClick={() => quitar(i)}
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mb-3 text-sm text-muted-foreground">
+          Sin correos adicionales.
+        </p>
+      )}
+
+      <div className="flex items-end gap-2">
+        <Input
+          className="h-8 flex-1 bg-card text-sm"
+          type="email"
+          placeholder="otro.correo@cliente.cl"
+          value={correo}
+          onChange={(e) => setCorreo(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") agregar();
+          }}
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8"
+          disabled={trabajando || !correo.trim()}
+          onClick={agregar}
+        >
+          <Plus className="size-4" /> Agregar
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 /** Sección dedicada: socios con RUT y % de participación, agregables. */
 function SociosCard({ empresa }: { empresa: EmpresaFichaRow }) {
@@ -446,6 +548,9 @@ export function EmpresasClient({
                   </div>
                   {grupo === "Identificación" ? (
                     <SociosCard empresa={empSel} />
+                  ) : null}
+                  {defs.some((d) => d.campo === "correo_empresa") ? (
+                    <CorreosCard empresa={empSel} />
                   ) : null}
                 </div>
               ))}

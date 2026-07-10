@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getUsuarioActual } from "@/lib/auth";
 import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
+import { correosCopiaCliente } from "@/lib/correos-cliente";
 import { etiquetaPeriodo } from "@/lib/periodos";
 import { formatFecha, formatMonto } from "@/lib/format";
 
@@ -259,6 +260,7 @@ export async function enviarCorreoF29(
   const usuario = await getUsuarioActual();
   const res = await enviarCorreo({
     para: destino,
+    cc: await correosCopiaCliente([row.cliente_id], [destino]),
     asunto: `F29 ${etiqueta} — RS Tax & Legal`,
     html: htmlCorreoDocumento({ titulo: `F29 período ${etiqueta}`, cuerpo }),
     de: { nombre: usuario.nombre, correo: usuario.correo },
@@ -353,6 +355,7 @@ export async function enviarCorreoF29Pagado(
   const usuario = await getUsuarioActual();
   const res = await enviarCorreo({
     para: destino,
+    cc: await correosCopiaCliente([row.cliente_id], [destino]),
     asunto: `F29 ${etiqueta} pagado — RS Tax & Legal`,
     html: htmlCorreoDocumento({ titulo: `F29 período ${etiqueta} — Pagado`, cuerpo }),
     de: { nombre: usuario.nombre, correo: usuario.correo },

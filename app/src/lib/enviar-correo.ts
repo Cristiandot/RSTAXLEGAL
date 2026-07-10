@@ -21,6 +21,7 @@ export async function enviarCorreo({
   html,
   adjuntos,
   de,
+  cc,
 }: {
   para: string;
   asunto: string;
@@ -28,6 +29,8 @@ export async function enviarCorreo({
   adjuntos?: Adjunto[];
   /** Usuario conectado que envía — el correo sale a su nombre. */
   de?: { nombre: string; correo: string };
+  /** Copias visibles — correos adicionales del cliente. */
+  cc?: string[];
 }): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -51,6 +54,7 @@ export async function enviarCorreo({
     body: JSON.stringify({
       from,
       to: [para],
+      ...(cc && cc.length > 0 ? { cc } : {}),
       subject: asunto,
       html,
       attachments: adjuntos,

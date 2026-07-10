@@ -6,6 +6,7 @@ import { getUsuarioActual } from "@/lib/auth";
 import { nombreArchivo } from "@/lib/format";
 import { generarYSubirContrato, generarYSubirAnexo } from "@/lib/contrato-generacion";
 import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
+import { correosCopiaCliente } from "@/lib/correos-cliente";
 
 const TRANSICIONES: Record<string, string[]> = {
   solicitado: ["generado", "anulado"],
@@ -119,7 +120,7 @@ export async function enviarContratoAlCliente(
   const { data: con } = await supabase
     .from("contratos")
     .select(
-      "id, estado, documento_path, tipo_documento, clientes(razon_social, correo_empresa), trabajadores(nombres, apellidos)",
+      "id, estado, documento_path, tipo_documento, cliente_id, clientes(razon_social, correo_empresa), trabajadores(nombres, apellidos)",
     )
     .eq("id", contratoId)
     .single();
@@ -150,6 +151,7 @@ export async function enviarContratoAlCliente(
   const res = await enviarCorreo({
     de: { nombre: usuario.nombre, correo: usuario.correo },
     para: cli.correo_empresa,
+    cc: await correosCopiaCliente([con.cliente_id], [cli.correo_empresa]),
     asunto: `Contrato de trabajo — ${trabajador} · ${cli.razon_social}`,
     html: htmlCorreoDocumento({
       titulo: "Contrato de trabajo listo",
