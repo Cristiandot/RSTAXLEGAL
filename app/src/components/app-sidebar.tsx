@@ -42,7 +42,14 @@ function iniciales(nombre: string): string {
   return (a + b).toUpperCase() || "?";
 }
 
-export function AppSidebar({ usuario }: { usuario: UsuarioSesion }) {
+export function AppSidebar({
+  usuario,
+  gestionesPendientes = 0,
+}: {
+  usuario: UsuarioSesion;
+  /** Gestiones sin terminar (v_gestiones_oficina) — puntito rojo en Inicio. */
+  gestionesPendientes?: number;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const secciones = modulosVisibles(usuario.rol);
@@ -94,10 +101,19 @@ export function AppSidebar({ usuario }: { usuario: UsuarioSesion }) {
                       <SidebarMenuButton
                         render={<Link href={m.href} />}
                         isActive={enRuta}
-                        tooltip={m.label}
+                        tooltip={
+                          m.key === "inicio" && gestionesPendientes > 0
+                            ? `${m.label} — ${gestionesPendientes} pendientes`
+                            : m.label
+                        }
                       >
                         <m.icon />
                         <span>{m.label}</span>
+                        {m.key === "inicio" && gestionesPendientes > 0 ? (
+                          <span className="ml-auto flex size-5 shrink-0 items-center justify-center rounded-full bg-red-500 text-[10px] font-semibold text-white">
+                            {gestionesPendientes > 99 ? "99+" : gestionesPendientes}
+                          </span>
+                        ) : null}
                       </SidebarMenuButton>
                     ) : (
                       <SidebarMenuButton

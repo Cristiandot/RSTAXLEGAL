@@ -1,4 +1,3 @@
-import Link from "next/link";
 import {
   Users,
   Wallet,
@@ -8,14 +7,12 @@ import {
 } from "lucide-react";
 import { getUsuarioActual } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { modulosVisibles, type Modulo } from "@/lib/modules";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import type { GestionRow } from "@/lib/gestiones";
+import type { UsuarioOpcion } from "@/lib/ciclos";
+import { Card, CardHeader } from "@/components/ui/card";
+import { InicioClient } from "./inicio-client";
+
+export const metadata = { title: "Inicio y requerimientos — RS Tax & Legal" };
 
 function saludoPorHora(): string {
   const hora = new Date().getHours();
@@ -64,58 +61,34 @@ function StatCard({
   );
 }
 
-function ModuloCard({ m }: { m: Modulo }) {
-  const activo = m.estado === "activo";
-  const Icon = m.icon;
-
-  const inner = (
-    <Card
-      className={`card-soft h-full border-transparent transition ${
-        activo ? "hover:-translate-y-0.5" : "opacity-70"
-      }`}
-    >
-      <CardHeader>
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <span
-            className={`flex size-10 items-center justify-center rounded-xl ${
-              activo
-                ? "bg-accent text-[var(--brand-teal)]"
-                : "bg-muted text-muted-foreground"
-            }`}
-          >
-            <Icon className="size-5" />
-          </span>
-          {!activo ? (
-            <Badge variant="secondary" className="font-normal">
-              {m.estado === "desarrollo" ? "En desarrollo" : "Próximamente"}
-            </Badge>
-          ) : null}
-        </div>
-        <CardTitle className="text-base">{m.label}</CardTitle>
-        <CardDescription>{m.descripcion}</CardDescription>
-      </CardHeader>
-    </Card>
-  );
-
-  if (!activo) return inner;
-  return (
-    <Link href={m.href} className="block">
-      {inner}
-    </Link>
-  );
-}
-
 export default async function HomePage() {
   const usuario = await getUsuarioActual();
-  const secciones = modulosVisibles(usuario.rol);
   const primerNombre = usuario.nombre.split(" ")[0];
+  const supabase = await createClient();
 
-  const [activos, previred, f29, contab] = await Promise.all([
-    contar({ activo: true }),
-    contar({ activo: true, hace_liquidaciones: true }),
-    contar({ activo: true, hace_f29: true }),
-    contar({ activo: true, hace_contabilidad_completa: true }),
-  ]);
+  const [activos, previred, f29, contab, pendientesRes, historialRes, usuariosRes] =
+    await Promise.all([
+      contar({ activo: true }),
+      contar({ activo: true, hace_liquidaciones: true }),
+      contar({ activo: true, hace_f29: true }),
+      contar({ activo: true, hace_contabilidad_completa: true }),
+      supabase
+        .from("v_gestiones_oficina")
+        .select("*")
+        .eq("pendiente", true)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("v_gestiones_oficina")
+        .select("*")
+        .eq("pendiente", false)
+        .order("updated_at", { ascending: false })
+        .limit(40),
+      supabase
+        .from("usuarios")
+        .select("id, nombre")
+        .eq("activo", true)
+        .order("nombre"),
+    ]);
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
@@ -155,20 +128,12 @@ export default async function HomePage() {
         />
       </section>
 
-      <div className="space-y-7">
-        {secciones.map((seccion) => (
-          <section key={seccion.seccion}>
-            <h2 className="mb-3 text-sm font-semibold tracking-wide text-muted-foreground uppercase">
-              {seccion.seccion}
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {seccion.modulos.map((m) => (
-                <ModuloCard key={m.key} m={m} />
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
+      <InicioClient
+        pendientes={(pendientesRes.data ?? []) as GestionRow[]}
+        historial={(historialRes.data ?? []) as GestionRow[]}
+        usuarios={(usuariosRes.data ?? []) as UsuarioOpcion[]}
+        errorCarga={pendientesRes.error?.message ?? null}
+      />
     </main>
   );
 }

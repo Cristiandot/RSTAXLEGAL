@@ -25,6 +25,7 @@ import {
   Home,
   Scale,
   Send,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 
@@ -60,6 +61,20 @@ export type SeccionModulos = {
  * esté construido, cambiar su `estado` a "activo" y crear su ruta.
  */
 export const MODULOS: SeccionModulos[] = [
+  {
+    seccion: "Inicio",
+    modulos: [
+      {
+        key: "inicio",
+        label: "Inicio y requerimientos",
+        descripcion:
+          "Bandeja de la oficina: todas las gestiones pendientes (contratos, anexos, finiquitos y lo que llegue) con asignación al equipo y calendario.",
+        href: "/",
+        icon: Inbox,
+        estado: "activo",
+      },
+    ],
+  },
   {
     seccion: "Ciclos mensuales",
     modulos: [
