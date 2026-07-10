@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Search } from "lucide-react";
-import { formatFecha, formatMonto } from "@/lib/format";
+import { formatFecha } from "@/lib/format";
 import { SelectorPeriodo } from "@/components/selector-periodo";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
@@ -15,7 +15,7 @@ import {
   type LiquidacionRow,
   type UsuarioOpcion,
 } from "@/lib/ciclos";
-import { guardarLiquidacion, marcarPaso } from "./actions";
+import { actualizarMontoPrevired, guardarLiquidacion, marcarPaso } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,30 +49,46 @@ const ESTADOS = [
   "DNP declarado",
 ];
 
-// Pasos marcables con checkbox inline (columna en BD → etiqueta de columna)
+// Único paso marcable en la grilla: liquidaciones enviadas al cliente. El
+// aviso de pago Previred al cliente vive en Comunicación mensual, que toma el
+// monto de acá.
 const PASOS = [
-  { columna: "fecha_consulta_enviada", label: "En espera detalle" },
-  { columna: "fecha_detalle_recibido", label: "Envío liquidac." },
-  { columna: "fecha_liquidaciones_enviadas", label: "Envío previred" },
+  { columna: "fecha_liquidaciones_enviadas", label: "Liq. enviadas" },
 ] satisfies { columna: keyof LiquidacionRow; label: string }[];
-
-// Checklist de control de la migración KAME → Claude. Marcas independientes que
-// el usuario activa cuando la nómina queda lista y cuando los cálculos cuadran.
-const CHECKLIST_NOMINA = [
-  {
-    columna: "fecha_datos_nomina_ok",
-    label: "Datos nómina",
-    titulo: "Todos los trabajadores de la nómina tienen sus datos cargados",
-  },
-  {
-    columna: "fecha_liq_confirmadas",
-    label: "Liq. confirmadas",
-    titulo: "Liquidaciones confirmadas: el cálculo cuadra con KAME",
-  },
-] satisfies { columna: keyof LiquidacionRow; label: string; titulo: string }[];
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** Input de monto que guarda al salir del campo o con Enter (patrón F29). */
+function MontoInline({
+  valor,
+  disabled,
+  onGuardar,
+}: {
+  valor: number | string | null;
+  disabled: boolean;
+  onGuardar: (monto: string) => void;
+}) {
+  const [texto, setTexto] = useState(valor === null ? "" : String(valor));
+  const original = valor === null ? "" : String(valor);
+  return (
+    <Input
+      type="number"
+      inputMode="numeric"
+      placeholder="—"
+      className="h-8 w-32 bg-card text-right tabular-nums"
+      value={texto}
+      disabled={disabled}
+      onChange={(e) => setTexto(e.target.value)}
+      onBlur={() => {
+        if (texto !== original) onGuardar(texto);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+    />
+  );
+}
 
 function ResumenCard({ label, valor }: { label: string; valor: number }) {
   return (
@@ -171,6 +187,16 @@ export function LiquidacionesClient({
       const res = await marcarPaso(cicloId, columna, hecho);
       if (res.ok) router.refresh();
       else toast.error(res.error ?? "Error al actualizar");
+    });
+  }
+
+  function guardarMonto(cicloId: string, monto: string) {
+    startMarcar(async () => {
+      const res = await actualizarMontoPrevired(cicloId, monto);
+      if (res.ok) {
+        toast.success("Monto guardado");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al guardar el monto");
     });
   }
 
@@ -305,25 +331,19 @@ export function LiquidacionesClient({
               <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
               <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>
               <ThSort col="dias" orden={orden} setOrden={setOrden} className="text-center">Días</ThSort>
-              {CHECKLIST_NOMINA.map((p) => (
-                <TableHead key={p.columna} className="text-center" title={p.titulo}>
-                  {p.label}
-                </TableHead>
-              ))}
               {PASOS.map((p) => (
                 <TableHead key={p.columna} className="text-center">
                   {p.label}
                 </TableHead>
               ))}
-              <ThSort col="pagado" orden={orden} setOrden={setOrden}>Pagado / DNP</ThSort>
-              <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Monto</ThSort>
+              <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Monto Previred</ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={14}
+                  colSpan={9}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -372,27 +392,6 @@ export function LiquidacionesClient({
                   >
                     {c.dias_restantes_previred ?? "—"}
                   </TableCell>
-                  {CHECKLIST_NOMINA.map((p) => (
-                    <TableCell
-                      key={p.columna}
-                      className="text-center"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Checkbox
-                        checked={c[p.columna] !== null}
-                        disabled={marcando}
-                        onCheckedChange={(v) =>
-                          toggle(c.ciclo_id, p.columna, v === true)
-                        }
-                        aria-label={p.titulo}
-                        title={
-                          c[p.columna]
-                            ? `${p.label} · ${formatFecha(c[p.columna])}`
-                            : p.titulo
-                        }
-                      />
-                    </TableCell>
-                  ))}
                   {PASOS.map((p) => (
                     <TableCell
                       key={p.columna}
@@ -406,12 +405,21 @@ export function LiquidacionesClient({
                           toggle(c.ciclo_id, p.columna, v === true)
                         }
                         aria-label={p.label}
+                        title={
+                          c[p.columna]
+                            ? `Liquidaciones enviadas el ${formatFecha(c[p.columna])}`
+                            : "Marcar liquidaciones enviadas (estampa la fecha de hoy)"
+                        }
                       />
                     </TableCell>
                   ))}
-                  <TableCell>{formatFecha(c.fecha_previred_pagado ?? c.fecha_dnp_declarado)}</TableCell>
-                  <TableCell className="text-right">
-                    {formatMonto(c.monto_previred_total)}
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <MontoInline
+                      key={`${c.ciclo_id}-${c.monto_previred_total ?? ""}`}
+                      valor={c.monto_previred_total}
+                      disabled={marcando}
+                      onGuardar={(m) => guardarMonto(c.ciclo_id, m)}
+                    />
                   </TableCell>
                 </TableRow>
               ))
@@ -448,8 +456,9 @@ export function LiquidacionesClient({
             </DialogHeader>
 
             <p className="text-xs text-muted-foreground">
-              Los pasos En espera de detalle · Envío de liquidaciones · Envío
-              previred se marcan con los checkboxes de la tabla.
+              El paso «Liquidaciones enviadas» se marca con el checkbox de la
+              tabla. El aviso de pago al cliente se envía desde Comunicación
+              mensual, que toma el monto Previred registrado acá.
             </p>
 
             <form

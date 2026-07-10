@@ -69,6 +69,25 @@ export async function guardarLiquidacion(
   return { ok: true };
 }
 
+/**
+ * Edición rápida inline del monto Previred desde la tabla. Este monto es el
+ * que usa Comunicación mensual como total de imposiciones del período (cuando
+ * la empresa no tiene centros de costo cargados).
+ */
+export async function actualizarMontoPrevired(
+  cicloId: string,
+  monto: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("ciclo_liquidaciones")
+    .update({ monto_previred_total: monto === null || monto === "" ? null : monto })
+    .eq("id", cicloId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/liquidaciones");
+  return { ok: true };
+}
+
 /** Columnas-fecha permitidas para los pasos marcables con checkbox. */
 const COLUMNAS_PASO = new Set([
   "fecha_consulta_enviada",
