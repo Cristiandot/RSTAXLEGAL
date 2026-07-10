@@ -41,7 +41,7 @@ const MESES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
-const DIAS_SEMANA = ["L", "M", "M", "J", "V", "S", "D"];
+const DIAS_SEMANA = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 /** "2026-07-10" local de un timestamptz ISO. */
 function fechaLocal(iso: string): string {
@@ -95,27 +95,42 @@ function CalendarioGestiones({
   ];
   const hoyIso = hoyLocal();
 
+  const enMesActual = anio === hoy.getFullYear() && mes === hoy.getMonth();
+
   return (
-    <div className="card-soft rounded-xl bg-card p-4">
-      <div className="mb-2 flex items-center justify-between">
+    <div className="card-soft h-fit rounded-xl bg-card p-5">
+      <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <CalendarDays className="size-4 text-muted-foreground" />
-          <span className="text-sm font-semibold">
+          <CalendarDays className="size-5 text-[var(--brand-teal,#17A2B8)]" />
+          <span className="font-heading text-lg font-semibold">
             {MESES[mes]} {anio}
           </span>
         </div>
         <div className="flex items-center gap-1">
+          {!enMesActual ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => {
+                setAnio(hoy.getFullYear());
+                setMes(hoy.getMonth());
+              }}
+            >
+              Hoy
+            </Button>
+          ) : null}
           <Button variant="ghost" size="icon" onClick={() => mover(-1)} aria-label="Mes anterior">
-            <ChevronLeft className="size-4" />
+            <ChevronLeft className="size-5" />
           </Button>
           <Button variant="ghost" size="icon" onClick={() => mover(1)} aria-label="Mes siguiente">
-            <ChevronRight className="size-4" />
+            <ChevronRight className="size-5" />
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center">
+      <div className="grid grid-cols-7 gap-1.5 text-center">
         {DIAS_SEMANA.map((d, i) => (
-          <div key={i} className="py-1 text-[11px] font-medium text-muted-foreground">
+          <div key={i} className="py-1.5 text-xs font-semibold tracking-wide text-muted-foreground">
             {d}
           </div>
         ))}
@@ -131,18 +146,18 @@ function CalendarioGestiones({
               type="button"
               onClick={() => onDia(sel ? null : iso)}
               title={n > 0 ? `${n} gestión(es) recibidas el ${formatFecha(iso)}` : formatFecha(iso)}
-              className={`relative flex h-11 flex-col items-center justify-center rounded-md text-sm transition ${
+              className={`relative flex h-14 flex-col items-center justify-center rounded-lg text-base transition sm:h-16 ${
                 sel
-                  ? "bg-[var(--brand-teal,#17A2B8)] font-semibold text-white"
+                  ? "bg-[var(--brand-teal,#17A2B8)] font-semibold text-white shadow-sm"
                   : n > 0
                     ? "bg-accent font-medium hover:bg-accent/70"
                     : "hover:bg-muted"
-              } ${esHoy && !sel ? "ring-1 ring-[var(--brand-teal,#17A2B8)]" : ""}`}
+              } ${esHoy && !sel ? "ring-2 ring-[var(--brand-teal,#17A2B8)]" : ""}`}
             >
               <span className="leading-none">{dia}</span>
               {n > 0 ? (
                 <span
-                  className={`mt-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold leading-none ${
+                  className={`mt-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none ${
                     sel ? "bg-white/25 text-white" : "bg-red-500 text-white"
                   }`}
                 >
@@ -153,9 +168,9 @@ function CalendarioGestiones({
           );
         })}
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        El número indica gestiones pendientes recibidas ese día. Clic en un día
-        filtra la bandeja; clic de nuevo la limpia.
+      <p className="mt-3 text-xs text-muted-foreground">
+        El número rojo indica gestiones pendientes recibidas ese día. Clic en un
+        día filtra la bandeja; clic de nuevo la limpia.
       </p>
     </div>
   );
@@ -293,15 +308,19 @@ export function InicioClient({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-2">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-heading text-xl font-semibold tracking-tight">
+          <h2 className="font-heading text-2xl font-semibold tracking-tight">
             Requerimientos de la oficina
           </h2>
-          <p className="text-sm text-muted-foreground">
-            {pendientes.length} gestiones pendientes
-            {sinAsignar > 0 ? ` · ${sinAsignar} sin asignar` : ""} — todo lo que
-            llega de los clientes, para asignar y trabajar.
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">
+              {pendientes.length} gestiones pendientes
+            </span>
+            {sinAsignar > 0 ? (
+              <span className="font-medium text-red-600"> · {sinAsignar} sin asignar</span>
+            ) : null}{" "}
+            — todo lo que llega de los clientes, para asignar y trabajar.
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -312,7 +331,7 @@ export function InicioClient({
                 key={t}
                 type="button"
                 onClick={() => setTipoF(tipoF === t ? "" : t)}
-                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                   tipoF === t ? "ring-2 ring-ring" : ""
                 } ${claseTipoGestion(t)}`}
               >
@@ -329,7 +348,7 @@ export function InicioClient({
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-5 lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_460px]">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
