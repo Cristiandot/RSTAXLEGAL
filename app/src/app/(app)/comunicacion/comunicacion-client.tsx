@@ -198,6 +198,16 @@ export function ComunicacionClient({
     },
   ];
 
+  // Empresas hermanas del mismo grupo (cliente con varias empresas): el correo
+  // sale consolidado con el detalle de todas las que tengan montos.
+  const hermanas = editando?.grupo_id
+    ? filas.filter(
+        (f) =>
+          f.grupo_id === editando.grupo_id &&
+          f.comunicacion_id !== editando.comunicacion_id,
+      )
+    : [];
+
   const facturasEditando = editando
     ? (facturasPorCliente.get(editando.cliente_id) ?? [])
     : [];
@@ -398,6 +408,15 @@ export function ComunicacionClient({
             </DialogHeader>
 
             <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+              {hermanas.length > 0 ? (
+                <div className="rounded-lg border border-sky-200 bg-sky-50 p-2.5 text-sm text-sky-800">
+                  Cliente <strong>{editando.grupo_nombre}</strong>: el correo
+                  sale consolidado con el detalle separado por empresa e
+                  incluirá también{" "}
+                  {hermanas.map((h) => h.razon_social).join(", ")} (las que
+                  tengan montos del período). El envío queda marcado en todas.
+                </div>
+              ) : null}
               {/* Imposiciones Previred por centro de costo */}
               <div className="space-y-2 rounded-lg border border-input bg-card p-3">
                 <div className="flex items-center justify-between">

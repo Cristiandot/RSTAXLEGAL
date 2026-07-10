@@ -114,6 +114,11 @@ function filaBoton(texto: string, url: string): string {
   return `<tr><td colspan="2" style="padding:10px 0 2px;"><a href="${url}" style="display:inline-block;background:#0b2545;color:#ffffff;text-decoration:none;font-weight:bold;font-size:13px;padding:9px 16px;border-radius:6px;">${texto} →</a></td></tr>`;
 }
 
+/** Banda de encabezado por empresa (solo correos de grupo con varias empresas). */
+function filaEmpresa(razon: string, rut: string | null): string {
+  return `<tr><td colspan="2" style="padding:10px 12px;background:#0b2545;color:#ffffff;font-weight:bold;font-size:14px;">${razon}${rut ? `<span style="font-weight:normal;color:#b9c6dc;font-size:12px;"> · RUT ${rut}</span>` : ""}</td></tr>`;
+}
+
 const URL_PREVIRED = "https://www.previred.com/";
 const URL_PAGO_F29 =
   "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?https://www4.sii.cl/propuestaf29ui/index.html#/default";
@@ -155,29 +160,136 @@ export async function enviarCorreoComunicacion(
       .eq("id", com.cliente_id);
   }
 
+  // Comunicación por CLIENTE: si la empresa pertenece a un grupo, el correo
+  // consolida todas las empresas del grupo en el período, cada una con su
+  // propio detalle y subtotal.
+  let empresas: ComunicacionRow[] = [com];
+  if (com.grupo_id) {
+    const { data: grupoRows } = await supabase
+      .from("v_comunicacion_mensual")
+      .select("*")
+      .eq("grupo_id", com.grupo_id)
+      .eq("periodo", com.periodo)
+      .order("razon_social");
+    if (grupoRows && grupoRows.length > 0) {
+      empresas = grupoRows as ComunicacionRow[];
+    }
+  }
+
   const [centrosRes, facturasRes] = await Promise.all([
     supabase
       .from("comunicacion_previred")
-      .select("centro_costo, monto, orden")
-      .eq("comunicacion_id", comunicacionId)
+      .select("comunicacion_id, centro_costo, monto, orden")
+      .in("comunicacion_id", empresas.map((e) => e.comunicacion_id))
       .order("orden"),
     supabase
       .from("facturas")
-      .select("folio, periodo, monto")
-      .eq("cliente_id", com.cliente_id)
+      .select("cliente_id, folio, periodo, monto")
+      .in("cliente_id", empresas.map((e) => e.cliente_id))
       .eq("tipo", "factura")
       .eq("pagada", false)
       .order("folio"),
   ]);
-  const centros = centrosRes.data ?? [];
-  const facturas = facturasRes.data ?? [];
+  const todosCentros = centrosRes.data ?? [];
+  const todasFacturas = facturasRes.data ?? [];
 
-  const montoPrevired =
-    com.monto_previred !== null ? Number(com.monto_previred) : null;
-  const montoF29 = com.monto_f29 !== null ? Number(com.monto_f29) : null;
-  const totalFacturas = facturas.reduce((s, f) => s + Number(f.monto ?? 0), 0);
+  const esGrupo = empresas.length > 1;
+  const etiqueta = etiquetaPeriodo(com.periodo);
+  let cuerpoTabla = "";
+  let total = 0;
+  let hayPrevired = false;
+  let hayF29 = false;
+  const idsIncluidos: string[] = [];
 
-  if (!montoPrevired && !montoF29 && facturas.length === 0) {
+  for (const emp of empresas) {
+    const centros = todosCentros.filter(
+      (c) => c.comunicacion_id === emp.comunicacion_id,
+    );
+    const facturas = todasFacturas.filter((f) => f.cliente_id === emp.cliente_id);
+    const montoPrevired =
+      emp.monto_previred !== null ? Number(emp.monto_previred) : null;
+    const montoF29 = emp.monto_f29 !== null ? Number(emp.monto_f29) : null;
+    const totalFacturas = facturas.reduce((s, f) => s + Number(f.monto ?? 0), 0);
+
+    // Empresas del grupo sin nada que cobrar quedan fuera del correo.
+    if (!montoPrevired && !montoF29 && facturas.length === 0) continue;
+    idsIncluidos.push(emp.comunicacion_id);
+    let subtotal = 0;
+
+    if (esGrupo) {
+      cuerpoTabla += filaEmpresa(emp.razon_social, emp.rut_empresa);
+    }
+
+    if (montoPrevired !== null && montoPrevired > 0) {
+      subtotal += montoPrevired;
+      hayPrevired = true;
+      cuerpoTabla += filaSeccion(
+        "Imposiciones (Previred)",
+        emp.plazo_previred ? `${fechaLarga(emp.plazo_previred)} a las 13:45 hrs` : null,
+      );
+      if (centros.length > 0) {
+        for (const c of centros) {
+          cuerpoTabla += filaDetalle(
+            c.centro_costo || "Centro de costo",
+            formatMonto(c.monto),
+          );
+        }
+        if (centros.length > 1) {
+          cuerpoTabla += filaDetalle(
+            "Subtotal imposiciones",
+            formatMonto(montoPrevired),
+            true,
+          );
+        }
+      } else {
+        cuerpoTabla += filaDetalle(
+          "Imposiciones del período",
+          formatMonto(montoPrevired),
+        );
+      }
+      if (!esGrupo) cuerpoTabla += filaBoton("Pagar en Previred", URL_PREVIRED);
+    }
+
+    if (montoF29 !== null && montoF29 > 0) {
+      subtotal += montoF29;
+      hayF29 = true;
+      cuerpoTabla += filaSeccion(
+        "Formulario 29 (SII)",
+        emp.plazo_f29 ? `${fechaLarga(emp.plazo_f29)} a las 23:59 hrs` : null,
+      );
+      cuerpoTabla += filaDetalle("Monto a pagar F29", formatMonto(montoF29));
+      if (!esGrupo) cuerpoTabla += filaBoton("Pagar el F29 en el SII", URL_PAGO_F29);
+    }
+
+    if (facturas.length > 0) {
+      subtotal += totalFacturas;
+      cuerpoTabla += filaSeccion("Facturas RS Tax & Legal pendientes de pago", null);
+      for (const f of facturas) {
+        cuerpoTabla += filaDetalle(
+          `Factura N° ${f.folio} · ${etiquetaPeriodo(f.periodo)}`,
+          formatMonto(f.monto),
+        );
+      }
+      if (facturas.length > 1) {
+        cuerpoTabla += filaDetalle(
+          "Subtotal facturas",
+          formatMonto(totalFacturas),
+          true,
+        );
+      }
+    }
+
+    if (esGrupo) {
+      cuerpoTabla += filaDetalle(
+        `Subtotal ${emp.razon_social}`,
+        formatMonto(subtotal),
+        true,
+      );
+    }
+    total += subtotal;
+  }
+
+  if (idsIncluidos.length === 0) {
     return {
       ok: false,
       error:
@@ -185,65 +297,15 @@ export async function enviarCorreoComunicacion(
     };
   }
 
-  const etiqueta = etiquetaPeriodo(com.periodo);
-  let cuerpoTabla = "";
-  let total = 0;
+  cuerpoTabla += `<tr><td style="padding:12px 0;font-weight:bold;font-size:15px;color:#0a1a2f;">Total a pagar${esGrupo ? " (todas las empresas)" : ""}</td><td style="padding:12px 0;text-align:right;font-weight:bold;font-size:15px;">${formatMonto(total)}</td></tr>`;
 
-  if (montoPrevired !== null && montoPrevired > 0) {
-    total += montoPrevired;
-    cuerpoTabla += filaSeccion(
-      "Imposiciones (Previred)",
-      com.plazo_previred ? `${fechaLarga(com.plazo_previred)} a las 13:45 hrs` : null,
-    );
-    if (centros.length > 0) {
-      for (const c of centros) {
-        cuerpoTabla += filaDetalle(
-          c.centro_costo || "Centro de costo",
-          formatMonto(c.monto),
-        );
-      }
-      if (centros.length > 1) {
-        cuerpoTabla += filaDetalle(
-          "Subtotal imposiciones",
-          formatMonto(montoPrevired),
-          true,
-        );
-      }
-    } else {
-      cuerpoTabla += filaDetalle("Imposiciones del período", formatMonto(montoPrevired));
-    }
+  // En correos de grupo los botones van una sola vez, al final del detalle.
+  if (esGrupo && hayPrevired) {
     cuerpoTabla += filaBoton("Pagar en Previred", URL_PREVIRED);
   }
-
-  if (montoF29 !== null && montoF29 > 0) {
-    total += montoF29;
-    cuerpoTabla += filaSeccion(
-      "Formulario 29 (SII)",
-      com.plazo_f29 ? `${fechaLarga(com.plazo_f29)} a las 23:59 hrs` : null,
-    );
-    cuerpoTabla += filaDetalle("Monto a pagar F29", formatMonto(montoF29));
+  if (esGrupo && hayF29) {
     cuerpoTabla += filaBoton("Pagar el F29 en el SII", URL_PAGO_F29);
   }
-
-  if (facturas.length > 0) {
-    total += totalFacturas;
-    cuerpoTabla += filaSeccion("Facturas RS Tax & Legal pendientes de pago", null);
-    for (const f of facturas) {
-      cuerpoTabla += filaDetalle(
-        `Factura N° ${f.folio} · ${etiquetaPeriodo(f.periodo)}`,
-        formatMonto(f.monto),
-      );
-    }
-    if (facturas.length > 1) {
-      cuerpoTabla += filaDetalle(
-        "Subtotal facturas",
-        formatMonto(totalFacturas),
-        true,
-      );
-    }
-  }
-
-  cuerpoTabla += `<tr><td style="padding:12px 0;font-weight:bold;font-size:15px;color:#0a1a2f;">Total a pagar</td><td style="padding:12px 0;text-align:right;font-weight:bold;font-size:15px;">${formatMonto(total)}</td></tr>`;
 
   const cajaTransferencia = `
     <div style="border:1px solid #ef9f27;background:#faeeda;border-radius:8px;padding:14px 16px;margin:0 0 16px;">
@@ -261,9 +323,13 @@ export async function enviarCorreoComunicacion(
       <p style="margin:12px 0 0;"><a href="https://rstaxlegal-panel.vercel.app/datos-transferencia" style="display:inline-block;background:#854f0b;color:#ffffff;text-decoration:none;font-weight:bold;font-size:13px;padding:9px 16px;border-radius:6px;">Copiar datos para transferir →</a></p>
     </div>`;
 
+  const intro = esGrupo
+    ? `Les compartimos el resumen de los pagos del período <strong>${etiqueta}</strong> de sus empresas, con el detalle separado por cada una:`
+    : `Les compartimos el resumen de los pagos del período <strong>${etiqueta}</strong> de <strong>${com.razon_social}</strong>:`;
+
   const cuerpo = `
     <p style="margin:0 0 12px;">Estimados,</p>
-    <p style="margin:0 0 16px;">Les compartimos el resumen de los pagos del período <strong>${etiqueta}</strong> de <strong>${com.razon_social}</strong>:</p>
+    <p style="margin:0 0 16px;">${intro}</p>
     <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;">
       ${cuerpoTabla}
     </table>
@@ -282,10 +348,11 @@ export async function enviarCorreoComunicacion(
   });
   if (!res.ok) return { ok: false, error: res.error };
 
+  // El envío queda registrado en TODAS las empresas incluidas en el correo.
   await supabase
     .from("ciclo_comunicacion")
     .update({ fecha_correo_enviado: new Date().toISOString() })
-    .eq("id", comunicacionId);
+    .in("id", idsIncluidos);
 
   revalidatePath("/comunicacion");
   return { ok: true, enviadoA: destino };

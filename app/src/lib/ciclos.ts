@@ -113,6 +113,8 @@ export type ComunicacionRow = {
   observaciones: string | null;
   fecha_correo_enviado: string | null;
   estado: string; // 'Enviado' | 'Pendiente'
+  grupo_id: string | null; // grupos_cliente: empresas del mismo cliente van en un solo correo
+  grupo_nombre: string | null;
 };
 
 /** Centro de costo con su monto Previred (tabla comunicacion_previred). */
