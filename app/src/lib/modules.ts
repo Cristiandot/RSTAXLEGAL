@@ -24,6 +24,7 @@ import {
   ScrollText,
   Home,
   Scale,
+  Send,
   type LucideIcon,
 } from "lucide-react";
 
@@ -85,6 +86,15 @@ export const MODULOS: SeccionModulos[] = [
         descripcion: "Armado y presentación mensual. Plazo día 20.",
         href: "/f29",
         icon: FileText,
+        estado: "activo",
+      },
+      {
+        key: "comunicacion",
+        label: "Comunicación mensual",
+        descripcion:
+          "Resumen mensual de pagos por empresa: Previred por centro de costo, F29 y facturas RS pendientes, con envío al cliente.",
+        href: "/comunicacion",
+        icon: Send,
         estado: "activo",
       },
       {

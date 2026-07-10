@@ -90,6 +90,49 @@ export type F29Row = {
   observaciones: string | null;
 };
 
+/** Fila de `v_comunicacion_mensual` (resumen mensual de pagos por empresa). */
+export type ComunicacionRow = {
+  comunicacion_id: string;
+  cliente_id: string;
+  periodo: string;
+  razon_social: string;
+  rut_empresa: string | null;
+  correo_empresa: string | null;
+  previred_centros: number;
+  previred_detalle_total: number | string | null; // suma de los centros de costo cargados
+  previred_total_ciclo: number | string | null; // monto_previred_total del ciclo Liquidaciones
+  monto_previred: number | string | null; // efectivo: detalle si hay, si no el del ciclo
+  plazo_previred: string | null;
+  monto_f29_override: number | string | null; // override manual guardado en el módulo
+  monto_f29_ciclo: number | string | null; // monto_a_pagar del ciclo F29
+  monto_f29: number | string | null; // efectivo: override si hay, si no el del ciclo
+  plazo_f29: string | null;
+  facturas_pendientes: number;
+  facturas_pendientes_monto: number | string | null;
+  total_a_pagar: number | string | null;
+  observaciones: string | null;
+  fecha_correo_enviado: string | null;
+  estado: string; // 'Enviado' | 'Pendiente'
+};
+
+/** Centro de costo con su monto Previred (tabla comunicacion_previred). */
+export type CentroCostoRow = {
+  id: string;
+  comunicacion_id: string;
+  centro_costo: string;
+  monto: number | string;
+  orden: number;
+};
+
+/** Factura RS pendiente de pago, para el detalle del mensaje. */
+export type FacturaPendienteRow = {
+  id: string;
+  cliente_id: string;
+  folio: number;
+  periodo: string;
+  monto: number | string | null;
+};
+
 /** Clase de color para el badge de estado (Tailwind). */
 export function claseEstado(estado: string): string {
   switch (estado) {
@@ -97,6 +140,7 @@ export function claseEstado(estado: string): string {
     case "Previred pagado":
     case "DNP declarado":
     case "Conciliado":
+    case "Enviado":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "Cerrado":
       return "border-sky-200 bg-sky-50 text-sky-700";
@@ -107,6 +151,7 @@ export function claseEstado(estado: string): string {
     case "Pendiente Previred":
     case "Pendiente presentación":
     case "Previred listo para pago RS":
+    case "Pendiente":
       return "border-amber-200 bg-amber-50 text-amber-700";
     default:
       return "border-sky-200 bg-sky-50 text-sky-700";
