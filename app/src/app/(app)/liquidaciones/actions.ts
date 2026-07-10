@@ -2,6 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getUsuarioActual } from "@/lib/auth";
+import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
+import { correosCopiaCliente } from "@/lib/correos-cliente";
+import { etiquetaPeriodo } from "@/lib/periodos";
+import { descargarLiquidaciones } from "./[clienteId]/actions";
 
 export type GuardarLiquidacionInput = {
   cicloId: string;
@@ -65,6 +70,83 @@ export async function guardarLiquidacion(
     }
   }
 
+  revalidatePath("/liquidaciones");
+  return { ok: true };
+}
+
+/**
+ * Envía al cliente las liquidaciones del período en un PDF adjunto (una por
+ * página, generado por el módulo de cálculo) y estampa la fecha de envío.
+ * Con `soloMarcar` no envía nada: solo marca enviadas (para empresas cuyas
+ * liquidaciones aún se despachan fuera del panel, p. ej. desde KAME).
+ */
+export async function enviarLiquidacionesCliente(
+  cicloId: string,
+  clienteId: string,
+  periodo: string,
+  soloMarcar: boolean,
+): Promise<{ ok: boolean; error?: string; enviadoA?: string }> {
+  const supabase = await createClient();
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  if (!soloMarcar) {
+    const { data: cli } = await supabase
+      .from("clientes")
+      .select("razon_social, correo_empresa")
+      .eq("id", clienteId)
+      .maybeSingle();
+    const destino = (cli?.correo_empresa ?? "").trim();
+    if (!destino) {
+      return {
+        ok: false,
+        error: `${cli?.razon_social ?? "La empresa"} no tiene correo en su ficha. Cárgalo en Empresas y reintenta.`,
+      };
+    }
+
+    const pdf = await descargarLiquidaciones(clienteId, periodo);
+    if (!pdf.ok || !pdf.base64) {
+      return {
+        ok: false,
+        error: `${pdf.error ?? "No se pudo generar el PDF."} Si las liquidaciones se enviaron fuera del panel, usa «Solo marcar como enviadas».`,
+      };
+    }
+
+    const etiqueta = etiquetaPeriodo(periodo);
+    const usuario = await getUsuarioActual();
+    const res = await enviarCorreo({
+      para: destino,
+      cc: await correosCopiaCliente([clienteId], [destino]),
+      asunto: `Liquidaciones de sueldo ${etiqueta} — RS Tax & Legal`,
+      html: htmlCorreoDocumento({
+        titulo: `Liquidaciones de sueldo · ${etiqueta}`,
+        cuerpo: `
+          <p style="margin:0 0 12px;">Estimados,</p>
+          <p style="margin:0 0 16px;">Adjuntamos las liquidaciones de sueldo de <strong>${cli?.razon_social ?? ""}</strong> correspondientes al período <strong>${etiqueta}</strong>, en un solo PDF (una liquidación por página).</p>
+          <p style="margin:0 0 4px;">Quedamos atentos a cualquier consulta.</p>`,
+      }),
+      adjuntos: [
+        {
+          filename: pdf.filename ?? `LIQUIDACIONES ${etiqueta.toUpperCase()}.pdf`,
+          content: pdf.base64,
+        },
+      ],
+      de: { nombre: usuario.nombre, correo: usuario.correo },
+    });
+    if (!res.ok) return { ok: false, error: res.error };
+
+    await supabase
+      .from("ciclo_liquidaciones")
+      .update({ fecha_liquidaciones_enviadas: hoy })
+      .eq("id", cicloId);
+    revalidatePath("/liquidaciones");
+    return { ok: true, enviadoA: destino };
+  }
+
+  const { error } = await supabase
+    .from("ciclo_liquidaciones")
+    .update({ fecha_liquidaciones_enviadas: hoy })
+    .eq("id", cicloId);
+  if (error) return { ok: false, error: error.message };
   revalidatePath("/liquidaciones");
   return { ok: true };
 }

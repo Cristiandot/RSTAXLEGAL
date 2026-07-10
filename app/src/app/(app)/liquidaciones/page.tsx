@@ -14,14 +14,24 @@ export default async function LiquidacionesPage({
   const periodo = normalizarPeriodo(p);
   const supabase = await createClient();
 
-  const [usuariosRes, filasRes] = await Promise.all([
+  const [usuariosRes, filasRes, comRes] = await Promise.all([
     supabase.from("usuarios").select("id, nombre").eq("activo", true).order("nombre"),
     supabase
       .from("v_checklist_mensual")
       .select("*")
       .eq("periodo", periodo)
       .order("razon_social"),
+    // Estado del envío de Comunicación mensual (indicador Previred de la grilla).
+    supabase
+      .from("ciclo_comunicacion")
+      .select("cliente_id, fecha_correo_enviado")
+      .eq("periodo", periodo),
   ]);
+
+  const comunicacion: Record<string, string | null> = {};
+  for (const c of comRes.data ?? []) {
+    comunicacion[c.cliente_id] = c.fecha_correo_enviado;
+  }
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
@@ -29,6 +39,7 @@ export default async function LiquidacionesPage({
         periodo={periodo}
         filas={(filasRes.data ?? []) as LiquidacionRow[]}
         usuarios={(usuariosRes.data ?? []) as UsuarioOpcion[]}
+        comunicacion={comunicacion}
         errorCarga={filasRes.error?.message ?? null}
       />
     </main>

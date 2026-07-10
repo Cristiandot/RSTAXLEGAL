@@ -15,7 +15,13 @@ import {
   type LiquidacionRow,
   type UsuarioOpcion,
 } from "@/lib/ciclos";
-import { actualizarMontoPrevired, guardarLiquidacion, marcarPaso } from "./actions";
+import {
+  actualizarMontoPrevired,
+  enviarLiquidacionesCliente,
+  guardarLiquidacion,
+  marcarPaso,
+} from "./actions";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,11 +55,10 @@ const ESTADOS = [
   "DNP declarado",
 ];
 
-// Pasos marcables en la grilla: liquidaciones enviadas al cliente y si el
-// período quedó con DNP (declaración sin pago). Ambos viajan a Comunicación
-// mensual, que toma el monto de acá y advierte el DNP en el correo.
+// Único checkbox de la grilla: DNP (declaración sin pago) — viaja a
+// Comunicación mensual, que lo advierte en el correo. Las liquidaciones se
+// envían con el botón de la columna "Liq. enviadas".
 const PASOS = [
-  { columna: "fecha_liquidaciones_enviadas", label: "Liq. enviadas" },
   { columna: "fecha_dnp_declarado", label: "DNP" },
 ] satisfies { columna: keyof LiquidacionRow; label: string }[];
 
@@ -104,11 +109,14 @@ export function LiquidacionesClient({
   periodo,
   filas,
   usuarios,
+  comunicacion,
   errorCarga,
 }: {
   periodo: string;
   filas: LiquidacionRow[];
   usuarios: UsuarioOpcion[];
+  /** cliente_id → fecha de envío del resumen en Comunicación mensual (o null). */
+  comunicacion: Record<string, string | null>;
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -118,8 +126,11 @@ export function LiquidacionesClient({
   const [respF, setRespF] = useState("");
   const [editando, setEditando] = useState<LiquidacionRow | null>(null);
   const [modalidadModal, setModalidadModal] = useState("pago");
+  // Diálogo de envío de liquidaciones por correo (columna "Liq. enviadas").
+  const [envioLiq, setEnvioLiq] = useState<LiquidacionRow | null>(null);
   const [guardando, startGuardar] = useTransition();
   const [marcando, startMarcar] = useTransition();
+  const [enviandoLiq, startEnviarLiq] = useTransition();
 
   const [orden, setOrden] = useState<Orden>(null);
 
@@ -188,6 +199,43 @@ export function LiquidacionesClient({
       const res = await marcarPaso(cicloId, columna, hecho);
       if (res.ok) router.refresh();
       else toast.error(res.error ?? "Error al actualizar");
+    });
+  }
+
+  function enviarLiq(soloMarcar: boolean) {
+    if (!envioLiq) return;
+    const fila = envioLiq;
+    startEnviarLiq(async () => {
+      const res = await enviarLiquidacionesCliente(
+        fila.ciclo_id,
+        fila.cliente_id,
+        fila.periodo,
+        soloMarcar,
+      );
+      if (res.ok) {
+        toast.success(
+          res.enviadoA
+            ? `Liquidaciones enviadas a ${res.enviadoA}`
+            : "Marcadas como enviadas",
+        );
+        setEnvioLiq(null);
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Error al enviar");
+      }
+    });
+  }
+
+  function quitarMarcaLiq() {
+    if (!envioLiq) return;
+    const fila = envioLiq;
+    startEnviarLiq(async () => {
+      const res = await marcarPaso(fila.ciclo_id, "fecha_liquidaciones_enviadas", false);
+      if (res.ok) {
+        toast.success("Marca de envío quitada");
+        setEnvioLiq(null);
+        router.refresh();
+      } else toast.error(res.error ?? "Error al actualizar");
     });
   }
 
@@ -332,11 +380,15 @@ export function LiquidacionesClient({
               <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
               <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>
               <ThSort col="dias" orden={orden} setOrden={setOrden} className="text-center">Días</ThSort>
+              <TableHead className="text-center">Liq. enviadas</TableHead>
               {PASOS.map((p) => (
                 <TableHead key={p.columna} className="text-center">
                   {p.label}
                 </TableHead>
               ))}
+              <TableHead className="text-center" title="Envío del resumen de pagos en Comunicación mensual">
+                Previred
+              </TableHead>
               <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Monto Previred</ThSort>
             </TableRow>
           </TableHeader>
@@ -344,7 +396,7 @@ export function LiquidacionesClient({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={10}
+                  colSpan={11}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -393,6 +445,26 @@ export function LiquidacionesClient({
                   >
                     {c.dias_restantes_previred ?? "—"}
                   </TableCell>
+                  <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => setEnvioLiq(c)}
+                      className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
+                        c.fecha_liquidaciones_enviadas
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                      }`}
+                      title={
+                        c.fecha_liquidaciones_enviadas
+                          ? `Liquidaciones enviadas el ${formatFecha(c.fecha_liquidaciones_enviadas)} — clic para reenviar`
+                          : "Liquidaciones NO enviadas — clic para enviarlas por correo"
+                      }
+                    >
+                      {c.fecha_liquidaciones_enviadas
+                        ? `Enviadas ${formatFecha(c.fecha_liquidaciones_enviadas)}`
+                        : "Enviar"}
+                    </button>
+                  </TableCell>
                   {PASOS.map((p) => (
                     <TableCell
                       key={p.columna}
@@ -409,13 +481,30 @@ export function LiquidacionesClient({
                         title={
                           c[p.columna]
                             ? `${p.label} · ${formatFecha(c[p.columna])}`
-                            : p.columna === "fecha_dnp_declarado"
-                              ? "Marcar si el período quedó con DNP (declaración sin pago) — se advierte en la Comunicación mensual"
-                              : "Marcar liquidaciones enviadas (estampa la fecha de hoy)"
+                            : "Marcar si el período quedó con DNP (declaración sin pago) — se advierte en la Comunicación mensual"
                         }
                       />
                     </TableCell>
                   ))}
+                  <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                    <Link
+                      href={`/comunicacion?periodo=${c.periodo}`}
+                      className={`inline-block rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
+                        comunicacion[c.cliente_id]
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                      }`}
+                      title={
+                        comunicacion[c.cliente_id]
+                          ? `Resumen de pagos enviado el ${formatFecha(comunicacion[c.cliente_id]!.slice(0, 10))} desde Comunicación mensual`
+                          : "Resumen de pagos pendiente — se envía desde Comunicación mensual"
+                      }
+                    >
+                      {comunicacion[c.cliente_id]
+                        ? `Enviado ${formatFecha(comunicacion[c.cliente_id]!.slice(0, 10))}`
+                        : "Pendiente"}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <MontoInline
                       key={`${c.ciclo_id}-${c.monto_previred_total ?? ""}`}
@@ -430,6 +519,78 @@ export function LiquidacionesClient({
           </TableBody>
         </Table>
       </div>
+
+      {/* Diálogo de envío de liquidaciones por correo */}
+      <Dialog
+        open={envioLiq !== null}
+        onOpenChange={(o) => {
+          if (!o) setEnvioLiq(null);
+        }}
+      >
+        {envioLiq ? (
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="font-heading">
+                {envioLiq.fecha_liquidaciones_enviadas
+                  ? "Reenviar liquidaciones"
+                  : "Enviar liquidaciones"}
+              </DialogTitle>
+              <DialogDescription>
+                {envioLiq.razon_social} · Período {envioLiq.periodo}
+              </DialogDescription>
+            </DialogHeader>
+
+            <p className="text-sm text-muted-foreground">
+              Se enviará un PDF con todas las liquidaciones calculadas del
+              período (una por página) al correo de la ficha de la empresa, con
+              copia a sus correos adicionales.
+            </p>
+            {envioLiq.fecha_liquidaciones_enviadas ? (
+              <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-sm text-emerald-700">
+                <span>
+                  Enviadas el {formatFecha(envioLiq.fecha_liquidaciones_enviadas)}.
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                  disabled={enviandoLiq}
+                  onClick={quitarMarcaLiq}
+                >
+                  Quitar marca
+                </Button>
+              </div>
+            ) : null}
+
+            <DialogFooter className="flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEnvioLiq(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={enviandoLiq}
+                onClick={() => enviarLiq(true)}
+                title="Para liquidaciones despachadas fuera del panel (p. ej. KAME): solo estampa la fecha"
+              >
+                Solo marcar como enviadas
+              </Button>
+              <Button
+                type="button"
+                disabled={enviandoLiq}
+                onClick={() => enviarLiq(false)}
+              >
+                {enviandoLiq ? "Enviando…" : "Enviar por correo"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        ) : null}
+      </Dialog>
 
       <Dialog
         open={editando !== null}
