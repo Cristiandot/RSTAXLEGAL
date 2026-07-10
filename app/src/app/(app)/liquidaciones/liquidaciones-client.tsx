@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search } from "lucide-react";
+import { Search, Send } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { SelectorPeriodo } from "@/components/selector-periodo";
 import { comparar, type Orden } from "@/lib/ordenar";
@@ -446,24 +446,40 @@ export function LiquidacionesClient({
                     {c.dias_restantes_previred ?? "—"}
                   </TableCell>
                   <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      onClick={() => setEnvioLiq(c)}
-                      className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
-                        c.fecha_liquidaciones_enviadas
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                          : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                      }`}
-                      title={
-                        c.fecha_liquidaciones_enviadas
-                          ? `Liquidaciones enviadas el ${formatFecha(c.fecha_liquidaciones_enviadas)} — clic para reenviar`
-                          : "Liquidaciones NO enviadas — clic para enviarlas por correo"
-                      }
-                    >
-                      {c.fecha_liquidaciones_enviadas
-                        ? `Enviadas ${formatFecha(c.fecha_liquidaciones_enviadas)}`
-                        : "Enviar"}
-                    </button>
+                    <div className="flex items-center justify-center gap-1.5">
+                      {/* Marcado manual (uso de este mes): tilda cuando las
+                          liquidaciones se enviaron por fuera del panel. */}
+                      <Checkbox
+                        checked={c.fecha_liquidaciones_enviadas !== null}
+                        disabled={marcando}
+                        onCheckedChange={(v) =>
+                          toggle(c.ciclo_id, "fecha_liquidaciones_enviadas", v === true)
+                        }
+                        aria-label="Liquidaciones enviadas"
+                        title={
+                          c.fecha_liquidaciones_enviadas
+                            ? `Liquidaciones enviadas el ${formatFecha(c.fecha_liquidaciones_enviadas)}`
+                            : "Marcar liquidaciones enviadas (estampa la fecha de hoy)"
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setEnvioLiq(c)}
+                        className={`rounded p-1 transition ${
+                          c.fecha_liquidaciones_enviadas
+                            ? "text-emerald-600 hover:bg-emerald-50"
+                            : "text-red-500 hover:bg-red-50"
+                        }`}
+                        title={
+                          c.fecha_liquidaciones_enviadas
+                            ? "Reenviar las liquidaciones por correo (PDF)"
+                            : "Enviar las liquidaciones por correo (PDF) desde el panel"
+                        }
+                        aria-label="Enviar liquidaciones por correo"
+                      >
+                        <Send className="size-4" />
+                      </button>
+                    </div>
                   </TableCell>
                   {PASOS.map((p) => (
                     <TableCell
