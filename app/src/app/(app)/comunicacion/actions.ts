@@ -109,6 +109,15 @@ function filaSeccion(titulo: string, plazo: string | null): string {
   return `<tr><td colspan="2" style="padding:14px 0 6px;font-weight:bold;color:#0b2545;border-bottom:2px solid #0b2545;">${titulo}${plazo ? `<span style="font-weight:normal;color:#64748b;font-size:12px;"> — vence el ${plazo}</span>` : ""}</td></tr>`;
 }
 
+/** Fila con botón de pago directo al portal correspondiente (Previred / SII). */
+function filaBoton(texto: string, url: string): string {
+  return `<tr><td colspan="2" style="padding:10px 0 2px;"><a href="${url}" style="display:inline-block;background:#0b2545;color:#ffffff;text-decoration:none;font-weight:bold;font-size:13px;padding:9px 16px;border-radius:6px;">${texto} →</a></td></tr>`;
+}
+
+const URL_PREVIRED = "https://www.previred.com/";
+const URL_PAGO_F29 =
+  "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?https://www4.sii.cl/propuestaf29ui/index.html#/default";
+
 /**
  * Envía al cliente el resumen consolidado de pagos del período: imposiciones
  * Previred (por centro de costo si hay detalle; si no, el total del ciclo de
@@ -203,6 +212,7 @@ export async function enviarCorreoComunicacion(
     } else {
       cuerpoTabla += filaDetalle("Imposiciones del período", formatMonto(montoPrevired));
     }
+    cuerpoTabla += filaBoton("Pagar en Previred", URL_PREVIRED);
   }
 
   if (montoF29 !== null && montoF29 > 0) {
@@ -212,6 +222,7 @@ export async function enviarCorreoComunicacion(
       com.plazo_f29 ? fechaLarga(com.plazo_f29) : null,
     );
     cuerpoTabla += filaDetalle("Monto a pagar F29", formatMonto(montoF29));
+    cuerpoTabla += filaBoton("Pagar el F29 en el SII", URL_PAGO_F29);
   }
 
   if (facturas.length > 0) {
