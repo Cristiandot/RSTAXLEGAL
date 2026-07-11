@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -80,6 +81,8 @@ export function ComunicacionClient({
   const [montoF29, setMontoF29] = useState("");
   const [correoCli, setCorreoCli] = useState("");
   const [obs, setObs] = useState("");
+  // Checklist previo al envío: incluir (o no) las facturas RS pendientes.
+  const [incluirFact, setIncluirFact] = useState(true);
   const [guardando, startGuardar] = useTransition();
   const [enviando, startEnviar] = useTransition();
 
@@ -111,6 +114,7 @@ export function ComunicacionClient({
     setMontoF29(c.monto_f29_override === null ? "" : String(c.monto_f29_override));
     setCorreoCli(c.correo_empresa ?? "");
     setObs(c.observaciones ?? "");
+    setIncluirFact(true);
     setEditando(c);
   }
 
@@ -149,6 +153,7 @@ export function ComunicacionClient({
         const res = await enviarCorreoComunicacion(
           com.comunicacion_id,
           correoCli.trim() || null,
+          incluirFact,
         );
         if (res.ok) {
           toast.success(`Resumen enviado a ${res.enviadoA}`);
@@ -242,7 +247,8 @@ export function ComunicacionClient({
     : editando?.monto_f29_ciclo !== null && editando !== null
       ? Number(editando.monto_f29_ciclo)
       : 0;
-  const totalVivo = previredVivo + f29Vivo + totalFacturasEditando;
+  const totalVivo =
+    previredVivo + f29Vivo + (incluirFact ? totalFacturasEditando : 0);
 
   return (
     <div className="space-y-5">
@@ -543,9 +549,21 @@ export function ComunicacionClient({
 
               {/* Facturas RS pendientes */}
               <div className="space-y-1.5 rounded-lg border border-input bg-card p-3">
-                <div className="flex items-center gap-2">
-                  <Receipt className="size-4 text-muted-foreground" />
-                  <Label>Facturas RS pendientes de pago</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="size-4 text-muted-foreground" />
+                    <Label>Facturas RS pendientes de pago</Label>
+                  </div>
+                  {facturasEditando.length > 0 ? (
+                    <label className="flex cursor-pointer items-center gap-1.5 text-xs">
+                      <Checkbox
+                        checked={incluirFact}
+                        onCheckedChange={(v) => setIncluirFact(v === true)}
+                        aria-label="Incluir las facturas pendientes en el correo"
+                      />
+                      Incluir en el correo
+                    </label>
+                  ) : null}
                 </div>
                 {facturasEditando.length === 0 ? (
                   <span className="text-sm text-muted-foreground">

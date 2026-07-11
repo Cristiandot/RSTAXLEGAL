@@ -175,6 +175,8 @@ const URL_PAGO_F29 =
 export async function enviarCorreoComunicacion(
   comunicacionId: string,
   correo: string | null,
+  /** Checklist del diálogo: incluir (o no) las facturas RS pendientes. */
+  incluirFacturas: boolean = true,
 ): Promise<{ ok: boolean; error?: string; enviadoA?: string }> {
   const supabase = await createClient();
 
@@ -247,13 +249,16 @@ export async function enviarCorreoComunicacion(
     const centros = todosCentros.filter(
       (c) => c.comunicacion_id === emp.comunicacion_id,
     );
-    const facturas = todasFacturas.filter((f) => f.cliente_id === emp.cliente_id);
+    const facturas = incluirFacturas
+      ? todasFacturas.filter((f) => f.cliente_id === emp.cliente_id)
+      : [];
     const montoPrevired =
       emp.monto_previred !== null ? Number(emp.monto_previred) : null;
     const montoF29 = emp.monto_f29 !== null ? Number(emp.monto_f29) : null;
     const totalFacturas = facturas.reduce((s, f) => s + Number(f.monto ?? 0), 0);
 
-    // Empresas del grupo sin nada que cobrar quedan fuera del correo.
+    // Solo se comunica lo que la empresa tiene: las secciones sin monto se
+    // omiten, y una empresa del grupo sin nada que cobrar queda fuera.
     if (!montoPrevired && !montoF29 && facturas.length === 0) continue;
     idsIncluidos.push(emp.comunicacion_id);
     let subtotal = 0;
@@ -388,6 +393,7 @@ export async function enviarCorreoComunicacion(
     <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;">
       ${cuerpoTabla}
     </table>
+    <p style="margin:0 0 16px;font-size:12px;color:#64748b;font-style:italic;">Si usted ya pagó o depositó a nuestra cuenta, por favor omita este correo.</p>
     ${cajaTransferencia}
     <p style="margin:0 0 4px;">Quedamos atentos a cualquier consulta.</p>`;
 
