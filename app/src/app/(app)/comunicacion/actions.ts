@@ -393,7 +393,9 @@ export async function enviarCorreoComunicacion(
     <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;">
       ${cuerpoTabla}
     </table>
-    <p style="margin:0 0 16px;font-size:12px;color:#64748b;font-style:italic;">Si usted ya pagó o depositó a nuestra cuenta, por favor omita este correo.</p>
+    <div style="border:1px solid #9fb3d1;background:#eef2f8;border-radius:8px;padding:12px 16px;margin:0 0 16px;text-align:center;">
+      <p style="margin:0;font-weight:bold;color:#0b2545;font-size:14px;">Si usted ya pagó o depositó a nuestra cuenta, por favor omita este correo.</p>
+    </div>
     ${cajaTransferencia}
     <p style="margin:0 0 4px;">Quedamos atentos a cualquier consulta.</p>`;
 
