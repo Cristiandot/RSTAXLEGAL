@@ -140,13 +140,16 @@ export type HitoGerencia = {
   orden: number;
 };
 
-/** Un punto de la serie de crecimiento: real viene del panel (2026+) o del histórico Excel (2025). */
+/** Un punto de la serie de crecimiento. El real efectivo es realManual si Felipe
+ *  lo digitó (criterio propio, como en el Excel) y si no, el neto en vivo del panel. */
 export type PuntoCrecimiento = {
   mes: string; // YYYY-MM
   meta: number;
-  real: number | null;
+  real: number | null; // realManual ?? realVivo
+  realVivo: number | null; // neto emitido según la grilla de facturación
+  realManual: number | null; // valor digitado a mano (override)
   uf: number | null;
-  enVivo: boolean; // true = calculado desde la grilla de facturación
+  enVivo: boolean; // true = mes con documentos en el panel
 };
 
 export type Posicion = {
@@ -189,6 +192,17 @@ export type LinkPlan = {
   orden: number;
 };
 
+export type EmisionItem = {
+  id: string;
+  periodo: string; // YYYY-MM
+  cliente: string;
+  rut: string | null;
+  valor: number;
+  observaciones: string | null;
+  emitida: boolean;
+  activo: boolean;
+};
+
 export type DatosGerencia = {
   cartera: CarteraItem[];
   metasCategoria: MetaCategoria[];
@@ -198,6 +212,7 @@ export type DatosGerencia = {
   ads: AdItem[];
   deudas: DeudaCliente[];
   links: LinkPlan[];
+  emision: EmisionItem[];
   ufActual: number;
   pendienteMes: number;
 };

@@ -9,6 +9,7 @@ import type {
   Cotizacion,
   DatosGerencia,
   DeudaCliente,
+  EmisionItem,
   HitoGerencia,
   LinkPlan,
   MetaCategoria,
@@ -230,7 +231,7 @@ export async function cargarGerencia(): Promise<
   { ok: true; datos: DatosGerencia } | { ok: false; error: string }
 > {
   const supabase = await createClient();
-  const [cartera, metas, hitos, crecimiento, facturacion, posiciones, ads, deudas, links, indicadores] =
+  const [cartera, metas, hitos, crecimiento, facturacion, posiciones, ads, deudas, links, emision, indicadores] =
     await Promise.all([
       supabase.from("gerencia_cartera").select("*").eq("activo", true)
         .order("categoria").order("valor", { ascending: false }),
@@ -242,6 +243,8 @@ export async function cargarGerencia(): Promise<
       supabase.from("gerencia_ads").select("*").order("fecha", { ascending: false }),
       supabase.from("gerencia_deudas_clientes").select("*").order("created_at"),
       supabase.from("gerencia_links_planes").select("*").order("orden"),
+      supabase.from("gerencia_emision").select("*").eq("activo", true)
+        .order("valor").order("cliente"),
       supabase.from("indicadores_previred").select("periodo, uf_ultimo_dia")
         .order("periodo", { ascending: false }).limit(1),
     ]);
@@ -249,7 +252,7 @@ export async function cargarGerencia(): Promise<
   const error =
     cartera.error?.message ?? metas.error?.message ?? hitos.error?.message ??
     crecimiento.error?.message ?? facturacion.error?.message ?? posiciones.error?.message ??
-    ads.error?.message ?? deudas.error?.message ?? links.error?.message;
+    ads.error?.message ?? deudas.error?.message ?? links.error?.message ?? emision.error?.message;
   if (error) return { ok: false, error };
 
   const netoPorMes = new Map<string, { neto: number; pendiente: number }>();
@@ -266,10 +269,17 @@ export async function cargarGerencia(): Promise<
     const mes = (r.mes as string).slice(0, 7);
     const enVivo = mes >= PANEL_DESDE;
     const vivo = netoPorMes.get(mes);
-    const real = enVivo
-      ? mes <= mesActual && vivo ? vivo.neto : null
-      : numONull(r.real_manual);
-    return { mes, meta: num(r.meta_monto), real, uf: numONull(r.uf_valor), enVivo };
+    const realVivo = enVivo && mes <= mesActual && vivo ? vivo.neto : null;
+    const realManual = numONull(r.real_manual);
+    return {
+      mes,
+      meta: num(r.meta_monto),
+      real: realManual ?? realVivo,
+      realVivo,
+      realManual,
+      uf: numONull(r.uf_valor),
+      enVivo,
+    };
   });
 
   const ufIndicadores = numONull(indicadores.data?.[0]?.uf_ultimo_dia);
@@ -303,10 +313,72 @@ export async function cargarGerencia(): Promise<
       ads: (ads.data ?? []).map((a) => ({ ...a, monto: num(a.monto) })) as AdItem[],
       deudas: (deudas.data ?? []).map((d) => ({ ...d, monto: num(d.monto) })) as DeudaCliente[],
       links: (links.data ?? []) as LinkPlan[],
+      emision: (emision.data ?? []).map((e) => ({ ...e, valor: num(e.valor) })) as EmisionItem[],
       ufActual,
       pendienteMes: netoPorMes.get(mesActual)?.pendiente ?? 0,
     },
   };
+}
+
+/** Edita un mes del plan de crecimiento (meta, real manual u UF). El mes es YYYY-MM. */
+export async function actualizarCrecimientoMes(
+  mes: string,
+  patch: { meta_monto?: number; real_manual?: number | null; uf_valor?: number | null },
+): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("gerencia_crecimiento")
+    .update(patch)
+    .eq("mes", `${mes}-01`);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function crearEmisionItem(input: {
+  periodo: string;
+  cliente: string;
+  rut: string | null;
+  valor: number;
+  observaciones: string | null;
+}): Promise<Resultado> {
+  if (!input.cliente.trim()) return { ok: false, error: "El cliente es obligatorio." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("gerencia_emision").insert(input);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function actualizarEmisionItem(
+  id: string,
+  patch: Partial<Pick<EmisionItem, "cliente" | "rut" | "valor" | "observaciones" | "emitida" | "activo">>,
+): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("gerencia_emision").update(patch).eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+/** Copia la nómina de un período a otro (sin marcar emitidas). No duplica: si el
+ *  destino ya tiene filas activas con el mismo cliente, esas se saltan. */
+export async function copiarEmisionMes(
+  desde: string,
+  hacia: string,
+): Promise<Resultado & { copiadas?: number }> {
+  if (!/^\d{4}-\d{2}$/.test(desde) || !/^\d{4}-\d{2}$/.test(hacia) || desde === hacia)
+    return { ok: false, error: "Períodos inválidos." };
+  const supabase = await createClient();
+  const [origen, destino] = await Promise.all([
+    supabase.from("gerencia_emision").select("cliente, rut, valor, observaciones")
+      .eq("periodo", desde).eq("activo", true),
+    supabase.from("gerencia_emision").select("cliente").eq("periodo", hacia).eq("activo", true),
+  ]);
+  if (origen.error) return { ok: false, error: origen.error.message };
+  if (destino.error) return { ok: false, error: destino.error.message };
+  const yaExisten = new Set((destino.data ?? []).map((d) => d.cliente.trim().toLowerCase()));
+  const nuevas = (origen.data ?? [])
+    .filter((o) => !yaExisten.has(o.cliente.trim().toLowerCase()))
+    .map((o) => ({ ...o, periodo: hacia }));
+  if (nuevas.length === 0)
+    return { ok: false, error: "No hay filas nuevas que copiar (¿ya estaba copiado el mes?)." };
+  const { error } = await supabase.from("gerencia_emision").insert(nuevas);
+  return error ? { ok: false, error: error.message } : { ok: true, copiadas: nuevas.length };
 }
 
 export async function crearCarteraItem(input: {
