@@ -11,6 +11,7 @@ import { ThSort } from "@/components/th-sort";
 import { RutCopiable } from "@/components/rut-copiable";
 import {
   claseEstado,
+  copiasComunicacion,
   type CentroCostoRow,
   type ComunicacionRow,
   type FacturaPendienteRow,
@@ -205,6 +206,16 @@ export function ComunicacionClient({
         (f) =>
           f.grupo_id === editando.grupo_id &&
           f.comunicacion_id !== editando.comunicacion_id,
+      )
+    : [];
+
+  // Todos los correos a los que saldrá este envío (cliente completo).
+  const copiasEditando = editando
+    ? copiasComunicacion(
+        editando.grupo_id
+          ? filas.filter((f) => f.grupo_id === editando.grupo_id)
+          : [editando],
+        correoCli,
       )
     : [];
 
@@ -602,6 +613,23 @@ export function ComunicacionClient({
                       ? `Último envío: ${formatFecha(editando.fecha_correo_enviado.slice(0, 10))}`
                       : "Guarda los cambios y envía al cliente el resumen de pagos del período. El correo se guarda en su ficha."}
                 </span>
+                <div className="rounded-md border border-input bg-muted/20 p-2 text-xs">
+                  <span className="font-medium">Saldrá a:</span>{" "}
+                  {correoCli.trim() || "— (falta el correo principal)"}
+                  {copiasEditando.length > 0 ? (
+                    <>
+                      {" "}· <span className="font-medium">en copia ({copiasEditando.length}):</span>{" "}
+                      <span className="text-muted-foreground">
+                        {copiasEditando.join(", ")}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {" "}· sin copias (agrega correos adicionales en la ficha
+                      de Empresas)
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-1.5">

@@ -120,7 +120,35 @@ export type ComunicacionRow = {
   dnp_declarado: boolean; // el ciclo de Liquidaciones quedó con DNP (declaración sin pago)
   f29_postergacion_monto: number | string | null; // opción de postergar IVA (del módulo F29)
   f29_comentario: string | null; // comentario personalizado del contador (del módulo F29)
+  correos_adicionales: string[] | null; // casillas extra del cliente — van en copia
 };
+
+/**
+ * Destinatarios del correo de Comunicación mensual para un cliente: el correo
+ * principal (destino) más TODOS los demás correos del cliente en copia —
+ * correo_empresa de cada empresa del grupo y correos adicionales de todas —
+ * deduplicados y sin el principal.
+ */
+export function copiasComunicacion(
+  empresas: Pick<ComunicacionRow, "correo_empresa" | "correos_adicionales">[],
+  destino: string,
+): string[] {
+  const vistos = new Map<string, string>();
+  const destinoLc = destino.trim().toLowerCase();
+  for (const emp of empresas) {
+    const candidatos = [
+      emp.correo_empresa ?? "",
+      ...(Array.isArray(emp.correos_adicionales) ? emp.correos_adicionales : []),
+    ];
+    for (const raw of candidatos) {
+      const correo = String(raw ?? "").trim();
+      const clave = correo.toLowerCase();
+      if (!correo.includes("@") || clave === destinoLc || vistos.has(clave)) continue;
+      vistos.set(clave, correo);
+    }
+  }
+  return [...vistos.values()];
+}
 
 /** Centro de costo con su monto Previred (tabla comunicacion_previred). */
 export type CentroCostoRow = {

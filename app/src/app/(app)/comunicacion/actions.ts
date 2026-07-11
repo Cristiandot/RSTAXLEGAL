@@ -4,10 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getUsuarioActual } from "@/lib/auth";
 import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
-import { correosCopiaCliente } from "@/lib/correos-cliente";
 import { etiquetaPeriodo } from "@/lib/periodos";
 import { formatFecha, formatMonto } from "@/lib/format";
-import type { ComunicacionRow } from "@/lib/ciclos";
+import { copiasComunicacion, type ComunicacionRow } from "@/lib/ciclos";
 
 export type CentroCostoInput = { centro: string; monto: string };
 
@@ -392,14 +391,14 @@ export async function enviarCorreoComunicacion(
     ${cajaTransferencia}
     <p style="margin:0 0 4px;">Quedamos atentos a cualquier consulta.</p>`;
 
+  // Por CLIENTE: además del destino principal, van en copia los correos de
+  // TODAS sus empresas (correo principal de cada una + correos adicionales).
+  const copias = copiasComunicacion(empresas, destino);
+
   const usuario = await getUsuarioActual();
   const res = await enviarCorreo({
     para: destino,
-    // Copia a los correos adicionales de todas las empresas del cliente.
-    cc: await correosCopiaCliente(
-      empresas.map((e) => e.cliente_id),
-      [destino],
-    ),
+    cc: copias,
     asunto: `Resumen de pagos ${etiqueta} — RS Tax & Legal`,
     html: htmlCorreoDocumento({
       titulo: `Resumen de pagos · ${etiqueta}`,
@@ -416,5 +415,8 @@ export async function enviarCorreoComunicacion(
     .in("id", idsIncluidos);
 
   revalidatePath("/comunicacion");
-  return { ok: true, enviadoA: destino };
+  return {
+    ok: true,
+    enviadoA: copias.length ? `${destino} (+${copias.length} en copia)` : destino,
+  };
 }
