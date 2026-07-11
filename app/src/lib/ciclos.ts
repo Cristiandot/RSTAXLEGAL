@@ -135,10 +135,11 @@ export type ComunicacionRow = {
 };
 
 /**
- * Destinatarios del correo de Comunicación mensual para un cliente: el correo
- * principal (destino) más TODOS los demás correos del cliente en copia —
- * correo_empresa de cada empresa del grupo y correos adicionales de todas —
- * deduplicados y sin el principal.
+ * Copias del correo de Comunicación mensual: SOLO los correos adicionales
+ * asignados a las empresas incluidas (criterio Cristian 10-07-2026). El correo
+ * principal de las otras empresas del grupo NO se suma automáticamente — si
+ * corresponde, se agrega como correo adicional en la ficha. Dedupe y sin el
+ * destinatario principal.
  */
 export function copiasComunicacion(
   empresas: Pick<ComunicacionRow, "correo_empresa" | "correos_adicionales">[],
@@ -147,10 +148,9 @@ export function copiasComunicacion(
   const vistos = new Map<string, string>();
   const destinoLc = destino.trim().toLowerCase();
   for (const emp of empresas) {
-    const candidatos = [
-      emp.correo_empresa ?? "",
-      ...(Array.isArray(emp.correos_adicionales) ? emp.correos_adicionales : []),
-    ];
+    const candidatos = Array.isArray(emp.correos_adicionales)
+      ? emp.correos_adicionales
+      : [];
     for (const raw of candidatos) {
       const correo = String(raw ?? "").trim();
       const clave = correo.toLowerCase();
