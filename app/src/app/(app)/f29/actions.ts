@@ -23,6 +23,11 @@ export type GuardarF29Input = {
   correoCliente: string | null;
   postergacionMonto: string | null;
   comentarioCorreo: string | null;
+  // Desglose del F29 (IVA, Imp. Único, Retenciones, Otros — PPM va aparte).
+  montoIva: string | null;
+  impUnico: string | null;
+  montoRetenciones: string | null;
+  montoOtros: string | null;
   observaciones: string | null;
 };
 
@@ -51,6 +56,10 @@ export async function guardarF29(
       numero_operacion: input.numeroOperacion,
       postergacion_monto: input.postergacionMonto,
       comentario_correo: input.comentarioCorreo,
+      monto_iva: input.montoIva,
+      imp_unico: input.impUnico,
+      monto_retenciones: input.montoRetenciones,
+      monto_otros: input.montoOtros,
       observaciones: input.observaciones,
     })
     .eq("id", input.cicloId);

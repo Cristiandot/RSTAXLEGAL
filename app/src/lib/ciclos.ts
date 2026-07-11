@@ -89,6 +89,11 @@ export type F29Row = {
   fecha_correo_pago_enviado: string | null; // último envío del aviso de pago al cliente
   postergacion_monto: number | string | null; // opción de postergar IVA — sale en la Comunicación mensual
   comentario_correo: string | null; // comentario personalizado del contador — sale en la Comunicación mensual
+  // Desglose del F29 para el detalle al cliente (solo se muestran los con monto).
+  monto_iva: number | string | null;
+  imp_unico: number | string | null;
+  monto_retenciones: number | string | null;
+  monto_otros: number | string | null;
   observaciones: string | null;
 };
 
@@ -121,6 +126,12 @@ export type ComunicacionRow = {
   f29_postergacion_monto: number | string | null; // opción de postergar IVA (del módulo F29)
   f29_comentario: string | null; // comentario personalizado del contador (del módulo F29)
   correos_adicionales: string[] | null; // casillas extra del cliente — van en copia
+  // Desglose del F29 (solo los conceptos con monto salen en el correo).
+  f29_iva: number | string | null;
+  f29_imp_unico: number | string | null;
+  f29_retenciones: number | string | null;
+  f29_ppm: number | string | null;
+  f29_otros: number | string | null;
 };
 
 /**

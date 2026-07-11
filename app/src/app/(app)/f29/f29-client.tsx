@@ -328,6 +328,10 @@ export function F29Client({
         correoCliente: correoCli.trim() || null,
         postergacionMonto: get("postergacion_monto"),
         comentarioCorreo: get("comentario_correo"),
+        montoIva: get("monto_iva"),
+        impUnico: get("imp_unico"),
+        montoRetenciones: get("monto_retenciones"),
+        montoOtros: get("monto_otros"),
         observaciones: get("observaciones"),
       });
       if (res.ok) {
@@ -662,8 +666,8 @@ export function F29Client({
                   </span>
                 </Label>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="monto">Monto a pagar</Label>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="monto">Monto TOTAL a pagar</Label>
                 <Input
                   id="monto"
                   name="monto"
@@ -672,15 +676,66 @@ export function F29Client({
                   defaultValue={editando.monto_a_pagar ?? ""}
                 />
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ppm">PPM</Label>
-                <Input
-                  id="ppm"
-                  name="ppm"
-                  type="number"
-                  inputMode="numeric"
-                  defaultValue={editando.ppm ?? ""}
-                />
+              <div className="col-span-2 grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-3">
+                <div className="col-span-2 text-xs font-semibold text-muted-foreground sm:col-span-3">
+                  Desglose del F29 — solo los conceptos con monto salen en el
+                  detalle al cliente (Comunicación mensual)
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="monto_iva">IVA</Label>
+                  <Input
+                    id="monto_iva"
+                    name="monto_iva"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="—"
+                    defaultValue={editando.monto_iva ?? ""}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="imp_unico">Impuesto Único</Label>
+                  <Input
+                    id="imp_unico"
+                    name="imp_unico"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="—"
+                    defaultValue={editando.imp_unico ?? ""}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="monto_retenciones">Retenciones</Label>
+                  <Input
+                    id="monto_retenciones"
+                    name="monto_retenciones"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="—"
+                    defaultValue={editando.monto_retenciones ?? ""}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="ppm">PPM</Label>
+                  <Input
+                    id="ppm"
+                    name="ppm"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="—"
+                    defaultValue={editando.ppm ?? ""}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="monto_otros">Otros</Label>
+                  <Input
+                    id="monto_otros"
+                    name="monto_otros"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="—"
+                    defaultValue={editando.monto_otros ?? ""}
+                  />
+                </div>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="pago_por">¿Quién paga el F29?</Label>

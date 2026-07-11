@@ -20,6 +20,12 @@ export type EmpresaComunicacion = {
   dnp_declarado: boolean;
   f29_postergacion_monto: number | string | null;
   f29_comentario: string | null;
+  /** Desglose del F29 — solo los conceptos con monto salen en el correo. */
+  f29_iva?: number | string | null;
+  f29_imp_unico?: number | string | null;
+  f29_retenciones?: number | string | null;
+  f29_ppm?: number | string | null;
+  f29_otros?: number | string | null;
 };
 
 export type CentroComunicacion = {
@@ -205,7 +211,27 @@ export function construirCorreoComunicacion({
         emp.plazo_f29,
         "23:59 hrs",
       );
-      cuerpoTabla += filaDetalle("Monto a pagar F29", formatMonto(montoF29));
+      // Desglose por concepto: solo los que tienen monto (los demás se omiten).
+      const conceptos: [string, number | string | null | undefined][] = [
+        ["IVA", emp.f29_iva],
+        ["Impuesto Único", emp.f29_imp_unico],
+        ["Retenciones", emp.f29_retenciones],
+        ["PPM", emp.f29_ppm],
+        ["Otros", emp.f29_otros],
+      ];
+      const conDesglose = conceptos.some(
+        ([, v]) => v !== null && v !== undefined && Number(v) > 0,
+      );
+      for (const [nombre, v] of conceptos) {
+        if (v !== null && v !== undefined && Number(v) > 0) {
+          cuerpoTabla += filaDetalle(nombre, formatMonto(v));
+        }
+      }
+      cuerpoTabla += filaDetalle(
+        conDesglose ? "TOTAL F29 a pagar" : "Monto a pagar F29",
+        formatMonto(montoF29),
+        conDesglose,
+      );
       // Opción de postergar IVA y comentario del contador (módulo F29).
       if (emp.f29_postergacion_monto !== null && Number(emp.f29_postergacion_monto) > 0) {
         cuerpoTabla += filaDetalle(
