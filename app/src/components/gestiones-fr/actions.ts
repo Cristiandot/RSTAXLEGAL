@@ -1,7 +1,20 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import type { Causa, Contacto, Cotizacion } from "./tipos";
+import type {
+  AdItem,
+  CarteraItem,
+  Causa,
+  Contacto,
+  Cotizacion,
+  DatosGerencia,
+  DeudaCliente,
+  HitoGerencia,
+  LinkPlan,
+  MetaCategoria,
+  Posicion,
+  PuntoCrecimiento,
+} from "./tipos";
 
 type Resultado = { ok: boolean; error?: string };
 
@@ -202,5 +215,212 @@ export async function actualizarCotizacion(
     .from("gestion_cotizaciones_rs")
     .update(patch)
     .eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+// ===================== Gerencia =====================
+
+const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
+const numONull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+
+/** Carga el módulo Gerencia completo. La serie de crecimiento mezcla el real
+ *  histórico sembrado del Excel (2025) con el neto en vivo de la grilla de
+ *  facturación (v_gerencia_facturacion_mensual, desde 2026-01). */
+export async function cargarGerencia(): Promise<
+  { ok: true; datos: DatosGerencia } | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  const [cartera, metas, hitos, crecimiento, facturacion, posiciones, ads, deudas, links, indicadores] =
+    await Promise.all([
+      supabase.from("gerencia_cartera").select("*").eq("activo", true)
+        .order("categoria").order("valor", { ascending: false }),
+      supabase.from("gerencia_metas_categoria").select("*").order("orden"),
+      supabase.from("gerencia_hitos").select("*").order("orden"),
+      supabase.from("gerencia_crecimiento").select("*").order("mes"),
+      supabase.from("v_gerencia_facturacion_mensual").select("*"),
+      supabase.from("gerencia_posiciones").select("*").order("primera_cuota"),
+      supabase.from("gerencia_ads").select("*").order("fecha", { ascending: false }),
+      supabase.from("gerencia_deudas_clientes").select("*").order("created_at"),
+      supabase.from("gerencia_links_planes").select("*").order("orden"),
+      supabase.from("indicadores_previred").select("periodo, uf_ultimo_dia")
+        .order("periodo", { ascending: false }).limit(1),
+    ]);
+
+  const error =
+    cartera.error?.message ?? metas.error?.message ?? hitos.error?.message ??
+    crecimiento.error?.message ?? facturacion.error?.message ?? posiciones.error?.message ??
+    ads.error?.message ?? deudas.error?.message ?? links.error?.message;
+  if (error) return { ok: false, error };
+
+  const netoPorMes = new Map<string, { neto: number; pendiente: number }>();
+  for (const f of facturacion.data ?? []) {
+    netoPorMes.set(f.periodo as string, {
+      neto: num(f.monto_neto),
+      pendiente: num(f.monto_pendiente),
+    });
+  }
+
+  const mesActual = new Date().toISOString().slice(0, 7);
+  const PANEL_DESDE = "2026-01"; // antes de esto la grilla de facturación no tiene documentos
+  const serie: PuntoCrecimiento[] = (crecimiento.data ?? []).map((r) => {
+    const mes = (r.mes as string).slice(0, 7);
+    const enVivo = mes >= PANEL_DESDE;
+    const vivo = netoPorMes.get(mes);
+    const real = enVivo
+      ? mes <= mesActual && vivo ? vivo.neto : null
+      : numONull(r.real_manual);
+    return { mes, meta: num(r.meta_monto), real, uf: numONull(r.uf_valor), enVivo };
+  });
+
+  const ufIndicadores = numONull(indicadores.data?.[0]?.uf_ultimo_dia);
+  const ufActual =
+    ufIndicadores ?? serie.find((p) => p.mes === mesActual)?.uf ?? 40823;
+
+  return {
+    ok: true,
+    datos: {
+      cartera: (cartera.data ?? []).map((c) => ({
+        ...c,
+        uf: numONull(c.uf),
+        valor: num(c.valor),
+      })) as CarteraItem[],
+      metasCategoria: (metas.data ?? []).map((m) => ({
+        ...m,
+        rango_uf: num(m.rango_uf),
+      })) as MetaCategoria[],
+      hitos: (hitos.data ?? []).map((h) => ({
+        ...h,
+        uf_objetivo: numONull(h.uf_objetivo),
+      })) as HitoGerencia[],
+      crecimiento: serie,
+      posiciones: (posiciones.data ?? []).map((p) => ({
+        ...p,
+        monto_total: num(p.monto_total),
+        capital_cuota: numONull(p.capital_cuota),
+        interes_cuota: numONull(p.interes_cuota),
+        valor_cuota: num(p.valor_cuota),
+      })) as Posicion[],
+      ads: (ads.data ?? []).map((a) => ({ ...a, monto: num(a.monto) })) as AdItem[],
+      deudas: (deudas.data ?? []).map((d) => ({ ...d, monto: num(d.monto) })) as DeudaCliente[],
+      links: (links.data ?? []) as LinkPlan[],
+      ufActual,
+      pendienteMes: netoPorMes.get(mesActual)?.pendiente ?? 0,
+    },
+  };
+}
+
+export async function crearCarteraItem(input: {
+  codigo: string | null;
+  cliente: string;
+  modalidad: string | null;
+  categoria: string;
+  uf: number | null;
+  valor: number;
+  es_prospecto: boolean;
+}): Promise<Resultado> {
+  if (!input.cliente.trim()) return { ok: false, error: "El cliente es obligatorio." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("gerencia_cartera").insert(input);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function actualizarCarteraItem(
+  id: string,
+  patch: Partial<
+    Pick<CarteraItem, "codigo" | "categoria" | "modalidad" | "uf" | "valor" | "es_prospecto" | "activo" | "notas">
+  >,
+): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("gerencia_cartera").update(patch).eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function actualizarMetaCategoria(
+  categoria: string,
+  patch: Partial<Pick<MetaCategoria, "rango_uf" | "objetivo_cantidad">>,
+): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("gerencia_metas_categoria")
+    .update(patch)
+    .eq("categoria", categoria);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function crearPosicion(input: {
+  financista: string;
+  monto_total: number;
+  valor_cuota: number;
+  num_cuotas: number;
+  primera_cuota: string;
+  capital_cuota: number | null;
+  interes_cuota: number | null;
+  observaciones: string | null;
+}): Promise<Resultado> {
+  if (!input.financista.trim()) return { ok: false, error: "El financista es obligatorio." };
+  if (!input.primera_cuota) return { ok: false, error: "La fecha de la primera cuota es obligatoria." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("gerencia_posiciones").insert(input);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function actualizarPosicion(
+  id: string,
+  patch: Partial<Pick<Posicion, "cuotas_pagadas" | "estado" | "observaciones">>,
+): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("gerencia_posiciones").update(patch).eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function crearAd(input: {
+  tipo: "gasto" | "conversion";
+  fecha: string;
+  detalle: string;
+  monto: number;
+  categoria: string | null;
+}): Promise<Resultado> {
+  if (!input.detalle.trim()) return { ok: false, error: "El detalle es obligatorio." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("gerencia_ads").insert(input);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function crearDeudaCliente(input: {
+  cliente: string;
+  monto: number;
+  motivo: string | null;
+}): Promise<Resultado> {
+  if (!input.cliente.trim()) return { ok: false, error: "El cliente es obligatorio." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("gerencia_deudas_clientes").insert(input);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function actualizarDeudaCliente(
+  id: string,
+  patch: Partial<Pick<DeudaCliente, "status" | "monto" | "motivo">>,
+): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("gerencia_deudas_clientes").update(patch).eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function crearLinkPlan(input: {
+  nombre: string;
+  monto: string | null;
+  observaciones: string | null;
+  link: string;
+}): Promise<Resultado> {
+  if (!input.nombre.trim() || !input.link.trim())
+    return { ok: false, error: "Nombre y link son obligatorios." };
+  const supabase = await createClient();
+  const { data: ultimo } = await supabase
+    .from("gerencia_links_planes")
+    .select("orden")
+    .order("orden", { ascending: false })
+    .limit(1);
+  const orden = (ultimo?.[0]?.orden ?? 0) + 1;
+  const { error } = await supabase.from("gerencia_links_planes").insert({ ...input, orden });
   return error ? { ok: false, error: error.message } : { ok: true };
 }

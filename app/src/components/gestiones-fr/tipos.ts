@@ -103,3 +103,101 @@ export const SEGMENTO_LABEL: Record<string, string> = {
   C: "C · Cliente actual",
   D: "D · Referido recibido",
 };
+
+// ===================== Gerencia =====================
+
+/** Deben calzar EXACTO con el CHECK de las tablas gerencia_*. */
+export const CATEGORIAS_GERENCIA = ["OPEN", "SEGUNDA", "TERCERA", "PUBA"] as const;
+export type CategoriaGerencia = (typeof CATEGORIAS_GERENCIA)[number];
+
+export type CarteraItem = {
+  id: string;
+  codigo: string | null;
+  cliente: string;
+  modalidad: string | null;
+  categoria: string;
+  uf: number | null;
+  valor: number;
+  n_trabajadores: number | null;
+  n_sociedades: number | null;
+  es_prospecto: boolean;
+  activo: boolean;
+  notas: string | null;
+};
+
+export type MetaCategoria = {
+  categoria: string;
+  rango_uf: number;
+  objetivo_cantidad: number;
+  orden: number;
+};
+
+export type HitoGerencia = {
+  id: string;
+  nombre: string;
+  uf_objetivo: number | null;
+  descripcion: string | null;
+  orden: number;
+};
+
+/** Un punto de la serie de crecimiento: real viene del panel (2026+) o del histórico Excel (2025). */
+export type PuntoCrecimiento = {
+  mes: string; // YYYY-MM
+  meta: number;
+  real: number | null;
+  uf: number | null;
+  enVivo: boolean; // true = calculado desde la grilla de facturación
+};
+
+export type Posicion = {
+  id: string;
+  financista: string;
+  monto_total: number;
+  capital_cuota: number | null;
+  interes_cuota: number | null;
+  valor_cuota: number;
+  num_cuotas: number;
+  primera_cuota: string;
+  cuotas_pagadas: number;
+  estado: string;
+  observaciones: string | null;
+};
+
+export type AdItem = {
+  id: string;
+  tipo: "gasto" | "conversion";
+  fecha: string;
+  detalle: string;
+  monto: number;
+  categoria: string | null;
+};
+
+export type DeudaCliente = {
+  id: string;
+  cliente: string;
+  monto: number;
+  motivo: string | null;
+  status: string;
+};
+
+export type LinkPlan = {
+  id: string;
+  nombre: string;
+  monto: string | null;
+  observaciones: string | null;
+  link: string;
+  orden: number;
+};
+
+export type DatosGerencia = {
+  cartera: CarteraItem[];
+  metasCategoria: MetaCategoria[];
+  hitos: HitoGerencia[];
+  crecimiento: PuntoCrecimiento[];
+  posiciones: Posicion[];
+  ads: AdItem[];
+  deudas: DeudaCliente[];
+  links: LinkPlan[];
+  ufActual: number;
+  pendienteMes: number;
+};

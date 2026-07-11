@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Lock, RefreshCw, Scale, TrendingUp, Unlock } from "lucide-react";
+import { LayoutDashboard, Loader2, Lock, RefreshCw, Scale, TrendingUp, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,10 +14,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cargarGestionesFR } from "@/components/gestiones-fr/actions";
+import { cargarGerencia, cargarGestionesFR } from "@/components/gestiones-fr/actions";
 import { ModuloCausas } from "@/components/gestiones-fr/modulo-causas";
 import { ModuloComercial } from "@/components/gestiones-fr/modulo-comercial";
-import type { Causa, Contacto, Cotizacion } from "@/components/gestiones-fr/tipos";
+import { ModuloGerencia } from "@/components/gestiones-fr/modulo-gerencia";
+import type { Causa, Contacto, Cotizacion, DatosGerencia } from "@/components/gestiones-fr/tipos";
 
 const CLAVE = "5753";
 const STORAGE_KEY = "gestiones-fr-unlocked";
@@ -34,8 +35,9 @@ export default function GestionesFelipe() {
   const [clave, setClave] = useState("");
   const [error, setError] = useState(false);
   const [datos, setDatos] = useState<Datos | null>(null);
+  const [gerencia, setGerencia] = useState<DatosGerencia | null>(null);
   const [cargando, setCargando] = useState(false);
-  const [modulo, setModulo] = useState<"causas" | "comercial">("causas");
+  const [modulo, setModulo] = useState<"causas" | "comercial" | "gerencia">("causas");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // El desbloqueo dura mientras viva la pestaña. Se lee tras montar para no
@@ -53,7 +55,7 @@ export default function GestionesFelipe() {
 
   async function recargar() {
     setCargando(true);
-    const res = await cargarGestionesFR();
+    const [res, resGerencia] = await Promise.all([cargarGestionesFR(), cargarGerencia()]);
     setCargando(false);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudieron cargar las gestiones.");
@@ -64,6 +66,8 @@ export default function GestionesFelipe() {
       contactos: res.contactos,
       cotizaciones: res.cotizaciones,
     });
+    if (resGerencia.ok) setGerencia(resGerencia.datos);
+    else toast.error(resGerencia.error ?? "No se pudo cargar Gerencia.");
   }
 
   function intentar(valor: string) {
@@ -207,6 +211,25 @@ export default function GestionesFelipe() {
             </span>
           </span>
         </button>
+        <button
+          type="button"
+          onClick={() => setModulo("gerencia")}
+          className={`flex min-w-64 flex-1 items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition ${
+            modulo === "gerencia"
+              ? "border-[var(--brand-teal,#17A2B8)] bg-accent"
+              : "border-transparent bg-white hover:bg-muted/50"
+          }`}
+        >
+          <LayoutDashboard className="size-5 shrink-0 text-[var(--brand-teal,#17A2B8)]" />
+          <span>
+            <span className="block text-sm font-semibold">Gerencia</span>
+            <span className="block text-xs text-muted-foreground">
+              {gerencia
+                ? `facturación vs meta · ${gerencia.cartera.filter((c) => !c.es_prospecto).length} clientes en cartera`
+                : "…"}
+            </span>
+          </span>
+        </button>
       </div>
 
       {!datos ? (
@@ -218,12 +241,21 @@ export default function GestionesFelipe() {
         </Card>
       ) : modulo === "causas" ? (
         <ModuloCausas causas={datos.causas} recargar={recargar} />
-      ) : (
+      ) : modulo === "comercial" ? (
         <ModuloComercial
           contactos={datos.contactos}
           cotizaciones={datos.cotizaciones}
           recargar={recargar}
         />
+      ) : gerencia ? (
+        <ModuloGerencia datos={gerencia} recargar={recargar} />
+      ) : (
+        <Card className="card-soft border-transparent">
+          <CardContent className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            Cargando gerencia…
+          </CardContent>
+        </Card>
       )}
     </section>
   );
