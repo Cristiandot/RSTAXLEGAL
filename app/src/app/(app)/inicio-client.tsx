@@ -515,6 +515,10 @@ export function InicioClient({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
+          <Button size="sm" onClick={() => setNuevaOpen(true)}>
+            <Plus className="size-4" />
+            Nueva tarea
+          </Button>
           {tiposPresentes.map((t) => {
             const n = pendientes.filter((g) => g.tipo === t).length;
             return (
@@ -530,10 +534,6 @@ export function InicioClient({
               </button>
             );
           })}
-          <Button size="sm" onClick={() => setNuevaOpen(true)}>
-            <Plus className="size-4" />
-            Nueva tarea
-          </Button>
         </div>
       </div>
 
