@@ -104,11 +104,12 @@ function filaSeccion(
 }
 
 /**
- * Aviso de DNP dentro de la sección de imposiciones: el período se declaró
- * sin pago, con la recomendación de pagarlo dentro del mes.
+ * Aviso de DNP dentro de la sección de imposiciones: la planilla ya quedó
+ * declarada, no es necesario pagarla de inmediato, y lo recomendable es
+ * pagarla dentro del mes.
  */
 function filaAvisoDnp(): string {
-  return `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #ef9f27;background:#faeeda;border-radius:6px;padding:10px 12px;font-size:12px;color:#633806;line-height:1.55;"><strong style="color:#854f0b;">Cotizaciones declaradas sin pago (DNP).</strong> Las imposiciones de este período quedaron declaradas pero pendientes de pago. Le recomendamos pagarlas dentro del mes, para no tener problemas con las cotizaciones previsionales de sus trabajadores.</div></td></tr>`;
+  return `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #ef9f27;background:#faeeda;border-radius:6px;padding:10px 12px;font-size:12px;color:#633806;line-height:1.55;"><strong style="color:#854f0b;">Planilla declarada sin pago (DNP).</strong> Sus cotizaciones de este período <strong>ya quedaron declaradas</strong>, por lo que <strong>no es necesario que las pague de inmediato</strong>. Lo recomendable es pagarlas dentro del mes, para no tener problemas con las cotizaciones previsionales de sus trabajadores.</div></td></tr>`;
 }
 
 /** Fila con botón de pago directo al portal correspondiente (Previred / SII). */
@@ -174,9 +175,13 @@ export function construirCorreoComunicacion({
     if (montoPrevired !== null && montoPrevired > 0) {
       subtotal += montoPrevired;
       hayPrevired = true;
+      // Con DNP no se muestra el vencimiento en rojo (la planilla ya quedó
+      // declarada y no es necesario pagarla de inmediato) — el aviso lo explica.
       cuerpoTabla += filaSeccion(
-        "Imposiciones (Previred)",
-        emp.plazo_previred,
+        emp.dnp_declarado
+          ? `Imposiciones (Previred)<span style="font-weight:normal;color:#854f0b;font-size:12px;"> — declarada sin pago (DNP)</span>`
+          : "Imposiciones (Previred)",
+        emp.dnp_declarado ? null : emp.plazo_previred,
         "13:45 hrs",
       );
       if (centros.length > 0) {
