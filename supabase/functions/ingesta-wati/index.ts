@@ -71,14 +71,16 @@ Deno.serve(async (req) => {
     clienteId = (data as string | null) ?? null;
   }
 
-  const titulo = texto.slice(0, 120);
+  // La vista de la bandeja muestra `titulo — detalle`, así que el detalle NO
+  // repite el texto (solo lo incluye si el título quedó truncado).
+  const MAX_TITULO = 200;
+  const truncado = texto.length > MAX_TITULO;
+  const titulo = truncado ? texto.slice(0, MAX_TITULO) + "…" : texto;
   const fecha = new Date().toLocaleString("es-CL", {
     timeZone: "America/Santiago",
   });
   const detalle = [
-    texto,
-    "",
-    "—",
+    truncado ? texto + "\n" : null,
     `Vía #req desde WhatsApp (Wati)${operador ? ` · Operador: ${operador}` : ""}`,
     waId ? `WhatsApp: ${waId}` : null,
     clienteId
