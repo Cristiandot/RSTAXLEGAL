@@ -304,6 +304,16 @@ export async function enviarCorreoComunicacion(
         "23:59 hrs",
       );
       cuerpoTabla += filaDetalle("Monto a pagar F29", formatMonto(montoF29));
+      // Opción de postergar IVA y comentario del contador (módulo F29).
+      if (emp.f29_postergacion_monto !== null && Number(emp.f29_postergacion_monto) > 0) {
+        cuerpoTabla += filaDetalle(
+          "Opción de postergar",
+          formatMonto(emp.f29_postergacion_monto),
+        );
+      }
+      if ((emp.f29_comentario ?? "").trim()) {
+        cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #b5d4f4;background:#e6f1fb;border-radius:6px;padding:9px 12px;font-size:12px;color:#0c447c;line-height:1.55;"><strong>Nota de su contador:</strong> ${emp.f29_comentario!.trim()}</div></td></tr>`;
+      }
       if (!esGrupo) cuerpoTabla += filaBoton("Pagar el F29 en el SII", URL_PAGO_F29);
     }
 

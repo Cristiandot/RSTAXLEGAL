@@ -87,6 +87,8 @@ export type F29Row = {
   numero_operacion: string | null; // N° de operación del pago (cuando paga RS)
   fecha_pago_f29: string | null; // fecha en que se pagó el F29 (cuando paga RS)
   fecha_correo_pago_enviado: string | null; // último envío del aviso de pago al cliente
+  postergacion_monto: number | string | null; // opción de postergar IVA — sale en la Comunicación mensual
+  comentario_correo: string | null; // comentario personalizado del contador — sale en la Comunicación mensual
   observaciones: string | null;
 };
 
@@ -116,6 +118,8 @@ export type ComunicacionRow = {
   grupo_id: string | null; // grupos_cliente: empresas del mismo cliente van en un solo correo
   grupo_nombre: string | null;
   dnp_declarado: boolean; // el ciclo de Liquidaciones quedó con DNP (declaración sin pago)
+  f29_postergacion_monto: number | string | null; // opción de postergar IVA (del módulo F29)
+  f29_comentario: string | null; // comentario personalizado del contador (del módulo F29)
 };
 
 /** Centro de costo con su monto Previred (tabla comunicacion_previred). */

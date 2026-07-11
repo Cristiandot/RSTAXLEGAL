@@ -63,6 +63,26 @@ export async function agregarSocio(
   return { ok: true };
 }
 
+/** Cambia la razón social (nombre) de la empresa en toda la plataforma. */
+export async function renombrarEmpresa(
+  empresaId: string,
+  nombre: string,
+): Promise<Resp> {
+  const limpio = nombre.trim();
+  if (limpio.length < 3) {
+    return { ok: false, error: "El nombre debe tener al menos 3 caracteres" };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("clientes")
+    .update({ razon_social: limpio })
+    .eq("id", empresaId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidarFichas();
+  return { ok: true };
+}
+
 const RE_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**

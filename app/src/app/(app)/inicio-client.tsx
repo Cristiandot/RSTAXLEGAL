@@ -11,9 +11,15 @@ import {
   ChevronRight,
   History,
   CalendarDays,
+  Plus,
+  CheckCircle2,
 } from "lucide-react";
 import { formatFecha } from "@/lib/format";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import {
+  CANAL_LABEL,
+  CANALES_TAREA,
   claseTipoGestion,
   diasDesde,
   TIPO_GESTION_HREF,
@@ -21,10 +27,20 @@ import {
   type GestionRow,
 } from "@/lib/gestiones";
 import type { UsuarioOpcion } from "@/lib/ciclos";
-import { asignarGestion } from "./actions";
+import { asignarGestion, completarTarea, crearTarea } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -242,11 +258,13 @@ export function InicioClient({
   pendientes,
   historial,
   usuarios,
+  clientes,
   errorCarga,
 }: {
   pendientes: GestionRow[];
   historial: GestionRow[];
   usuarios: UsuarioOpcion[];
+  clientes: { id: string; razon_social: string }[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -255,7 +273,17 @@ export function InicioClient({
   const [respF, setRespF] = useState("");
   const [diaSel, setDiaSel] = useState<string | null>(null);
   const [verHistorial, setVerHistorial] = useState(false);
+  const [orden, setOrden] = useState<Orden>(null);
   const [asignando, startAsignar] = useTransition();
+  // Diálogo del botón "+": tarea manual con canal y plazo de entrega.
+  const [nuevaOpen, setNuevaOpen] = useState(false);
+  const [ntTitulo, setNtTitulo] = useState("");
+  const [ntDetalle, setNtDetalle] = useState("");
+  const [ntCliente, setNtCliente] = useState("");
+  const [ntCanal, setNtCanal] = useState("dashboard");
+  const [ntPlazo, setNtPlazo] = useState("");
+  const [ntResp, setNtResp] = useState("");
+  const [creando, startCrear] = useTransition();
 
   const tiposPresentes = useMemo(() => {
     const s = new Set(pendientes.map((g) => g.tipo));
@@ -264,7 +292,7 @@ export function InicioClient({
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return pendientes.filter((g) => {
+    const out = pendientes.filter((g) => {
       if (tipoF && g.tipo !== tipoF) return false;
       if (respF === "sin" && g.responsable_id !== null) return false;
       if (respF && respF !== "sin" && g.responsable_id !== respF) return false;
@@ -275,7 +303,22 @@ export function InicioClient({
       }
       return true;
     });
-  }, [pendientes, buscar, tipoF, respF, diaSel]);
+    if (!orden) return out;
+    const valor = (g: GestionRow): unknown => {
+      switch (orden.col) {
+        case "tipo": return TIPO_GESTION_LABEL[g.tipo] ?? g.tipo;
+        case "cliente": return g.razon_social;
+        case "detalle": return g.trabajador ?? g.detalle;
+        case "canal": return g.canal;
+        case "recibida": return g.created_at;
+        case "plazo": return g.plazo;
+        case "estado": return g.estado;
+        case "responsable": return g.responsable;
+        default: return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
+  }, [pendientes, buscar, tipoF, respF, diaSel, orden]);
 
   const sinAsignar = pendientes.filter((g) => g.responsable_id === null).length;
   const atrasadas = pendientes.filter((g) => diasDesde(g.created_at) > 7).length;
@@ -293,14 +336,56 @@ export function InicioClient({
     });
   }
 
+  function crear() {
+    startCrear(async () => {
+      const res = await crearTarea({
+        titulo: ntTitulo,
+        detalle: ntDetalle.trim() || null,
+        clienteId: ntCliente || null,
+        canal: ntCanal,
+        plazo: ntPlazo || null,
+        responsableId: ntResp || null,
+      });
+      if (res.ok) {
+        toast.success("Tarea creada");
+        setNuevaOpen(false);
+        setNtTitulo("");
+        setNtDetalle("");
+        setNtCliente("");
+        setNtCanal("dashboard");
+        setNtPlazo("");
+        setNtResp("");
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Error al crear la tarea");
+      }
+    });
+  }
+
+  function completar(g: GestionRow, terminada: boolean) {
+    startAsignar(async () => {
+      const res = await completarTarea(g.gestion_id, terminada);
+      if (res.ok) {
+        toast.success(terminada ? "Tarea terminada" : "Tarea reabierta");
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Error al actualizar la tarea");
+      }
+    });
+  }
+
   function filaGestion(g: GestionRow, esHistorial: boolean) {
     const dias = diasDesde(g.created_at);
+    const esTarea = g.fuente === "tareas_oficina";
     const href = `${TIPO_GESTION_HREF[g.tipo] ?? "/"}?gestion=${g.gestion_id}`;
+    const plazoVencido =
+      g.plazo !== null && !esHistorial && diasDesde(g.plazo + "T12:00:00") >= 0 &&
+      g.plazo < hoyLocal();
     return (
       <TableRow
         key={`${g.fuente}-${g.gestion_id}`}
-        onClick={() => router.push(href)}
-        className="cursor-pointer"
+        onClick={esTarea ? undefined : () => router.push(href)}
+        className={esTarea ? undefined : "cursor-pointer"}
       >
         <TableCell>
           <Badge variant="outline" className={claseTipoGestion(g.tipo)}>
@@ -321,6 +406,15 @@ export function InicioClient({
           </span>
         </TableCell>
         <TableCell>
+          {g.canal ? (
+            <Badge variant="outline" className="border-slate-200 bg-slate-50 font-normal text-slate-600">
+              {CANAL_LABEL[g.canal] ?? g.canal}
+            </Badge>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TableCell>
+        <TableCell>
           <span className="text-sm tabular-nums">{formatFecha(fechaLocal(g.created_at))}</span>
           {!esHistorial ? (
             dias > 7 ? (
@@ -335,6 +429,18 @@ export function InicioClient({
               </span>
             )
           ) : null}
+        </TableCell>
+        <TableCell>
+          {g.plazo ? (
+            <span
+              className={`text-sm tabular-nums ${plazoVencido ? "font-semibold text-red-600" : ""}`}
+              title={plazoVencido ? "Plazo de entrega vencido" : "Plazo de entrega"}
+            >
+              {formatFecha(g.plazo)}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
         </TableCell>
         <TableCell>
           <Badge variant="outline" className={claseEstadoGestion(g.estado)}>
@@ -369,13 +475,28 @@ export function InicioClient({
           )}
         </TableCell>
         <TableCell onClick={(e) => e.stopPropagation()}>
-          <Link
-            href={href}
-            className="inline-flex items-center gap-1 text-sm font-medium text-[var(--brand-teal,#17A2B8)] hover:underline"
-          >
-            Abrir
-            <ExternalLink className="size-3.5" />
-          </Link>
+          {esTarea ? (
+            <button
+              type="button"
+              disabled={asignando}
+              onClick={() => completar(g, !esHistorial)}
+              className={`inline-flex items-center gap-1 text-sm font-medium hover:underline ${
+                esHistorial ? "text-muted-foreground" : "text-emerald-600"
+              }`}
+              title={esHistorial ? "Reabrir la tarea" : "Marcar la tarea como terminada"}
+            >
+              <CheckCircle2 className="size-3.5" />
+              {esHistorial ? "Reabrir" : "Terminar"}
+            </button>
+          ) : (
+            <Link
+              href={href}
+              className="inline-flex items-center gap-1 text-sm font-medium text-[var(--brand-teal,#17A2B8)] hover:underline"
+            >
+              Abrir
+              <ExternalLink className="size-3.5" />
+            </Link>
+          )}
         </TableCell>
       </TableRow>
     );
@@ -393,7 +514,7 @@ export function InicioClient({
             una fila para ir directo a la gestión.
           </p>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {tiposPresentes.map((t) => {
             const n = pendientes.filter((g) => g.tipo === t).length;
             return (
@@ -409,6 +530,10 @@ export function InicioClient({
               </button>
             );
           })}
+          <Button size="sm" onClick={() => setNuevaOpen(true)}>
+            <Plus className="size-4" />
+            Nueva tarea
+          </Button>
         </div>
       </div>
 
@@ -487,12 +612,14 @@ export function InicioClient({
             <Table stickyHeader>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Trabajador / detalle</TableHead>
-                  <TableHead>Recibida</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="w-[190px]">Responsable</TableHead>
+                  <ThSort col="tipo" orden={orden} setOrden={setOrden}>Tipo</ThSort>
+                  <ThSort col="cliente" orden={orden} setOrden={setOrden}>Cliente</ThSort>
+                  <ThSort col="detalle" orden={orden} setOrden={setOrden}>Trabajador / detalle</ThSort>
+                  <ThSort col="canal" orden={orden} setOrden={setOrden}>Canal</ThSort>
+                  <ThSort col="recibida" orden={orden} setOrden={setOrden}>Recibida</ThSort>
+                  <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>
+                  <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
+                  <ThSort col="responsable" orden={orden} setOrden={setOrden} className="w-[190px]">Responsable</ThSort>
                   <TableHead />
                 </TableRow>
               </TableHeader>
@@ -500,7 +627,7 @@ export function InicioClient({
                 {filtradas.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={9}
                       className="py-10 text-center text-muted-foreground"
                     >
                       {pendientes.length === 0
@@ -534,7 +661,9 @@ export function InicioClient({
                       <TableHead>Tipo</TableHead>
                       <TableHead>Cliente</TableHead>
                       <TableHead>Trabajador / detalle</TableHead>
+                      <TableHead>Canal</TableHead>
                       <TableHead>Recibida</TableHead>
+                      <TableHead>Plazo</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Responsable</TableHead>
                       <TableHead />
@@ -544,7 +673,7 @@ export function InicioClient({
                     {historial.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={7}
+                          colSpan={9}
                           className="py-8 text-center text-muted-foreground"
                         >
                           Sin gestiones terminadas recientes.
@@ -566,6 +695,112 @@ export function InicioClient({
           onDia={setDiaSel}
         />
       </div>
+
+      {/* Diálogo del botón "+": tarea manual con canal y plazo de entrega */}
+      <Dialog
+        open={nuevaOpen}
+        onOpenChange={(o) => {
+          if (!o) setNuevaOpen(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Nueva tarea</DialogTitle>
+            <DialogDescription>
+              Requerimiento que llegó por fuera del portal (correo, Wati,
+              teléfono) o creado a mano por el equipo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="nt_titulo">Título *</Label>
+              <Input
+                id="nt_titulo"
+                placeholder="Ej.: Certificado de renta para socio"
+                value={ntTitulo}
+                onChange={(e) => setNtTitulo(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="nt_detalle">Detalle</Label>
+              <Textarea
+                id="nt_detalle"
+                rows={2}
+                value={ntDetalle}
+                onChange={(e) => setNtDetalle(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="nt_cliente">Cliente</Label>
+                <select
+                  id="nt_cliente"
+                  className={selectCls}
+                  value={ntCliente}
+                  onChange={(e) => setNtCliente(e.target.value)}
+                >
+                  <option value="">Sin cliente</option>
+                  {clientes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.razon_social}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="nt_canal">Canal</Label>
+                <select
+                  id="nt_canal"
+                  className={selectCls}
+                  value={ntCanal}
+                  onChange={(e) => setNtCanal(e.target.value)}
+                >
+                  {CANALES_TAREA.map((c) => (
+                    <option key={c} value={c}>
+                      {CANAL_LABEL[c]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="nt_plazo">Plazo de entrega</Label>
+                <Input
+                  id="nt_plazo"
+                  type="date"
+                  value={ntPlazo}
+                  onChange={(e) => setNtPlazo(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="nt_resp">Responsable</Label>
+                <select
+                  id="nt_resp"
+                  className={selectCls}
+                  value={ntResp}
+                  onChange={(e) => setNtResp(e.target.value)}
+                >
+                  <option value="">Sin asignar</option>
+                  {usuarios.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNuevaOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={crear} disabled={creando || !ntTitulo.trim()}>
+              {creando ? "Creando…" : "Crear tarea"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

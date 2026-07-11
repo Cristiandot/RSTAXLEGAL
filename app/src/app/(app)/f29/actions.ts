@@ -21,6 +21,8 @@ export type GuardarF29Input = {
   fechaPagoOficina: string | null;
   numeroOperacion: string | null;
   correoCliente: string | null;
+  postergacionMonto: string | null;
+  comentarioCorreo: string | null;
   observaciones: string | null;
 };
 
@@ -47,6 +49,8 @@ export async function guardarF29(
       pago_por: input.pagoPor,
       fecha_pago_oficina: input.fechaPagoOficina,
       numero_operacion: input.numeroOperacion,
+      postergacion_monto: input.postergacionMonto,
+      comentario_correo: input.comentarioCorreo,
       observaciones: input.observaciones,
     })
     .eq("id", input.cicloId);

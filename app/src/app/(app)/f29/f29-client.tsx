@@ -326,6 +326,8 @@ export function F29Client({
         fechaPagoOficina: get("fecha_pago_oficina"),
         numeroOperacion: numOp.trim() || null,
         correoCliente: correoCli.trim() || null,
+        postergacionMonto: get("postergacion_monto"),
+        comentarioCorreo: get("comentario_correo"),
         observaciones: get("observaciones"),
       });
       if (res.ok) {
@@ -774,6 +776,36 @@ export function F29Client({
                   </span>
                 </div>
               ) : null}
+              <div className="col-span-2 grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/20 p-3">
+                <div className="col-span-2 text-xs font-semibold text-muted-foreground">
+                  Para el correo de Comunicación mensual
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="postergacion_monto">Opción de postergar ($)</Label>
+                  <Input
+                    id="postergacion_monto"
+                    name="postergacion_monto"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="—"
+                    defaultValue={editando.postergacion_monto ?? ""}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Si el cliente puede postergar el IVA, escribe el monto: sale
+                    en el detalle del correo.
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="comentario_correo">Comentario personalizado</Label>
+                  <Textarea
+                    id="comentario_correo"
+                    name="comentario_correo"
+                    rows={2}
+                    placeholder="Nota del contador para el cliente…"
+                    defaultValue={editando.comentario_correo ?? ""}
+                  />
+                </div>
+              </div>
               <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="observaciones">Observaciones</Label>
                 <Textarea

@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, ChevronRight, Plus, X } from "lucide-react";
+import { Search, ChevronRight, Plus, X, Pencil } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
 import { ThSort } from "@/components/th-sort";
 import { Progreso } from "@/components/progreso";
@@ -39,6 +39,7 @@ import {
   agregarSocio,
   quitarCorreoAdicional,
   quitarSocio,
+  renombrarEmpresa,
   type Socio,
 } from "./actions";
 
@@ -61,6 +62,68 @@ export type EmpresaFichaRow = {
   /** Correos adicionales: todo envío al cliente va con copia a esta lista. */
   correos_adicionales: string[];
 };
+
+/** Título del diálogo con edición del nombre (razón social) de la empresa. */
+function NombreEditable({ empresa }: { empresa: EmpresaFichaRow }) {
+  const router = useRouter();
+  const [editando, setEditando] = useState(false);
+  const [nombre, setNombre] = useState(empresa.razon_social);
+  const [trabajando, start] = useTransition();
+
+  function guardar() {
+    if (nombre.trim() === empresa.razon_social) {
+      setEditando(false);
+      return;
+    }
+    start(async () => {
+      const res = await renombrarEmpresa(empresa.id, nombre);
+      if (res.ok) {
+        toast.success("Nombre actualizado");
+        setEditando(false);
+        router.refresh();
+      } else toast.error(res.error ?? "Error al renombrar");
+    });
+  }
+
+  if (editando) {
+    return (
+      <span className="flex items-center gap-2">
+        <Input
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          className="h-8 flex-1 text-base"
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === "Enter") guardar();
+            if (e.key === "Escape") {
+              setNombre(empresa.razon_social);
+              setEditando(false);
+            }
+          }}
+        />
+        <Button size="sm" className="h-8" disabled={trabajando} onClick={guardar}>
+          {trabajando ? "…" : "Guardar"}
+        </Button>
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-2">
+      {empresa.razon_social}
+      <button
+        type="button"
+        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+        title="Editar el nombre de la empresa"
+        onClick={() => {
+          setNombre(empresa.razon_social);
+          setEditando(true);
+        }}
+      >
+        <Pencil className="size-3.5" />
+      </button>
+    </span>
+  );
+}
 
 /** Sección dedicada: correos adicionales del cliente, agregables sin límite. */
 function CorreosCard({ empresa }: { empresa: EmpresaFichaRow }) {
@@ -496,7 +559,7 @@ export function EmpresasClient({
           <DialogContent className="sm:max-w-3xl">
             <DialogHeader>
               <DialogTitle className="font-heading">
-                {empSel.razon_social}
+                <NombreEditable key={empSel.id} empresa={empSel} />
               </DialogTitle>
               <DialogDescription>
                 {empSel.grupo_codigo ? `${empSel.grupo_codigo} — ` : ""}

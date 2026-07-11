@@ -6,7 +6,8 @@ export type GestionRow = {
     | "solicitudes_rrhh"
     | "contratos"
     | "licencias_medicas"
-    | "solicitudes_documento";
+    | "solicitudes_documento"
+    | "tareas_oficina";
   gestion_id: string;
   tipo: string; // contrato | anexo | amonestacion | finiquito | vacaciones | permiso | licencia | documento
   trabajador: string | null;
@@ -20,7 +21,23 @@ export type GestionRow = {
   asignado_at: string | null;
   created_at: string;
   updated_at: string | null;
+  canal: string | null; // portal | dashboard | correo | wati | telefono | otro
+  plazo: string | null; // plazo de entrega (tareas manuales)
 };
+
+/** Canales por los que puede llegar un requerimiento. Correo/Wati aún no
+ * están conectados al dashboard, pero la opción queda para cuando se integren. */
+export const CANAL_LABEL: Record<string, string> = {
+  portal: "Portal",
+  dashboard: "Dashboard",
+  correo: "Mail",
+  wati: "Wati",
+  telefono: "Teléfono",
+  otro: "Otro",
+};
+
+/** Canales elegibles al crear una tarea manual con el botón "+". */
+export const CANALES_TAREA = ["dashboard", "correo", "wati", "telefono", "otro"];
 
 /** Etiqueta legible por tipo de gestión. */
 export const TIPO_GESTION_LABEL: Record<string, string> = {
@@ -32,6 +49,7 @@ export const TIPO_GESTION_LABEL: Record<string, string> = {
   permiso: "Permiso",
   licencia: "Licencia médica",
   documento: "Documento",
+  tarea: "Tarea",
 };
 
 /** Ruta del módulo donde se trabaja cada tipo de gestión. */
@@ -44,6 +62,7 @@ export const TIPO_GESTION_HREF: Record<string, string> = {
   permiso: "/permisos",
   licencia: "/licencias",
   documento: "/documentos",
+  tarea: "/", // las tareas manuales viven en la bandeja del inicio
 };
 
 /** Clase Tailwind del badge por tipo de gestión. */
@@ -65,6 +84,8 @@ export function claseTipoGestion(tipo: string): string {
       return "border-violet-200 bg-violet-50 text-violet-700";
     case "documento":
       return "border-amber-200 bg-amber-50 text-amber-700";
+    case "tarea":
+      return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700";
     default:
       return "border-slate-200 bg-slate-100 text-slate-600";
   }

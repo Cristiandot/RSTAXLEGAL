@@ -48,6 +48,13 @@ export default async function HomePage() {
       .order("nombre"),
   ]);
 
+  // Empresas activas para el selector del botón "+" (tarea manual).
+  const clientesRes = await supabase
+    .from("clientes")
+    .select("id, razon_social")
+    .eq("activo", true)
+    .order("razon_social");
+
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
       <header className="mb-6">
@@ -64,6 +71,9 @@ export default async function HomePage() {
         pendientes={(pendientesRes.data ?? []) as GestionRow[]}
         historial={(historialRes.data ?? []) as GestionRow[]}
         usuarios={(usuariosRes.data ?? []) as UsuarioOpcion[]}
+        clientes={
+          (clientesRes.data ?? []) as { id: string; razon_social: string }[]
+        }
         errorCarga={pendientesRes.error?.message ?? null}
       />
     </main>
