@@ -62,13 +62,20 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  // Resolver el cliente por su número de WhatsApp registrado en la ficha.
+  // Resolver el cliente por su número de WhatsApp (tabla cliente_whatsapp).
+  // Devuelve cliente_id (empresa) solo si el grupo tiene una; el nombre del
+  // grupo se usa para mostrar el cliente aunque no haya empresa unívoca.
   let clienteId: string | null = null;
+  let clienteNombre: string | null = null;
   if (waId) {
     const { data } = await supabase.rpc("resolver_cliente_por_whatsapp", {
       p_wa: waId,
     });
-    clienteId = (data as string | null) ?? null;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row) {
+      clienteId = row.cliente_id ?? null;
+      clienteNombre = row.grupo_nombre ?? null;
+    }
   }
 
   // La vista de la bandeja muestra `titulo — detalle`, así que el detalle NO
@@ -81,11 +88,11 @@ Deno.serve(async (req) => {
   });
   const detalle = [
     truncado ? texto + "\n" : null,
+    clienteNombre
+      ? `Cliente: ${clienteNombre}`
+      : "Cliente no identificado (número sin coincidencia)",
     `Vía #req desde WhatsApp (Wati)${operador ? ` · Operador: ${operador}` : ""}`,
     waId ? `WhatsApp: ${waId}` : null,
-    clienteId
-      ? null
-      : "Cliente no identificado (número sin coincidencia en fichas)",
     `Recibido: ${fecha}`,
   ]
     .filter((l) => l !== null)
@@ -100,7 +107,13 @@ Deno.serve(async (req) => {
   if (error) return json({ error: error.message }, 500);
 
   return json(
-    { ok: true, id: inserted.id, cliente_id: clienteId, identificado: !!clienteId },
+    {
+      ok: true,
+      id: inserted.id,
+      cliente_id: clienteId,
+      cliente: clienteNombre,
+      identificado: !!clienteNombre,
+    },
     201,
   );
 });
