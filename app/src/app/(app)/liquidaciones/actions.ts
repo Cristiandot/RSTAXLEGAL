@@ -92,10 +92,11 @@ export async function enviarLiquidacionesCliente(
   if (!soloMarcar) {
     const { data: cli } = await supabase
       .from("clientes")
-      .select("razon_social, correo_empresa")
+      .select("razon_social, correo_empresa, contacto_correo")
       .eq("id", clienteId)
       .maybeSingle();
-    const destino = (cli?.correo_empresa ?? "").trim();
+    // Destino: correo de la empresa, o el del contacto (el obligatorio de la ficha).
+    const destino = (cli?.correo_empresa ?? cli?.contacto_correo ?? "").trim();
     if (!destino) {
       return {
         ok: false,
@@ -173,7 +174,7 @@ export async function enviarAvisoPreviredPagado(
       .maybeSingle(),
     supabase
       .from("clientes")
-      .select("razon_social, correo_empresa")
+      .select("razon_social, correo_empresa, contacto_correo")
       .eq("id", clienteId)
       .maybeSingle(),
   ]);
@@ -191,7 +192,8 @@ export async function enviarAvisoPreviredPagado(
       error: "Registra (y guarda) el monto de pago antes de enviar el aviso.",
     };
   }
-  const destino = (cli?.correo_empresa ?? "").trim();
+  // Destino: correo de la empresa, o el del contacto (el obligatorio de la ficha).
+  const destino = (cli?.correo_empresa ?? cli?.contacto_correo ?? "").trim();
   if (!destino) {
     return {
       ok: false,

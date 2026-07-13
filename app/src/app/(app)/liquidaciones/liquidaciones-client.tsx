@@ -793,9 +793,11 @@ export function LiquidacionesClient({
                   ) : null}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {editando.correo_empresa ? (
+                  {editando.correo_empresa || editando.contacto_correo ? (
                     <>
-                      Le llegaría a <b>{editando.correo_empresa}</b>
+                      Le llegaría a{" "}
+                      <b>{editando.correo_empresa ?? editando.contacto_correo}</b>
+                      {!editando.correo_empresa ? " (correo del contacto)" : ""}
                       {editando.correos_adicionales?.length ? (
                         <>
                           {" "}con copia a <b>{editando.correos_adicionales.join(", ")}</b>
@@ -805,7 +807,7 @@ export function LiquidacionesClient({
                     </>
                   ) : (
                     <span className="text-red-600">
-                      La empresa no tiene correo en su ficha — cárgalo en Empresas para poder enviar.
+                      La empresa no tiene ningún correo en su ficha — cárgalo en Empresas para poder enviar.
                     </span>
                   )}
                 </p>
@@ -818,7 +820,7 @@ export function LiquidacionesClient({
                       enviandoLiq ||
                       !editando.fecha_previred_pagado ||
                       !editando.monto_previred_total ||
-                      !editando.correo_empresa
+                      (!editando.correo_empresa && !editando.contacto_correo)
                     }
                     onClick={enviarAvisoPagado}
                   >

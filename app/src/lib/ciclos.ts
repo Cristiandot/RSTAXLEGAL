@@ -31,6 +31,7 @@ export type LiquidacionRow = {
   /** Aviso de imposiciones pagadas: fecha del correo + destinatarios a mostrar. */
   fecha_correo_previred_enviado: string | null;
   correo_empresa: string | null;
+  contacto_correo: string | null;
   correos_adicionales: string[] | null;
 };
 
