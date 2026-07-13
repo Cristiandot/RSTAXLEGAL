@@ -48,10 +48,11 @@ export default async function HomePage() {
       .order("nombre"),
   ]);
 
-  // Empresas activas para el selector del botón "+" (tarea manual).
+  // Empresas activas: para el selector del botón "+" (tarea manual) y para el
+  // desplegable de empresa por fila (se filtran por grupo del requerimiento).
   const clientesRes = await supabase
     .from("clientes")
-    .select("id, razon_social")
+    .select("id, razon_social, grupo_id")
     .eq("activo", true)
     .order("razon_social");
 
@@ -72,7 +73,11 @@ export default async function HomePage() {
         historial={(historialRes.data ?? []) as GestionRow[]}
         usuarios={(usuariosRes.data ?? []) as UsuarioOpcion[]}
         clientes={
-          (clientesRes.data ?? []) as { id: string; razon_social: string }[]
+          (clientesRes.data ?? []) as {
+            id: string;
+            razon_social: string;
+            grupo_id: string | null;
+          }[]
         }
         errorCarga={pendientesRes.error?.message ?? null}
       />

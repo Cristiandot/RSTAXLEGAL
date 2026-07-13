@@ -27,7 +27,12 @@ import {
   type GestionRow,
 } from "@/lib/gestiones";
 import type { UsuarioOpcion } from "@/lib/ciclos";
-import { asignarGestion, completarTarea, crearTarea } from "./actions";
+import {
+  asignarEmpresaTarea,
+  asignarGestion,
+  completarTarea,
+  crearTarea,
+} from "./actions";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -264,7 +269,7 @@ export function InicioClient({
   pendientes: GestionRow[];
   historial: GestionRow[];
   usuarios: UsuarioOpcion[];
-  clientes: { id: string; razon_social: string }[];
+  clientes: { id: string; razon_social: string; grupo_id: string | null }[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -284,6 +289,19 @@ export function InicioClient({
   const [ntPlazo, setNtPlazo] = useState("");
   const [ntResp, setNtResp] = useState("");
   const [creando, startCrear] = useTransition();
+
+  // Empresas agrupadas por cliente (grupo), para el desplegable de Empresa por
+  // fila: al abrirlo se ofrecen todas las sociedades de ese cliente.
+  const empresasPorGrupo = useMemo(() => {
+    const m = new Map<string, { id: string; razon_social: string }[]>();
+    for (const c of clientes) {
+      if (!c.grupo_id) continue;
+      const arr = m.get(c.grupo_id) ?? [];
+      arr.push({ id: c.id, razon_social: c.razon_social });
+      m.set(c.grupo_id, arr);
+    }
+    return m;
+  }, [clientes]);
 
   const tiposPresentes = useMemo(() => {
     const s = new Set(pendientes.map((g) => g.tipo));
@@ -337,6 +355,18 @@ export function InicioClient({
     });
   }
 
+  function asignarEmpresa(g: GestionRow, clienteId: string | null) {
+    startAsignar(async () => {
+      const res = await asignarEmpresaTarea(g.gestion_id, clienteId);
+      if (res.ok) {
+        toast.success("Empresa actualizada");
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Error al cambiar la empresa");
+      }
+    });
+  }
+
   function crear() {
     startCrear(async () => {
       const res = await crearTarea({
@@ -378,6 +408,14 @@ export function InicioClient({
   function filaGestion(g: GestionRow, esHistorial: boolean) {
     const dias = diasDesde(g.created_at);
     const esTarea = g.fuente === "tareas_oficina";
+    const empresasGrupo = g.grupo_id ? empresasPorGrupo.get(g.grupo_id) ?? [] : [];
+    // La empresa se puede cambiar solo en requerimientos (tareas) cuyo cliente
+    // (grupo) tenga empresas donde elegir.
+    const puedeCambiarEmpresa = esTarea && !esHistorial && empresasGrupo.length > 0;
+    // Si la empresa asignada no está en la lista (p.ej. inactiva), la incluimos
+    // igual como opción para no perderla del selector.
+    const faltaActual =
+      g.cliente_id !== null && !empresasGrupo.some((e) => e.id === g.cliente_id);
     const href = `${TIPO_GESTION_HREF[g.tipo] ?? "/"}?gestion=${g.gestion_id}`;
     const plazoVencido =
       g.plazo !== null && !esHistorial && diasDesde(g.plazo + "T12:00:00") >= 0 &&
@@ -403,13 +441,33 @@ export function InicioClient({
             ) : null}
           </span>
         </TableCell>
-        <TableCell>
-          <span
-            className="block max-w-[200px] truncate text-muted-foreground"
-            title={g.razon_social ?? ""}
-          >
-            {g.razon_social ?? "—"}
-          </span>
+        <TableCell onClick={(e) => e.stopPropagation()}>
+          {puedeCambiarEmpresa ? (
+            <select
+              aria-label="Empresa del requerimiento"
+              className="h-8 max-w-[200px] rounded-md border border-input bg-card px-2 text-xs shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={g.cliente_id ?? ""}
+              disabled={asignando}
+              onChange={(e) => asignarEmpresa(g, e.target.value || null)}
+            >
+              <option value="">— Sin empresa</option>
+              {faltaActual ? (
+                <option value={g.cliente_id ?? ""}>{g.razon_social}</option>
+              ) : null}
+              {empresasGrupo.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.razon_social}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span
+              className="block max-w-[200px] truncate text-muted-foreground"
+              title={g.razon_social ?? ""}
+            >
+              {g.razon_social ?? "—"}
+            </span>
+          )}
         </TableCell>
         <TableCell>
           <span className="block max-w-[240px] truncate" title={`${g.trabajador ?? ""} ${g.detalle ?? ""}`}>

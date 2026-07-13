@@ -16,6 +16,7 @@ export type GestionRow = {
   razon_social: string | null; // empresa (razón social de la sociedad)
   cliente: string | null; // cliente = grupo (la relación/persona que atendemos)
   cliente_codigo: string | null; // código del grupo (p.ej. A.2)
+  grupo_id: string | null; // id del grupo (para listar sus empresas)
   estado: string;
   pendiente: boolean;
   responsable_id: string | null;

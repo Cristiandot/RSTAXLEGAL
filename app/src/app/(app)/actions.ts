@@ -78,6 +78,50 @@ export async function completarTarea(
 }
 
 /**
+ * Cambia la empresa (cliente_id) de una tarea/requerimiento desde la bandeja.
+ * Útil cuando la auto-identificación (correo/WhatsApp) eligió una empresa del
+ * grupo distinta a la correcta. Solo aplica a `tareas_oficina`. Valida que la
+ * empresa elegida pertenezca al mismo grupo (cliente) de la tarea; el grupo no
+ * cambia. `clienteId` null deja la tarea sin empresa (solo a nivel cliente).
+ */
+export async function asignarEmpresaTarea(
+  tareaId: string,
+  clienteId: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+
+  const { data: tarea, error: eTarea } = await supabase
+    .from("tareas_oficina")
+    .select("grupo_id")
+    .eq("id", tareaId)
+    .maybeSingle();
+  if (eTarea) return { ok: false, error: eTarea.message };
+  if (!tarea) return { ok: false, error: "Tarea no encontrada" };
+
+  if (clienteId) {
+    const { data: empresa, error: eEmp } = await supabase
+      .from("clientes")
+      .select("grupo_id")
+      .eq("id", clienteId)
+      .maybeSingle();
+    if (eEmp) return { ok: false, error: eEmp.message };
+    if (!empresa) return { ok: false, error: "Empresa no encontrada" };
+    if (tarea.grupo_id && empresa.grupo_id && empresa.grupo_id !== tarea.grupo_id) {
+      return { ok: false, error: "La empresa no pertenece al cliente de la tarea." };
+    }
+  }
+
+  const { error } = await supabase
+    .from("tareas_oficina")
+    .update({ cliente_id: clienteId })
+    .eq("id", tareaId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
  * Asigna (o desasigna con null) una gestión a un usuario del equipo, desde la
  * bandeja de Inicio y requerimientos. Estampa la fecha de asignación y
  * revalida el layout completo para refrescar el contador del sidebar.
