@@ -21,6 +21,7 @@ import {
   FileDown,
   HandCoins,
   HardHat,
+  KeyRound,
   ScrollText,
   Home,
   Scale,
@@ -274,6 +275,15 @@ export const MODULOS: SeccionModulos[] = [
           "Ficha de cada empresa: datos tributarios, contacto, cuenta bancaria y servicios.",
         href: "/empresas",
         icon: Building2,
+        estado: "activo",
+      },
+      {
+        key: "credenciales",
+        label: "Credenciales",
+        descripcion:
+          "Claves SII y Previred de cada empresa: ocultas con puntitos, ver o copiar con un click y edición en línea. Cada revelación queda auditada.",
+        href: "/credenciales",
+        icon: KeyRound,
         estado: "activo",
       },
       {
