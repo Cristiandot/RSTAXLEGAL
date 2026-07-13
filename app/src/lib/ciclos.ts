@@ -33,6 +33,8 @@ export type LiquidacionRow = {
   correo_empresa: string | null;
   contacto_correo: string | null;
   correos_adicionales: string[] | null;
+  /** Correo a nivel de cliente (grupos_cliente) — último fallback del destino. */
+  grupo_correo: string | null;
 };
 
 /** Fila de `v_checklist_conciliacion` (ciclo Conciliación SII/KAME). */

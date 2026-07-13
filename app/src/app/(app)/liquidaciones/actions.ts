@@ -8,6 +8,12 @@ import { correosCopiaCliente } from "@/lib/correos-cliente";
 import { etiquetaPeriodo } from "@/lib/periodos";
 import { descargarLiquidaciones } from "./[clienteId]/actions";
 
+/** El join `grupo:grupos_cliente(correo)` puede venir como objeto o arreglo. */
+function correoDelGrupo(g: unknown): string | null {
+  const fila = Array.isArray(g) ? g[0] : g;
+  return (fila as { correo?: string | null } | null | undefined)?.correo ?? null;
+}
+
 export type GuardarLiquidacionInput = {
   cicloId: string;
   clienteId: string;
@@ -92,11 +98,13 @@ export async function enviarLiquidacionesCliente(
   if (!soloMarcar) {
     const { data: cli } = await supabase
       .from("clientes")
-      .select("razon_social, correo_empresa, contacto_correo")
+      .select("razon_social, correo_empresa, contacto_correo, grupo:grupos_cliente(correo)")
       .eq("id", clienteId)
       .maybeSingle();
-    // Destino: correo de la empresa, o el del contacto (el obligatorio de la ficha).
-    const destino = (cli?.correo_empresa ?? cli?.contacto_correo ?? "").trim();
+    // Destino: correo de la empresa → correo del contacto → correo del cliente (grupo).
+    const destino = (
+      cli?.correo_empresa ?? cli?.contacto_correo ?? correoDelGrupo(cli?.grupo) ?? ""
+    ).trim();
     if (!destino) {
       return {
         ok: false,
@@ -174,7 +182,7 @@ export async function enviarAvisoPreviredPagado(
       .maybeSingle(),
     supabase
       .from("clientes")
-      .select("razon_social, correo_empresa, contacto_correo")
+      .select("razon_social, correo_empresa, contacto_correo, grupo:grupos_cliente(correo)")
       .eq("id", clienteId)
       .maybeSingle(),
   ]);
@@ -192,8 +200,10 @@ export async function enviarAvisoPreviredPagado(
       error: "Registra (y guarda) el monto de pago antes de enviar el aviso.",
     };
   }
-  // Destino: correo de la empresa, o el del contacto (el obligatorio de la ficha).
-  const destino = (cli?.correo_empresa ?? cli?.contacto_correo ?? "").trim();
+  // Destino: correo de la empresa → correo del contacto → correo del cliente (grupo).
+  const destino = (
+    cli?.correo_empresa ?? cli?.contacto_correo ?? correoDelGrupo(cli?.grupo) ?? ""
+  ).trim();
   if (!destino) {
     return {
       ok: false,
