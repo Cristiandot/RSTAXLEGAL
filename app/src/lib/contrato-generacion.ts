@@ -158,6 +158,7 @@ export async function generarYSubirContrato(
     RUT_REP_LEGAL: (cli.representante_legal_rut as string) ?? "",
     EMAIL_EMPRESA: (cli.correo_empresa as string) ?? "",
     DIRECCION_EMPRESA: domicilio,
+    COMUNA_EMPRESA: (cli.comuna as string) || (cli.ciudad as string) || "",
     NOMBRE_EMPLEADO: nombreCompleto,
     RUT_EMPLEADO: rutEmpleado,
     EMAILPERSONAL_EMPLEADO: (t.correo as string) ?? "",
