@@ -44,8 +44,11 @@ Deno.serve(async (req) => {
   }
 
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
-  const waId = String(body.waId ?? "").trim();
-  const operador = String(body.operatorName ?? "").trim();
+  // Tolerante al nombre del campo del número (waId / wald / wa_id / phone / numero / from).
+  const waId = String(
+    body.waId ?? body.wald ?? body.wa_id ?? body.phone ?? body.numero ?? body.from ?? "",
+  ).trim();
+  const operador = String(body.operatorName ?? body.operator ?? "").trim();
 
   // Texto del requerimiento: prioriza `texto`; si viene `text` crudo, extrae lo
   // que sigue a "#req".
