@@ -152,6 +152,91 @@ export async function enviarLiquidacionesCliente(
 }
 
 /**
+ * Aviso al cliente de que sus imposiciones del período quedaron pagadas
+ * (correo inmediato desde el modal, independiente del resumen de Comunicación
+ * mensual). Requiere fecha de pago y monto guardados en el ciclo. Va al correo
+ * de la empresa con copia a los correos adicionales, y estampa
+ * `fecha_correo_previred_enviado` para el estado Enviar→Reenviar.
+ */
+export async function enviarAvisoPreviredPagado(
+  cicloId: string,
+  clienteId: string,
+  periodo: string,
+): Promise<{ ok: boolean; error?: string; enviadoA?: string; cc?: string[] }> {
+  const supabase = await createClient();
+
+  const [{ data: ciclo }, { data: cli }] = await Promise.all([
+    supabase
+      .from("ciclo_liquidaciones")
+      .select("fecha_previred_pagado, monto_previred_total")
+      .eq("id", cicloId)
+      .maybeSingle(),
+    supabase
+      .from("clientes")
+      .select("razon_social, correo_empresa")
+      .eq("id", clienteId)
+      .maybeSingle(),
+  ]);
+
+  if (!ciclo?.fecha_previred_pagado) {
+    return {
+      ok: false,
+      error: "Primero registra (y guarda) la fecha de «Previred pagado».",
+    };
+  }
+  const monto = Number(ciclo.monto_previred_total);
+  if (!Number.isFinite(monto) || monto <= 0) {
+    return {
+      ok: false,
+      error: "Registra (y guarda) el monto de pago antes de enviar el aviso.",
+    };
+  }
+  const destino = (cli?.correo_empresa ?? "").trim();
+  if (!destino) {
+    return {
+      ok: false,
+      error: `${cli?.razon_social ?? "La empresa"} no tiene correo en su ficha. Cárgalo en Empresas y reintenta.`,
+    };
+  }
+
+  const etiqueta = etiquetaPeriodo(periodo);
+  const montoTexto = `$${Math.round(monto).toLocaleString("es-CL")}`;
+  const [anio, mes, dia] = ciclo.fecha_previred_pagado.split("-");
+  const fechaPagoTexto = `${dia}-${mes}-${anio}`;
+  const usuario = await getUsuarioActual();
+  const cc = await correosCopiaCliente([clienteId], [destino]);
+
+  const res = await enviarCorreo({
+    para: destino,
+    cc,
+    asunto: `Imposiciones ${etiqueta} pagadas — RS Tax & Legal`,
+    html: htmlCorreoDocumento({
+      titulo: `Imposiciones previsionales · ${etiqueta}`,
+      cuerpo: `
+        <p style="margin:0 0 12px;">Estimados,</p>
+        <p style="margin:0 0 16px;">Les informamos que las cotizaciones previsionales (Previred) de <strong>${cli?.razon_social ?? ""}</strong> correspondientes a las remuneraciones de <strong>${etiqueta}</strong> quedaron <strong>pagadas</strong> con fecha ${fechaPagoTexto}.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border:1px solid #e2e8f0;border-radius:8px;">
+          <tr>
+            <td style="padding:12px 18px;font-size:13px;color:#475569;">Monto pagado</td>
+            <td style="padding:12px 18px;font-size:18px;font-weight:700;color:#0B2545;">${montoTexto}</td>
+          </tr>
+        </table>
+        <p style="margin:0 0 4px;">Con esto, las imposiciones de sus trabajadores del período quedan al día. Cualquier duda, quedamos atentos.</p>`,
+    }),
+    de: { nombre: usuario.nombre, correo: usuario.correo },
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+
+  await supabase
+    .from("ciclo_liquidaciones")
+    .update({ fecha_correo_previred_enviado: new Date().toISOString().slice(0, 10) })
+    .eq("id", cicloId);
+
+  revalidatePath("/liquidaciones");
+  return { ok: true, enviadoA: destino, cc };
+}
+
+/**
  * Edición rápida inline del monto Previred desde la tabla. Este monto es el
  * que usa Comunicación mensual como total de imposiciones del período (cuando
  * la empresa no tiene centros de costo cargados).

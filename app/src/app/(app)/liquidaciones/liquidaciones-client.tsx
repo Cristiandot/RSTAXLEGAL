@@ -17,6 +17,7 @@ import {
 } from "@/lib/ciclos";
 import {
   actualizarMontoPrevired,
+  enviarAvisoPreviredPagado,
   enviarLiquidacionesCliente,
   guardarLiquidacion,
   marcarPaso,
@@ -222,6 +223,28 @@ export function LiquidacionesClient({
         router.refresh();
       } else {
         toast.error(res.error ?? "Error al enviar");
+      }
+    });
+  }
+
+  /** Aviso al cliente: imposiciones del período pagadas (usa los datos GUARDADOS del ciclo). */
+  function enviarAvisoPagado() {
+    if (!editando) return;
+    const fila = editando;
+    startEnviarLiq(async () => {
+      const res = await enviarAvisoPreviredPagado(
+        fila.ciclo_id,
+        fila.cliente_id,
+        fila.periodo,
+      );
+      if (res.ok) {
+        toast.success(
+          `Aviso enviado a ${res.enviadoA}${res.cc?.length ? ` (copia: ${res.cc.join(", ")})` : ""}`,
+        );
+        setEditando(null);
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Error al enviar el aviso");
       }
     });
   }
@@ -637,8 +660,9 @@ export function LiquidacionesClient({
 
             <p className="text-xs text-muted-foreground">
               El paso «Liquidaciones enviadas» se marca con el checkbox de la
-              tabla. El aviso de pago al cliente se envía desde Comunicación
-              mensual, que toma el monto Previred registrado acá.
+              tabla. Con «Previred pagado» y el monto guardados, abajo puedes
+              enviar el aviso inmediato al cliente (además del resumen de
+              Comunicación mensual).
             </p>
 
             <form
@@ -751,6 +775,69 @@ export function LiquidacionesClient({
                 />
               </div>
             </form>
+
+            {/* Aviso al cliente: imposiciones pagadas (solo modalidad pago) */}
+            {modalidadModal !== "dnp" ? (
+              <div className="rounded-xl border bg-muted/30 p-3">
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <p className="mr-auto text-sm font-semibold">
+                    Aviso al cliente: imposiciones pagadas
+                  </p>
+                  {editando.fecha_correo_previred_enviado ? (
+                    <Badge
+                      variant="outline"
+                      className="border-emerald-200 bg-emerald-50 text-emerald-700"
+                    >
+                      Enviado el {formatFecha(editando.fecha_correo_previred_enviado)}
+                    </Badge>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {editando.correo_empresa ? (
+                    <>
+                      Le llegaría a <b>{editando.correo_empresa}</b>
+                      {editando.correos_adicionales?.length ? (
+                        <>
+                          {" "}con copia a <b>{editando.correos_adicionales.join(", ")}</b>
+                        </>
+                      ) : null}
+                      , indicando el período y el monto pagado.
+                    </>
+                  ) : (
+                    <span className="text-red-600">
+                      La empresa no tiene correo en su ficha — cárgalo en Empresas para poder enviar.
+                    </span>
+                  )}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={editando.fecha_correo_previred_enviado ? "outline" : "default"}
+                    disabled={
+                      enviandoLiq ||
+                      !editando.fecha_previred_pagado ||
+                      !editando.monto_previred_total ||
+                      !editando.correo_empresa
+                    }
+                    onClick={enviarAvisoPagado}
+                  >
+                    <Send className="size-4" />
+                    {enviandoLiq
+                      ? "Enviando…"
+                      : editando.fecha_correo_previred_enviado
+                        ? "Reenviar aviso"
+                        : "Enviar aviso de pago"}
+                  </Button>
+                  {!editando.fecha_previred_pagado || !editando.monto_previred_total ? (
+                    <span className="text-xs text-muted-foreground">
+                      Requiere fecha de «Previred pagado» y monto <b>guardados</b> (si los acabas de
+                      escribir, guarda primero y vuelve a abrir).
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             <DialogFooter>
               <Button

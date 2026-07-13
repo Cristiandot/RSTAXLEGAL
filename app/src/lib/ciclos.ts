@@ -28,6 +28,10 @@ export type LiquidacionRow = {
   fecha_dnp_declarado: string | null;
   monto_previred_total: number | string | null;
   observaciones: string | null;
+  /** Aviso de imposiciones pagadas: fecha del correo + destinatarios a mostrar. */
+  fecha_correo_previred_enviado: string | null;
+  correo_empresa: string | null;
+  correos_adicionales: string[] | null;
 };
 
 /** Fila de `v_checklist_conciliacion` (ciclo Conciliación SII/KAME). */
