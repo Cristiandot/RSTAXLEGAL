@@ -186,3 +186,32 @@ export async function quitarSocio(
   return { ok: true };
 }
 
+
+/**
+ * Marca una empresa como sin servicio activo (cliente que canceló) o la
+ * reactiva. Al desactivar se estampa la fecha de término; sale de los ciclos
+ * mensuales (Liquidaciones, F29, Comunicación) y del % de completitud.
+ */
+export async function marcarServicioEmpresa(
+  empresaId: string,
+  activo: boolean,
+): Promise<Resp> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("clientes")
+    .update({
+      activo,
+      fecha_termino_servicio: activo
+        ? null
+        : new Date().toISOString().slice(0, 10),
+    })
+    .eq("id", empresaId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidarFichas();
+  revalidatePath("/credenciales");
+  revalidatePath("/liquidaciones");
+  revalidatePath("/f29");
+  revalidatePath("/links");
+  return { ok: true };
+}

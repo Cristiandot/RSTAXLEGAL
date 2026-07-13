@@ -38,11 +38,13 @@ import {
 import {
   agregarCorreoAdicional,
   agregarSocio,
+  marcarServicioEmpresa,
   quitarCorreoAdicional,
   quitarSocio,
   renombrarEmpresa,
   type Socio,
 } from "./actions";
+import { Badge } from "@/components/ui/badge";
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -59,6 +61,9 @@ export type EmpresaFichaRow = {
   faltan: number;
   /** Valor mostrable de cada campo de la ficha; null = falta (editable). */
   valores: Record<string, string | null>;
+  /** false = cliente que canceló el servicio (fuera de ciclos mensuales). */
+  activo: boolean;
+  fecha_termino_servicio: string | null;
   /** Accesos: solo el RUT viaja; de las claves llega un booleano (card Accesos). */
   previred_rut: string | null;
   tiene_clave_sii: boolean;
@@ -220,6 +225,59 @@ function CorreosCard({ empresa }: { empresa: EmpresaFichaRow }) {
           <Plus className="size-4" /> Agregar
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** Sección dedicada: estado del servicio (cliente activo o que canceló). */
+function ServicioCard({ empresa }: { empresa: EmpresaFichaRow }) {
+  const router = useRouter();
+  const [trabajando, start] = useTransition();
+
+  function marcar(activo: boolean) {
+    start(async () => {
+      const res = await marcarServicioEmpresa(empresa.id, activo);
+      if (res.ok) {
+        toast.success(
+          activo
+            ? `${empresa.razon_social} reactivada — vuelve a los ciclos mensuales`
+            : `${empresa.razon_social} marcada sin servicio — sale de los ciclos mensuales`,
+        );
+        router.refresh();
+      } else toast.error(res.error ?? "Error al cambiar el estado del servicio");
+    });
+  }
+
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="mb-1 flex items-center justify-between text-sm font-semibold">
+        <span>Servicio</span>
+        {empresa.activo ? (
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 font-normal text-emerald-700">
+            Con servicio activo
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="border-red-200 bg-red-50 font-normal text-red-700">
+            Sin servicio
+            {empresa.fecha_termino_servicio
+              ? ` desde ${formatFecha(empresa.fecha_termino_servicio)}`
+              : ""}
+          </Badge>
+        )}
+      </div>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Al marcar sin servicio, la empresa sale de Liquidaciones, F29,
+        Comunicación mensual y del % de completitud, pero conserva su historial
+        y credenciales. Se puede reactivar cuando quieras.
+      </p>
+      <Button
+        size="sm"
+        variant={empresa.activo ? "outline" : "default"}
+        disabled={trabajando}
+        onClick={() => marcar(!empresa.activo)}
+      >
+        {empresa.activo ? "Marcar sin servicio" : "Reactivar servicio"}
+      </Button>
     </div>
   );
 }
@@ -406,6 +464,8 @@ export function EmpresasClient({
   const router = useRouter();
   const [buscar, setBuscar] = useState("");
   const [clienteF, setClienteF] = useState("");
+  // Estado del servicio: por defecto solo las empresas con servicio activo.
+  const [servicioF, setServicioF] = useState<"activas" | "sin_servicio" | "todas">("activas");
   const [orden, setOrden] = useState<Orden>(null);
 
   // Detalle: id seleccionado; la fila se deriva de props para que al guardar
@@ -429,6 +489,8 @@ export function EmpresasClient({
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
     const out = empresas.filter((e) => {
+      if (servicioF === "activas" && !e.activo) return false;
+      if (servicioF === "sin_servicio" && e.activo) return false;
       if (q) {
         const t =
           `${e.razon_social} ${e.rut_empresa ?? ""} ${e.grupo_codigo ?? ""} ${e.grupo_nombre ?? ""}`.toLowerCase();
@@ -457,7 +519,7 @@ export function EmpresasClient({
       }
     };
     return [...out].sort((a, b) => comparar(val(a), val(b), orden.dir));
-  }, [empresas, buscar, clienteF, orden]);
+  }, [empresas, buscar, clienteF, servicioF, orden]);
 
   /** Valor a mostrar de un campo lleno (las fechas se formatean DD-MM-AAAA). */
   function mostrar(def: CampoDef, v: string): string {
@@ -506,6 +568,20 @@ export function EmpresasClient({
               {g.nombre}
             </option>
           ))}
+        </select>
+        <select
+          aria-label="Estado del servicio"
+          className={selectCls}
+          value={servicioF}
+          onChange={(e) =>
+            setServicioF(e.target.value as "activas" | "sin_servicio" | "todas")
+          }
+        >
+          <option value="activas">Con servicio activo</option>
+          <option value="sin_servicio">
+            Sin servicio ({empresas.filter((e) => !e.activo).length})
+          </option>
+          <option value="todas">Todas</option>
         </select>
         <span className="ml-auto text-sm text-muted-foreground">
           {filtradas.length} de {empresas.length} empresas
@@ -575,6 +651,17 @@ export function EmpresasClient({
                     >
                       {e.razon_social}
                     </span>
+                    {!e.activo ? (
+                      <Badge
+                        variant="outline"
+                        className="mt-0.5 border-red-200 bg-red-50 text-[10px] font-normal text-red-700"
+                      >
+                        Sin servicio
+                        {e.fecha_termino_servicio
+                          ? ` desde ${formatFecha(e.fecha_termino_servicio)}`
+                          : ""}
+                      </Badge>
+                    ) : null}
                   </TableCell>
                   <TableCell>
                     <RutCopiable rut={e.rut_empresa} />
@@ -671,6 +758,7 @@ export function EmpresasClient({
                 </div>
               ))}
               <AccesosCard empresa={empSel} />
+              <ServicioCard empresa={empSel} />
             </div>
           </DialogContent>
         ) : null}

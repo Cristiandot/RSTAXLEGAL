@@ -25,7 +25,7 @@ export default async function EmpresasPage() {
       supabase
         .from("clientes")
         .select(
-          "id, razon_social, rut_empresa, grupo_id, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, correos_adicionales, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono, clave_sii, previred_rut, previred_clave",
+          "id, razon_social, rut_empresa, grupo_id, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, correos_adicionales, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono, clave_sii, previred_rut, previred_clave, activo, fecha_termino_servicio",
         )
         .order("razon_social"),
       supabase
@@ -106,6 +106,8 @@ export default async function EmpresasPage() {
       pct: pctPorEmpresa.get(e.id)?.pct ?? null,
       faltan: pctPorEmpresa.get(e.id)?.faltan ?? 0,
       valores,
+      activo: e.activo ?? true,
+      fecha_termino_servicio: e.fecha_termino_servicio,
       // Las claves se reducen a booleano acá — no viajan al navegador.
       previred_rut: e.previred_rut,
       tiene_clave_sii: Boolean(e.clave_sii),
