@@ -197,14 +197,16 @@ def build_contrato(out_path: str, con_turnos: bool, extranjero: bool = False):
     vacio()
     cl("DÉCIMO PRIMERO: ", "Las cartas de amonestación son el medio utilizado por el empleador para comunicar al trabajador los incumplimientos en que ha incurrido, los cuales, de persistir, dan derecho al empleador para poner término al contrato de trabajo por incumplimiento grave de las obligaciones que impone el contrato o la causal que corresponda.")
     vacio()
+    cl("DÉCIMO SEGUNDO: PREVISIÓN Y SALUD. ", "Se deja constancia que el trabajador cotizará en {PREVISION} y en el sistema de salud {INSTITUCION_SALUD}.")
+    vacio()
     if extranjero:
-        cl("DÉCIMO SEGUNDO: CLÁUSULAS ESPECIALES (TRABAJADOR EXTRANJERO). ", CLAUSULA_EXTRANJERO[0][1])
+        cl("DÉCIMO TERCERO: CLÁUSULAS ESPECIALES (TRABAJADOR EXTRANJERO). ", CLAUSULA_EXTRANJERO[0][1])
         for _, texto in CLAUSULA_EXTRANJERO[1:]:
             num(texto)
         vacio()
-        n_jur, n_ej = "DÉCIMO TERCERO", "DÉCIMO CUARTO"
+        n_jur, n_ej = "DÉCIMO CUARTO", "DÉCIMO QUINTO"
     else:
-        n_jur, n_ej = "DÉCIMO SEGUNDO", "DÉCIMO TERCERO"
+        n_jur, n_ej = "DÉCIMO TERCERO", "DÉCIMO CUARTO"
     cl(f"{n_jur}: ", "Para todos los efectos legales derivados de este contrato, las partes fijan su domicilio en la ciudad y comuna de Viña del Mar, sometiéndose a la jurisdicción y competencia de sus Tribunales de Justicia.")
     vacio()
     cl(f"{n_ej}: ", "Se suscribe este instrumento en dos ejemplares de igual tenor, quedando uno de ellos en poder del empleador y el restante en poder del trabajador, quien declara recibirlo en este acto.")
