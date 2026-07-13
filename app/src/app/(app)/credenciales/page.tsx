@@ -11,8 +11,9 @@ export default async function CredencialesPage() {
     supabase
       .from("clientes")
       .select(
-        "id, razon_social, rut_empresa, previred_rut, clave_sii, previred_clave, activo, grupo_id",
+        "id, razon_social, rut_empresa, previred_rut, clave_sii, previred_clave, activo, grupo_id, credencial_fijada",
       )
+      .order("credencial_fijada", { ascending: false })
       .order("razon_social"),
   ]);
 
@@ -31,6 +32,7 @@ export default async function CredencialesPage() {
     tieneClavePrevired: Boolean(c.previred_clave),
     activo: c.activo ?? true,
     grupo: c.grupo_id ? (grupos.get(c.grupo_id) ?? null) : null,
+    fijada: Boolean(c.credencial_fijada),
   }));
 
   return (

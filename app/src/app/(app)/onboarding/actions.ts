@@ -195,6 +195,7 @@ export async function crearCliente(
   const g = await insertarGrupo(supabase, nombre, letra, correo, telefono);
   if (!g.ok) return g;
   revalidatePath("/onboarding");
+  revalidatePath("/clientes");
   return { ok: true, codigo: g.codigo };
 }
 

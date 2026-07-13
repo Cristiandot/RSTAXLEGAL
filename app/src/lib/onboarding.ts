@@ -69,12 +69,13 @@ export type CatalogoOpcion = { codigo: string; etiqueta: string };
 /** Opciones por tipo de selector (afp, comuna, banco, …). */
 export type Catalogos = Record<string, CatalogoOpcion[]>;
 
-/** Letras de cartera OneDrive/ClickUp para clientes nuevos. */
+/** Letras de cartera OneDrive para clientes nuevos. */
 export const GRUPOS_CARTERA = [
   { codigo: "A", etiqueta: "A — Cartera histórica" },
   { codigo: "B", etiqueta: "B — Grupo abril 2026 (1)" },
   { codigo: "C", etiqueta: "C — Grupo abril 2026 (2)" },
   { codigo: "D", etiqueta: "D — Cartera ligera" },
+  { codigo: "W", etiqueta: "W — Servicio único (sin mensualidad)" },
   { codigo: "Z", etiqueta: "Z — Otros" },
 ] as const;
 

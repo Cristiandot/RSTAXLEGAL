@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { KeyRound, Search } from "lucide-react";
+import { KeyRound, Pin, Search } from "lucide-react";
 import { ClaveCell, RutPreviredCell } from "@/components/credencial-celdas";
 import { RutCopiable } from "@/components/rut-copiable";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ export type CredencialRow = {
   tieneClavePrevired: boolean;
   activo: boolean;
   grupo: string | null; // "A.4 — Red Barrera"
+  fijada: boolean; // fijada arriba (claves de la oficina, p. ej. el contador)
 };
 
 export function CredencialesClient({
@@ -112,8 +113,16 @@ export function CredencialesClient({
             {filtradas.map((f) => (
               <TableRow key={f.id}>
                 <TableCell className="font-medium">
-                  <span className="block max-w-[280px] truncate" title={f.razonSocial}>
-                    {f.razonSocial}
+                  <span className="flex max-w-[280px] items-center gap-1.5">
+                    {f.fijada ? (
+                      <Pin
+                        className="size-3.5 shrink-0 text-[var(--brand-teal)]"
+                        aria-label="Credencial fijada"
+                      />
+                    ) : null}
+                    <span className="truncate" title={f.razonSocial}>
+                      {f.razonSocial}
+                    </span>
                   </span>
                   {!f.activo ? (
                     <Badge variant="outline" className="mt-0.5 text-[10px] text-muted-foreground">
