@@ -13,7 +13,6 @@ import {
   CalendarDays,
   Plus,
   CheckCircle2,
-  Pencil,
 } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { comparar, type Orden } from "@/lib/ordenar";
@@ -513,15 +512,15 @@ export function InicioClient({
             {esTarea && !esHistorial ? (
               <button
                 type="button"
-                aria-label="Editar texto del requerimiento"
-                title="Editar texto"
+                aria-label="Ver y editar texto del requerimiento"
+                title="Ver / editar texto"
                 onClick={(e) => {
                   e.stopPropagation();
                   abrirEdicion(g);
                 }}
                 className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
               >
-                <Pencil className="size-3.5" />
+                <Search className="size-3.5" />
               </button>
             ) : null}
           </div>
