@@ -78,6 +78,27 @@ export async function completarTarea(
 }
 
 /**
+ * Edita el texto (título y detalle) de una tarea/requerimiento desde la bandeja.
+ * Solo aplica a `tareas_oficina` (requerimientos de correo/WhatsApp/manuales);
+ * las demás fuentes traen su texto del registro de origen.
+ */
+export async function editarTextoTarea(
+  tareaId: string,
+  titulo: string,
+  detalle: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!titulo.trim()) return { ok: false, error: "El título no puede quedar vacío." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tareas_oficina")
+    .update({ titulo: titulo.trim(), detalle: detalle?.trim() || null })
+    .eq("id", tareaId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
  * Cambia la empresa (cliente_id) de una tarea/requerimiento desde la bandeja.
  * Útil cuando la auto-identificación (correo/WhatsApp) eligió una empresa del
  * grupo distinta a la correcta. Solo aplica a `tareas_oficina`. Valida que la

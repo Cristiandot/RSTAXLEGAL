@@ -17,6 +17,8 @@ export type GestionRow = {
   cliente: string | null; // cliente = grupo (la relación/persona que atendemos)
   cliente_codigo: string | null; // código del grupo (p.ej. A.2)
   grupo_id: string | null; // id del grupo (para listar sus empresas)
+  titulo: string | null; // solo tareas: título editable
+  detalle_raw: string | null; // solo tareas: detalle editable (sin el título)
   estado: string;
   pendiente: boolean;
   responsable_id: string | null;

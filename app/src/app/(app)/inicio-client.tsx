@@ -13,6 +13,7 @@ import {
   CalendarDays,
   Plus,
   CheckCircle2,
+  Pencil,
 } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { comparar, type Orden } from "@/lib/ordenar";
@@ -32,6 +33,7 @@ import {
   asignarGestion,
   completarTarea,
   crearTarea,
+  editarTextoTarea,
 } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -289,6 +291,12 @@ export function InicioClient({
   const [ntPlazo, setNtPlazo] = useState("");
   const [ntResp, setNtResp] = useState("");
   const [creando, startCrear] = useTransition();
+  // Diálogo de edición de texto de un requerimiento (tarea).
+  const [editOpen, setEditOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editTitulo, setEditTitulo] = useState("");
+  const [editDetalle, setEditDetalle] = useState("");
+  const [editando, startEditar] = useTransition();
 
   // Empresas agrupadas por cliente (grupo), para el desplegable de Empresa por
   // fila: al abrirlo se ofrecen todas las sociedades de ese cliente.
@@ -363,6 +371,28 @@ export function InicioClient({
         router.refresh();
       } else {
         toast.error(res.error ?? "Error al cambiar la empresa");
+      }
+    });
+  }
+
+  function abrirEdicion(g: GestionRow) {
+    setEditId(g.gestion_id);
+    setEditTitulo(g.titulo ?? "");
+    setEditDetalle(g.detalle_raw ?? "");
+    setEditOpen(true);
+  }
+
+  function guardarEdicion() {
+    if (!editId) return;
+    startEditar(async () => {
+      const res = await editarTextoTarea(editId, editTitulo, editDetalle.trim() || null);
+      if (res.ok) {
+        toast.success("Requerimiento actualizado");
+        setEditOpen(false);
+        setEditId(null);
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Error al editar el requerimiento");
       }
     });
   }
@@ -470,12 +500,31 @@ export function InicioClient({
           )}
         </TableCell>
         <TableCell>
-          <span className="block max-w-[240px] truncate" title={`${g.trabajador ?? ""} ${g.detalle ?? ""}`}>
-            {g.trabajador ?? g.detalle ?? "—"}
-            {g.trabajador && g.detalle ? (
-              <span className="text-xs text-muted-foreground"> · {g.detalle}</span>
+          <div className="flex items-center gap-1.5">
+            <span
+              className="block max-w-[240px] truncate"
+              title={`${g.trabajador ?? ""} ${g.detalle ?? ""}`}
+            >
+              {g.trabajador ?? g.detalle ?? "—"}
+              {g.trabajador && g.detalle ? (
+                <span className="text-xs text-muted-foreground"> · {g.detalle}</span>
+              ) : null}
+            </span>
+            {esTarea && !esHistorial ? (
+              <button
+                type="button"
+                aria-label="Editar texto del requerimiento"
+                title="Editar texto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  abrirEdicion(g);
+                }}
+                className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <Pencil className="size-3.5" />
+              </button>
             ) : null}
-          </span>
+          </div>
         </TableCell>
         <TableCell>
           {g.canal ? (
@@ -769,6 +818,62 @@ export function InicioClient({
           onDia={setDiaSel}
         />
       </div>
+
+      {/* Diálogo de edición de texto de un requerimiento (tarea) */}
+      <Dialog
+        open={editOpen}
+        onOpenChange={(o) => {
+          if (!o) {
+            setEditOpen(false);
+            setEditId(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Editar requerimiento</DialogTitle>
+            <DialogDescription>
+              Ajusta el texto de este requerimiento (correo, WhatsApp o creado a
+              mano). No cambia el cliente ni la empresa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ed_titulo">Título *</Label>
+              <Input
+                id="ed_titulo"
+                value={editTitulo}
+                onChange={(e) => setEditTitulo(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ed_detalle">Detalle</Label>
+              <Textarea
+                id="ed_detalle"
+                rows={6}
+                value={editDetalle}
+                onChange={(e) => setEditDetalle(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditOpen(false);
+                setEditId(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={guardarEdicion} disabled={editando || !editTitulo.trim()}>
+              {editando ? "Guardando…" : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Diálogo del botón "+": tarea manual con canal y plazo de entrega */}
       <Dialog
