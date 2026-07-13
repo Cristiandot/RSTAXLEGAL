@@ -84,6 +84,7 @@ export function InvitacionesTab({
   const [formOpen, setFormOpen] = useState(false);
   const [nombre, setNombre] = useState("");
   const [empresaSel, setEmpresaSel] = useState("");
+  const [requierePago, setRequierePago] = useState(true);
   const [linkSel, setLinkSel] = useState("");
   const [linkCustom, setLinkCustom] = useState("");
   const [mensaje, setMensaje] = useState("");
@@ -100,14 +101,26 @@ export function InvitacionesTab({
 
   function crear() {
     const linkPlan = linksPago.find((l) => l.id === linkSel);
-    const link = linkSel === "__otro__" ? linkCustom.trim() : (linkPlan?.link ?? null);
+    const link = requierePago
+      ? linkSel === "__otro__"
+        ? linkCustom.trim()
+        : (linkPlan?.link ?? null)
+      : null;
+    if (requierePago && !link) {
+      toast.error("Elige el link de pago del plan (o marca que no requiere suscripción).");
+      return;
+    }
     startCrear(async () => {
       const res = await crearInvitacion({
         nombre_cliente: nombre,
         cliente_id: empresaSel || null,
-        link_pago: link || null,
+        link_pago: link,
         link_pago_nombre:
-          linkSel === "__otro__" ? null : linkPlan ? `${linkPlan.nombre}${linkPlan.monto ? ` (${linkPlan.monto})` : ""}` : null,
+          !requierePago || linkSel === "__otro__"
+            ? null
+            : linkPlan
+              ? `${linkPlan.nombre}${linkPlan.monto ? ` (${linkPlan.monto})` : ""}`
+              : null,
         mensaje: mensaje || null,
       });
       if (!res.ok || !res.token) {
@@ -119,6 +132,7 @@ export function InvitacionesTab({
       setFormOpen(false);
       setNombre("");
       setEmpresaSel("");
+      setRequierePago(true);
       setLinkSel("");
       setLinkCustom("");
       setMensaje("");
@@ -167,18 +181,47 @@ export function InvitacionesTab({
               </select>
             </div>
             <div>
-              <label className={labelClase}>Link de pago (según su plan)</label>
-              <select className={selectClase} value={linkSel} onChange={(e) => setLinkSel(e.target.value)}>
-                <option value="">— Sin link de pago —</option>
-                {linksPago.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.nombre} {l.monto ? `· ${l.monto}` : ""}
-                  </option>
-                ))}
-                <option value="__otro__">Otro link (pegar manualmente)</option>
-              </select>
+              <label className={labelClase}>¿Requiere suscripción de pago?</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRequierePago(true)}
+                  className={`h-9 flex-1 rounded-md border px-3 text-sm font-semibold transition ${
+                    requierePago
+                      ? "border-[var(--brand-teal,#17A2B8)] bg-accent"
+                      : "border-input bg-white text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  Sí, enviarle link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRequierePago(false)}
+                  className={`h-9 flex-1 rounded-md border px-3 text-sm font-semibold transition ${
+                    !requierePago
+                      ? "border-[var(--brand-teal,#17A2B8)] bg-accent"
+                      : "border-input bg-white text-muted-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  No aplica
+                </button>
+              </div>
             </div>
-            {linkSel === "__otro__" ? (
+            {requierePago ? (
+              <div>
+                <label className={labelClase}>Link de pago (según su plan) *</label>
+                <select className={selectClase} value={linkSel} onChange={(e) => setLinkSel(e.target.value)}>
+                  <option value="">— Elegir plan —</option>
+                  {linksPago.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.nombre} {l.monto ? `· ${l.monto}` : ""}
+                    </option>
+                  ))}
+                  <option value="__otro__">Otro link (pegar manualmente)</option>
+                </select>
+              </div>
+            ) : null}
+            {requierePago && linkSel === "__otro__" ? (
               <div>
                 <label className={labelClase}>Link de pago personalizado</label>
                 <Input
@@ -187,26 +230,20 @@ export function InvitacionesTab({
                   placeholder="https://www.mercadopago.cl/…"
                 />
               </div>
-            ) : (
-              <div>
-                <label className={labelClase}>Mensaje de bienvenida (opcional, sale en el encabezado)</label>
-                <Input
-                  value={mensaje}
-                  onChange={(e) => setMensaje(e.target.value)}
-                  placeholder="¡Hola Juan! Completa estos datos y quedamos operativos."
-                />
-              </div>
-            )}
-          </div>
-          {linkSel === "__otro__" ? (
-            <div className="mb-3">
-              <label className={labelClase}>Mensaje de bienvenida (opcional)</label>
+            ) : null}
+            <div>
+              <label className={labelClase}>Mensaje de bienvenida (opcional, sale en el encabezado)</label>
               <Input
                 value={mensaje}
                 onChange={(e) => setMensaje(e.target.value)}
                 placeholder="¡Hola Juan! Completa estos datos y quedamos operativos."
               />
             </div>
+          </div>
+          {!requierePago ? (
+            <p className="mb-3 text-xs text-muted-foreground">
+              El paso de suscripción NO aparecerá en el formulario del cliente.
+            </p>
           ) : null}
           <div className="flex gap-2">
             <Button type="submit" size="sm" disabled={creando || !nombre.trim()}>
@@ -250,7 +287,7 @@ export function InvitacionesTab({
                   {formatFecha(i.created_at)}
                 </TableCell>
                 <TableCell className="max-w-44 truncate text-xs text-muted-foreground" title={i.link_pago ?? undefined}>
-                  {i.link_pago_nombre ?? (i.link_pago ? "Link personalizado" : "—")}
+                  {i.link_pago_nombre ?? (i.link_pago ? "Link personalizado" : "No requiere")}
                 </TableCell>
                 <TableCell>
                   {i.estado === "completada" ? (
