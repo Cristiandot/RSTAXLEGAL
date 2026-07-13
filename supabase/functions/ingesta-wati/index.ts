@@ -43,7 +43,26 @@ Deno.serve(async (req) => {
     return json({ error: "No autorizado" }, 401);
   }
 
-  const body = await req.json().catch(() => ({} as Record<string, unknown>));
+  const raw = await req.json().catch(() => ({} as Record<string, unknown>));
+  // Make con "Body input method = Data structure" de un solo campo (p.ej. "Version")
+  // envuelve el JSON real como STRING dentro de esa clave. Si no vienen los campos
+  // esperados al nivel superior, buscamos un valor string que sea JSON y lo abrimos.
+  let body = raw as Record<string, unknown>;
+  if (body && body.texto === undefined && body.text === undefined) {
+    for (const v of Object.values(raw)) {
+      if (typeof v === "string" && v.trim().startsWith("{")) {
+        try {
+          const inner = JSON.parse(v);
+          if (inner && typeof inner === "object") {
+            body = inner as Record<string, unknown>;
+            break;
+          }
+        } catch {
+          // no era JSON; seguir
+        }
+      }
+    }
+  }
   // Tolerante al nombre del campo del número (waId / wald / wa_id / phone / numero / from).
   const waId = String(
     body.waId ?? body.wald ?? body.wa_id ?? body.phone ?? body.numero ?? body.from ?? "",
