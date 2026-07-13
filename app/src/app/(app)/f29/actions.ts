@@ -197,6 +197,15 @@ export async function enviarCorreoF29(
   if (errRow || !row) {
     return { ok: false, error: errRow?.message ?? "Ciclo F29 no encontrado." };
   }
+  // El correo sale con los datos GUARDADOS del ciclo: sin monto, el aviso
+  // llegaría con "—" (pasó el 13-07-2026) — se bloquea acá como última barrera.
+  if (row.monto_a_pagar === null || row.monto_a_pagar === undefined || String(row.monto_a_pagar) === "") {
+    return {
+      ok: false,
+      error:
+        "Falta el monto TOTAL a pagar del F29: escríbelo en el formulario y reintenta (sin monto, el aviso saldría con «—»).",
+    };
+  }
 
   const destino = (correo ?? "").trim() || (row.correo_empresa ?? "").trim();
   if (!destino) {
@@ -322,6 +331,14 @@ export async function enviarCorreoF29Pagado(
     return {
       ok: false,
       error: 'El aviso de pago es solo para F29 que paga la oficina ("Paga RS").',
+    };
+  }
+  // Mismo resguardo que el aviso de F29: el comprobante no puede salir sin monto.
+  if (row.monto_a_pagar === null || row.monto_a_pagar === undefined || String(row.monto_a_pagar) === "") {
+    return {
+      ok: false,
+      error:
+        "Falta el monto TOTAL a pagar del F29: escríbelo en el formulario y reintenta (el comprobante saldría sin monto).",
     };
   }
 

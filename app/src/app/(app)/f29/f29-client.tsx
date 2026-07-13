@@ -297,43 +297,53 @@ export function F29Client({
     },
   ];
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!editando) return;
-    const fd = new FormData(e.currentTarget);
+  /**
+   * Payload de `guardarF29` leído del formulario del modal. Lo usan el botón
+   * Guardar y AMBOS envíos de correo: los correos usan los datos guardados del
+   * ciclo, así que antes de enviar siempre se guarda lo escrito (evita avisos
+   * con monto vacío o desactualizado).
+   */
+  function payloadFormulario(form: HTMLFormElement, ciclo: F29Row) {
+    const fd = new FormData(form);
     const get = (k: string) => {
       const v = fd.get(k);
       return v === null || v === "" ? null : String(v);
     };
-    const ciclo = editando;
     // El hito conserva su fecha original si ya estaba marcado; si se tilda
     // recién ahora, se estampa hoy; si se destilda, queda en blanco.
     const hoy = hoyLocal();
+    return {
+      cicloId: ciclo.ciclo_id,
+      clienteId: ciclo.cliente_id,
+      responsableId: get("responsable"),
+      // fecha_f29_armado ya no se gestiona en la UI: se conserva tal cual.
+      fechaArmado: ciclo.fecha_f29_armado,
+      fechaPresentado: presentadoChk
+        ? (ciclo.fecha_f29_presentado ?? hoy)
+        : null,
+      monto: get("monto"),
+      ppm: get("ppm"),
+      folio: get("folio"),
+      pagoPor: get("pago_por"),
+      fechaPagoOficina: get("fecha_pago_oficina"),
+      numeroOperacion: numOp.trim() || null,
+      correoCliente: correoCli.trim() || null,
+      postergacionMonto: get("postergacion_monto"),
+      comentarioCorreo: get("comentario_correo"),
+      montoIva: get("monto_iva"),
+      impUnico: get("imp_unico"),
+      montoRetenciones: get("monto_retenciones"),
+      montoOtros: get("monto_otros"),
+      observaciones: get("observaciones"),
+    };
+  }
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editando) return;
+    const payload = payloadFormulario(e.currentTarget, editando);
     startGuardar(async () => {
-      const res = await guardarF29({
-        cicloId: ciclo.ciclo_id,
-        clienteId: ciclo.cliente_id,
-        responsableId: get("responsable"),
-        // fecha_f29_armado ya no se gestiona en la UI: se conserva tal cual.
-        fechaArmado: ciclo.fecha_f29_armado,
-        fechaPresentado: presentadoChk
-          ? (ciclo.fecha_f29_presentado ?? hoy)
-          : null,
-        monto: get("monto"),
-        ppm: get("ppm"),
-        folio: get("folio"),
-        pagoPor: get("pago_por"),
-        fechaPagoOficina: get("fecha_pago_oficina"),
-        numeroOperacion: numOp.trim() || null,
-        correoCliente: correoCli.trim() || null,
-        postergacionMonto: get("postergacion_monto"),
-        comentarioCorreo: get("comentario_correo"),
-        montoIva: get("monto_iva"),
-        impUnico: get("imp_unico"),
-        montoRetenciones: get("monto_retenciones"),
-        montoOtros: get("monto_otros"),
-        observaciones: get("observaciones"),
-      });
+      const res = await guardarF29(payload);
       if (res.ok) {
         toast.success("Cambios guardados");
         setEditando(null);
@@ -344,12 +354,26 @@ export function F29Client({
     });
   }
 
+  /** Guarda el formulario del modal; devuelve false (con toast) si falla. */
+  async function guardarAntesDeEnviar(ciclo: F29Row): Promise<boolean> {
+    const form = document.getElementById("form-f29") as HTMLFormElement | null;
+    if (!form) return true;
+    const res = await guardarF29(payloadFormulario(form, ciclo));
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo guardar antes de enviar");
+      return false;
+    }
+    return true;
+  }
+
   function enviarAviso() {
     if (!editando) return;
+    const ciclo = editando;
     startEnviar(async () => {
-      const res = await enviarCorreoF29(editando.ciclo_id, correoCli.trim() || null);
+      if (!(await guardarAntesDeEnviar(ciclo))) return;
+      const res = await enviarCorreoF29(ciclo.ciclo_id, correoCli.trim() || null);
       if (res.ok) {
-        toast.success(`Aviso enviado a ${res.enviadoA}`);
+        toast.success(`Guardado y aviso enviado a ${res.enviadoA}`);
         router.refresh();
       } else {
         toast.error(res.error ?? "Error al enviar el correo");
@@ -359,14 +383,16 @@ export function F29Client({
 
   function enviarAvisoPago() {
     if (!editando) return;
+    const ciclo = editando;
     startEnviarPago(async () => {
+      if (!(await guardarAntesDeEnviar(ciclo))) return;
       const res = await enviarCorreoF29Pagado(
-        editando.ciclo_id,
+        ciclo.ciclo_id,
         numOp.trim() || null,
         correoCli.trim() || null,
       );
       if (res.ok) {
-        toast.success(`Aviso de pago enviado a ${res.enviadoA}`);
+        toast.success(`Guardado y aviso de pago enviado a ${res.enviadoA}`);
         router.refresh();
       } else {
         toast.error(res.error ?? "Error al enviar el correo");
@@ -788,15 +814,17 @@ export function F29Client({
                     disabled={enviando || !correoCli.trim()}
                   >
                     <Send className="size-4" />
-                    {editando.fecha_correo_f29_enviado ? "Reenviar" : "Enviar"}
+                    {editando.fecha_correo_f29_enviado
+                      ? "Guardar y reenviar"
+                      : "Guardar y enviar"}
                   </Button>
                 </div>
                 <span className="text-xs text-muted-foreground">
                   {enviando
-                    ? "Enviando aviso…"
+                    ? "Guardando y enviando aviso…"
                     : editando.fecha_correo_f29_enviado
                       ? `Último aviso enviado: ${formatFecha(editando.fecha_correo_f29_enviado.slice(0, 10))}`
-                      : "Envía al cliente el aviso de F29 (PPM, monto y plazo). El correo se guarda en su ficha."}
+                      : "Guarda lo escrito en el formulario y envía al cliente el aviso de F29 (PPM, monto y plazo). El correo se guarda en su ficha."}
                 </span>
               </div>
               {editando.pago_por === "rs" ? (
@@ -824,10 +852,10 @@ export function F29Client({
                   </div>
                   <span className="text-xs text-muted-foreground">
                     {enviandoPago
-                      ? "Enviando aviso de pago…"
+                      ? "Guardando y enviando aviso de pago…"
                       : editando.fecha_correo_pago_enviado
                         ? `Aviso de pago enviado: ${formatFecha(editando.fecha_correo_pago_enviado.slice(0, 10))}`
-                        : "Avisa al cliente que su F29 quedó pagado (monto, fecha y N° de operación). Usa el correo de arriba."}
+                        : "Guarda el formulario y avisa al cliente que su F29 quedó pagado (monto, fecha y N° de operación). Usa el correo de arriba."}
                   </span>
                 </div>
               ) : null}
