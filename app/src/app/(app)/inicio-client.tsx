@@ -298,7 +298,7 @@ export function InicioClient({
       if (respF && respF !== "sin" && g.responsable_id !== respF) return false;
       if (diaSel && fechaLocal(g.created_at) !== diaSel) return false;
       if (q) {
-        const t = `${g.razon_social ?? ""} ${g.trabajador ?? ""} ${g.detalle ?? ""}`.toLowerCase();
+        const t = `${g.cliente ?? ""} ${g.cliente_codigo ?? ""} ${g.razon_social ?? ""} ${g.trabajador ?? ""} ${g.detalle ?? ""}`.toLowerCase();
         if (!t.includes(q)) return false;
       }
       return true;
@@ -307,7 +307,8 @@ export function InicioClient({
     const valor = (g: GestionRow): unknown => {
       switch (orden.col) {
         case "tipo": return TIPO_GESTION_LABEL[g.tipo] ?? g.tipo;
-        case "cliente": return g.razon_social;
+        case "cliente": return g.cliente;
+        case "empresa": return g.razon_social;
         case "detalle": return g.trabajador ?? g.detalle;
         case "canal": return g.canal;
         case "recibida": return g.created_at;
@@ -393,7 +394,20 @@ export function InicioClient({
           </Badge>
         </TableCell>
         <TableCell className="font-medium">
-          <span className="block max-w-[220px] truncate" title={g.razon_social ?? ""}>
+          <span className="block max-w-[200px] truncate" title={g.cliente ?? ""}>
+            {g.cliente ?? "—"}
+            {g.cliente_codigo ? (
+              <span className="ml-1 text-xs font-normal text-muted-foreground">
+                {g.cliente_codigo}
+              </span>
+            ) : null}
+          </span>
+        </TableCell>
+        <TableCell>
+          <span
+            className="block max-w-[200px] truncate text-muted-foreground"
+            title={g.razon_social ?? ""}
+          >
             {g.razon_social ?? "—"}
           </span>
         </TableCell>
@@ -614,6 +628,7 @@ export function InicioClient({
                 <TableRow className="hover:bg-transparent">
                   <ThSort col="tipo" orden={orden} setOrden={setOrden}>Tipo</ThSort>
                   <ThSort col="cliente" orden={orden} setOrden={setOrden}>Cliente</ThSort>
+                  <ThSort col="empresa" orden={orden} setOrden={setOrden}>Empresa</ThSort>
                   <ThSort col="detalle" orden={orden} setOrden={setOrden}>Trabajador / detalle</ThSort>
                   <ThSort col="canal" orden={orden} setOrden={setOrden}>Canal</ThSort>
                   <ThSort col="recibida" orden={orden} setOrden={setOrden}>Recibida</ThSort>
@@ -627,7 +642,7 @@ export function InicioClient({
                 {filtradas.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={9}
+                      colSpan={10}
                       className="py-10 text-center text-muted-foreground"
                     >
                       {pendientes.length === 0
@@ -660,6 +675,7 @@ export function InicioClient({
                     <TableRow className="hover:bg-transparent">
                       <TableHead>Tipo</TableHead>
                       <TableHead>Cliente</TableHead>
+                      <TableHead>Empresa</TableHead>
                       <TableHead>Trabajador / detalle</TableHead>
                       <TableHead>Canal</TableHead>
                       <TableHead>Recibida</TableHead>
@@ -673,7 +689,7 @@ export function InicioClient({
                     {historial.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={9}
+                          colSpan={10}
                           className="py-8 text-center text-muted-foreground"
                         >
                           Sin gestiones terminadas recientes.

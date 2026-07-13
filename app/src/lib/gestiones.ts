@@ -13,7 +13,9 @@ export type GestionRow = {
   trabajador: string | null;
   detalle: string | null;
   cliente_id: string | null;
-  razon_social: string | null;
+  razon_social: string | null; // empresa (razón social de la sociedad)
+  cliente: string | null; // cliente = grupo (la relación/persona que atendemos)
+  cliente_codigo: string | null; // código del grupo (p.ej. A.2)
   estado: string;
   pendiente: boolean;
   responsable_id: string | null;
