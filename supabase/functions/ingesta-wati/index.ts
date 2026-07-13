@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
 
   const secret = Deno.env.get("WATI_INGESTA_SECRET");
   if (!secret) return json({ error: "Función sin secreto configurado" }, 500);
-  if (req.headers.get("x-wati-secret") !== secret) {
+  if ((req.headers.get("x-wati-secret") ?? "").trim() !== secret.trim()) {
     return json({ error: "No autorizado" }, 401);
   }
 
