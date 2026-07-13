@@ -26,12 +26,15 @@ export function ClaveCell({
   etiqueta,
   razonSocial,
   tiene,
+  compacto = false,
 }: {
   clienteId: string;
   campo: TipoClave;
   etiqueta: string; // "Clave SII" | "Clave Previred"
   razonSocial: string;
   tiene: boolean;
+  /** Para grillas densas (Liquidaciones, F29): puntitos cortos y sin lápiz. */
+  compacto?: boolean;
 }) {
   const router = useRouter();
   const [valor, setValor] = useState<string | null>(null); // clave ya traída
@@ -110,7 +113,7 @@ export function ClaveCell({
 
   if (editando) {
     return (
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <Input
           autoFocus
           className="h-8 w-36 bg-card font-mono text-xs"
@@ -151,7 +154,10 @@ export function ClaveCell({
         size="sm"
         disabled={ocupado}
         className="h-7 px-2 text-xs text-muted-foreground"
-        onClick={editar}
+        onClick={(e) => {
+          e.stopPropagation();
+          editar();
+        }}
       >
         <Plus className="size-3.5" />
         Agregar
@@ -160,12 +166,12 @@ export function ClaveCell({
   }
 
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
       <span
-        className="min-w-[90px] font-mono text-xs tracking-wider select-all"
+        className={`font-mono text-xs tracking-wider select-all ${compacto ? "" : "min-w-[90px]"}`}
         title={visible ? undefined : "Clave oculta"}
       >
-        {visible && valor !== null ? valor : "••••••••"}
+        {visible && valor !== null ? valor : compacto ? "••••" : "••••••••"}
       </span>
       <Button
         variant="ghost"
@@ -185,15 +191,17 @@ export function ClaveCell({
       >
         <ClipboardCopy className="size-3.5" />
       </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        disabled={ocupado}
-        aria-label="Editar clave"
-        onClick={editar}
-      >
-        <Pencil className="size-3.5" />
-      </Button>
+      {!compacto ? (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          disabled={ocupado}
+          aria-label="Editar clave"
+          onClick={editar}
+        >
+          <Pencil className="size-3.5" />
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -230,7 +238,7 @@ export function RutPreviredCell({
 
   if (editando) {
     return (
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
         <Input
           autoFocus
           className="h-8 w-32 bg-card text-xs"
@@ -259,7 +267,7 @@ export function RutPreviredCell({
   }
 
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
       <RutCopiable rut={valorInicial} />
       <Button
         variant="ghost"

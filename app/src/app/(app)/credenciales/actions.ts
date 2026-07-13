@@ -66,5 +66,7 @@ export async function guardarCredencial(
   revalidatePath("/credenciales");
   revalidatePath("/empresas");
   revalidatePath("/onboarding");
+  revalidatePath("/liquidaciones");
+  revalidatePath("/f29");
   return { ok: true };
 }

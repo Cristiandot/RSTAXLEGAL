@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Plus, Trash2, Calculator, UserPlus, Download, Copy } from "lucide-react";
 import { formatMonto } from "@/lib/format";
 import { SelectorPeriodo } from "@/components/selector-periodo";
+import { ClaveCell } from "@/components/credencial-celdas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -136,6 +137,7 @@ function Seccion({ titulo, children, accion }: { titulo: string; children: React
 export function ClienteLiquidacionClient({
   periodo,
   cliente,
+  tieneClavePrevired,
   trabajadores,
   conceptos,
   considerado,
@@ -146,6 +148,8 @@ export function ClienteLiquidacionClient({
 }: {
   periodo: string;
   cliente: Cliente;
+  /** Tiene clave Previred guardada (el valor se revela on demand, auditado). */
+  tieneClavePrevired: boolean;
   trabajadores: Trabajador[];
   conceptos: Concepto[];
   considerado: Record<string, boolean>;
@@ -230,19 +234,32 @@ export function ClienteLiquidacionClient({
             {cliente.rut_empresa ?? ""} · Carga de liquidaciones del período
           </p>
           {cliente.previred_rut && (
-            <button
-              type="button"
-              title="Copiar RUT de ingreso a Previred"
-              onClick={() => {
-                navigator.clipboard.writeText(cliente.previred_rut ?? "");
-                toast.success(`RUT Previred copiado: ${cliente.previred_rut}`);
-              }}
-              className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-input bg-card px-2 py-1 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <Copy className="size-3" />
-              RUT Previred:
-              <span className="font-semibold text-foreground">{cliente.previred_rut}</span>
-            </button>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                title="Copiar RUT de ingreso a Previred"
+                onClick={() => {
+                  navigator.clipboard.writeText(cliente.previred_rut ?? "");
+                  toast.success(`RUT Previred copiado: ${cliente.previred_rut}`);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-input bg-card px-2 py-1 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Copy className="size-3" />
+                RUT Previred:
+                <span className="font-semibold text-foreground">{cliente.previred_rut}</span>
+              </button>
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                Clave:
+                <ClaveCell
+                  clienteId={cliente.id}
+                  campo="previred_clave"
+                  etiqueta="Clave Previred"
+                  razonSocial={cliente.razon_social}
+                  tiene={tieneClavePrevired}
+                  compacto
+                />
+              </span>
+            </div>
           )}
         </div>
         <div className="ml-auto">

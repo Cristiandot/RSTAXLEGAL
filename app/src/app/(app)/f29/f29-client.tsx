@@ -9,6 +9,7 @@ import { SelectorPeriodo } from "@/components/selector-periodo";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
 import { RutCopiable } from "@/components/rut-copiable";
+import { ClaveCell } from "@/components/credencial-celdas";
 import {
   claseDias,
   claseEstado,
@@ -175,11 +176,14 @@ export function F29Client({
   periodo,
   filas,
   usuarios,
+  clavesSii,
   errorCarga,
 }: {
   periodo: string;
   filas: F29Row[];
   usuarios: UsuarioOpcion[];
+  /** cliente_id → tiene clave SII guardada (el valor se revela on demand). */
+  clavesSii: Record<string, boolean>;
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -531,7 +535,19 @@ export function F29Client({
                       {c.razon_social}
                     </span>
                   </TableCell>
-                  <TableCell><RutCopiable rut={c.rut_empresa} /></TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <RutCopiable rut={c.rut_empresa} />
+                      <ClaveCell
+                        clienteId={c.cliente_id}
+                        campo="clave_sii"
+                        etiqueta="Clave SII"
+                        razonSocial={c.razon_social}
+                        tiene={clavesSii[c.cliente_id] ?? false}
+                        compacto
+                      />
+                    </div>
+                  </TableCell>
                   <TableCell>
                     {c.conciliacion_ok ? (
                       <Badge

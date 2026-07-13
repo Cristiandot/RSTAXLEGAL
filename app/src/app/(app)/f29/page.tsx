@@ -14,14 +14,21 @@ export default async function F29Page({
   const periodo = normalizarPeriodo(p);
   const supabase = await createClient();
 
-  const [usuariosRes, filasRes] = await Promise.all([
+  const [usuariosRes, filasRes, clavesRes] = await Promise.all([
     supabase.from("usuarios").select("id, nombre").eq("activo", true).order("nombre"),
     supabase
       .from("v_checklist_f29")
       .select("*")
       .eq("periodo", periodo)
       .order("razon_social"),
+    supabase.from("clientes").select("id, clave_sii"),
   ]);
+
+  // Solo el booleano viaja al navegador; la clave se revela vía server action.
+  const clavesSii: Record<string, boolean> = {};
+  for (const c of clavesRes.data ?? []) {
+    clavesSii[c.id] = Boolean(c.clave_sii);
+  }
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
@@ -29,6 +36,7 @@ export default async function F29Page({
         periodo={periodo}
         filas={(filasRes.data ?? []) as F29Row[]}
         usuarios={(usuariosRes.data ?? []) as UsuarioOpcion[]}
+        clavesSii={clavesSii}
         errorCarga={filasRes.error?.message ?? null}
       />
     </main>

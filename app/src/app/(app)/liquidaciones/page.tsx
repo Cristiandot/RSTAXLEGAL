@@ -14,7 +14,7 @@ export default async function LiquidacionesPage({
   const periodo = normalizarPeriodo(p);
   const supabase = await createClient();
 
-  const [usuariosRes, filasRes, comRes] = await Promise.all([
+  const [usuariosRes, filasRes, comRes, clavesRes] = await Promise.all([
     supabase.from("usuarios").select("id, nombre").eq("activo", true).order("nombre"),
     supabase
       .from("v_checklist_mensual")
@@ -26,11 +26,18 @@ export default async function LiquidacionesPage({
       .from("ciclo_comunicacion")
       .select("cliente_id, fecha_correo_enviado")
       .eq("periodo", periodo),
+    supabase.from("clientes").select("id, previred_clave"),
   ]);
 
   const comunicacion: Record<string, string | null> = {};
   for (const c of comRes.data ?? []) {
     comunicacion[c.cliente_id] = c.fecha_correo_enviado;
+  }
+
+  // Solo el booleano viaja al navegador; la clave se revela vía server action.
+  const clavesPrevired: Record<string, boolean> = {};
+  for (const c of clavesRes.data ?? []) {
+    clavesPrevired[c.id] = Boolean(c.previred_clave);
   }
 
   return (
@@ -40,6 +47,7 @@ export default async function LiquidacionesPage({
         filas={(filasRes.data ?? []) as LiquidacionRow[]}
         usuarios={(usuariosRes.data ?? []) as UsuarioOpcion[]}
         comunicacion={comunicacion}
+        clavesPrevired={clavesPrevired}
         errorCarga={filasRes.error?.message ?? null}
       />
     </main>

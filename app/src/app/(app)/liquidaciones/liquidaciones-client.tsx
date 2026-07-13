@@ -9,6 +9,7 @@ import { SelectorPeriodo } from "@/components/selector-periodo";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
 import { RutCopiable } from "@/components/rut-copiable";
+import { ClaveCell } from "@/components/credencial-celdas";
 import {
   claseDias,
   claseEstado,
@@ -112,6 +113,7 @@ export function LiquidacionesClient({
   filas,
   usuarios,
   comunicacion,
+  clavesPrevired,
   errorCarga,
 }: {
   periodo: string;
@@ -119,6 +121,8 @@ export function LiquidacionesClient({
   usuarios: UsuarioOpcion[];
   /** cliente_id → fecha de envío del resumen en Comunicación mensual (o null). */
   comunicacion: Record<string, string | null>;
+  /** cliente_id → tiene clave Previred guardada (el valor se revela on demand). */
+  clavesPrevired: Record<string, boolean>;
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -455,7 +459,19 @@ export function LiquidacionesClient({
                       Cargar liquidaciones →
                     </a>
                   </TableCell>
-                  <TableCell><RutCopiable rut={c.previred_rut} /></TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <RutCopiable rut={c.previred_rut} />
+                      <ClaveCell
+                        clienteId={c.cliente_id}
+                        campo="previred_clave"
+                        etiqueta="Clave Previred"
+                        razonSocial={c.razon_social}
+                        tiene={clavesPrevired[c.cliente_id] ?? false}
+                        compacto
+                      />
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="uppercase">
                       {c.modalidad_previred}

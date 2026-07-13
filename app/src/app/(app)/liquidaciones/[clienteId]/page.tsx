@@ -20,7 +20,7 @@ export default async function ClienteLiquidacionPage({
     supabase
       .from("clientes")
       .select(
-        "id, razon_social, rut_empresa, previred_rut, mutual_institucion, mutual_tasa, caja_compensacion, sabado_habil",
+        "id, razon_social, rut_empresa, previred_rut, previred_clave, mutual_institucion, mutual_tasa, caja_compensacion, sabado_habil",
       )
       .eq("id", clienteId)
       .maybeSingle(),
@@ -99,11 +99,15 @@ export default async function ClienteLiquidacionPage({
     );
   }
 
+  // La clave no viaja al navegador: se separa y se pasa solo el booleano.
+  const { previred_clave, ...clienteSinClave } = cliente;
+
   return (
     <main className="mx-auto max-w-[1400px] px-4 pb-10 sm:px-6">
       <ClienteLiquidacionClient
         periodo={periodo}
-        cliente={cliente}
+        cliente={clienteSinClave}
+        tieneClavePrevired={Boolean(previred_clave)}
         trabajadores={trabRes.data ?? []}
         conceptos={concRes.data ?? []}
         considerado={considerado}
