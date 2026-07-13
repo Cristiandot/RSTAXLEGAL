@@ -526,23 +526,49 @@ export function LiquidacionesClient({
                     </TableCell>
                   ))}
                   <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                    <Link
-                      href={`/comunicacion?periodo=${c.periodo}`}
-                      className={`inline-block rounded-full border px-2.5 py-1 text-xs font-semibold transition ${
-                        comunicacion[c.cliente_id]
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                          : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                      }`}
-                      title={
-                        comunicacion[c.cliente_id]
-                          ? `Resumen de pagos enviado el ${formatFecha(comunicacion[c.cliente_id]!.slice(0, 10))} desde Comunicación mensual`
-                          : "Resumen de pagos pendiente — se envía desde Comunicación mensual"
-                      }
-                    >
-                      {comunicacion[c.cliente_id]
-                        ? `Enviado ${formatFecha(comunicacion[c.cliente_id]!.slice(0, 10))}`
-                        : "Pendiente"}
-                    </Link>
+                    {(() => {
+                      // Progresión del flujo Previred hacia el cliente:
+                      // Pendiente → Detalle enviado → Pagado → Colilla pago enviada.
+                      const detalle = comunicacion[c.cliente_id];
+                      const chip = c.fecha_correo_previred_enviado
+                        ? {
+                            texto: "Colilla pago enviada a cliente",
+                            clase:
+                              "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+                            title: `Aviso de imposiciones pagadas enviado el ${formatFecha(c.fecha_correo_previred_enviado)} (desde el modal de la fila)`,
+                          }
+                        : c.fecha_previred_pagado
+                          ? {
+                              texto: `Pagado ${formatFecha(c.fecha_previred_pagado)}`,
+                              clase:
+                                "border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100",
+                              title:
+                                "Previred pagado — envía la colilla de pago al cliente desde el modal de la fila",
+                            }
+                          : detalle
+                            ? {
+                                texto: `Detalle enviado ${formatFecha(detalle.slice(0, 10))}`,
+                                clase:
+                                  "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100",
+                                title: `Detalle de pagos enviado el ${formatFecha(detalle.slice(0, 10))} desde Comunicación mensual`,
+                              }
+                            : {
+                                texto: "Pendiente",
+                                clase:
+                                  "border-red-200 bg-red-50 text-red-700 hover:bg-red-100",
+                                title:
+                                  "Detalle de pagos pendiente — se envía desde Comunicación mensual",
+                              };
+                      return (
+                        <Link
+                          href={`/comunicacion?periodo=${c.periodo}`}
+                          className={`inline-block rounded-full border px-2.5 py-1 text-xs font-semibold whitespace-nowrap transition ${chip.clase}`}
+                          title={chip.title}
+                        >
+                          {chip.texto}
+                        </Link>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <MontoInline
