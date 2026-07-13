@@ -355,10 +355,18 @@ export function ComunicacionClient({
                     {c.dnp_declarado ? (
                       <Badge
                         variant="outline"
-                        className="ml-1.5 border-amber-200 bg-amber-50 text-amber-700"
-                        title="Período declarado sin pago (DNP) — el correo incluye la advertencia"
+                        className={`ml-1.5 ${
+                          c.fecha_dnp_pagado
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-amber-200 bg-amber-50 text-amber-700"
+                        }`}
+                        title={
+                          c.fecha_dnp_pagado
+                            ? `DNP declarado${c.fecha_dnp_declarado ? ` el ${formatFecha(c.fecha_dnp_declarado)}` : ""} y pagado el ${formatFecha(c.fecha_dnp_pagado)} — el correo informa ambas fechas`
+                            : `Período declarado sin pago (DNP)${c.fecha_dnp_declarado ? ` el ${formatFecha(c.fecha_dnp_declarado)}` : ""} — el correo incluye la advertencia`
+                        }
                       >
-                        DNP
+                        {c.fecha_dnp_pagado ? "DNP pagado" : "DNP"}
                       </Badge>
                     ) : null}
                   </TableCell>
@@ -453,11 +461,26 @@ export function ComunicacionClient({
                   </span>
                 </div>
                 {editando.dnp_declarado ? (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-                    Período declarado <strong>sin pago (DNP)</strong> en
-                    Liquidaciones: el correo incluirá la advertencia y la
-                    recomendación de pagar dentro del mes.
-                  </div>
+                  editando.fecha_dnp_pagado ? (
+                    <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
+                      Período declarado <strong>sin pago (DNP)</strong>
+                      {editando.fecha_dnp_declarado
+                        ? ` el ${formatFecha(editando.fecha_dnp_declarado)}`
+                        : ""}{" "}
+                      y <strong>pagado el {formatFecha(editando.fecha_dnp_pagado)}</strong>:
+                      el correo informará ambas fechas.
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                      Período declarado <strong>sin pago (DNP)</strong> en
+                      Liquidaciones
+                      {editando.fecha_dnp_declarado
+                        ? ` el ${formatFecha(editando.fecha_dnp_declarado)}`
+                        : ""}
+                      : el correo incluirá la advertencia (con la fecha de
+                      declaración) y la recomendación de pagar dentro del mes.
+                    </div>
+                  )
                 ) : null}
                 {centrosEdit.map((c, i) => (
                   <div key={i} className="flex items-center gap-2">

@@ -54,6 +54,7 @@ const ESTADOS = [
   "Previred listo para pago RS",
   "Previred pagado",
   "DNP declarado",
+  "DNP pagado",
 ];
 
 // Único checkbox de la grilla: DNP (declaración sin pago) — viaja a
@@ -156,7 +157,7 @@ export function LiquidacionesClient({
         case "responsable": return c.responsable;
         case "plazo": return c.plazo_previred;
         case "dias": return c.dias_restantes_previred;
-        case "pagado": return c.fecha_previred_pagado ?? c.fecha_dnp_declarado;
+        case "pagado": return c.fecha_previred_pagado ?? c.fecha_dnp_pagado ?? c.fecha_dnp_declarado;
         case "monto": return c.monto_previred_total !== null ? Number(c.monto_previred_total) : null;
         default: return null;
       }
@@ -177,11 +178,13 @@ export function LiquidacionesClient({
     },
     {
       label: "Pagados",
-      valor: filas.filter((c) => c.estado === "Previred pagado").length,
+      valor: filas.filter(
+        (c) => c.estado === "Previred pagado" || c.estado === "DNP pagado",
+      ).length,
     },
     {
       label: "DNP declarados",
-      valor: filas.filter((c) => c.estado === "DNP declarado").length,
+      valor: filas.filter((c) => c.fecha_dnp_declarado !== null).length,
     },
     {
       label: "Plazo ≤ 5 días",
@@ -189,6 +192,7 @@ export function LiquidacionesClient({
         (c) =>
           c.estado !== "Previred pagado" &&
           c.estado !== "DNP declarado" &&
+          c.estado !== "DNP pagado" &&
           c.dias_restantes_previred !== null &&
           c.dias_restantes_previred <= 5,
       ).length,
@@ -290,6 +294,7 @@ export function LiquidacionesClient({
         fechaPreviredListoPago: get("fecha_previred_listo_pago"),
         fechaPreviredPagado: get("fecha_previred_pagado"),
         fechaDnpDeclarado: get("fecha_dnp_declarado"),
+        fechaDnpPagado: get("fecha_dnp_pagado"),
         monto: get("monto"),
         observaciones: get("observaciones"),
         origResponsableDefaultId: ciclo.responsable_default_id,
@@ -530,6 +535,7 @@ export function LiquidacionesClient({
                       // Progresión del flujo Previred hacia el cliente:
                       // Pendiente → Detalle enviado → Pagado → Colilla pago enviada.
                       const detalle = comunicacion[c.cliente_id];
+                      const fechaPago = c.fecha_previred_pagado ?? c.fecha_dnp_pagado;
                       const chip = c.fecha_correo_previred_enviado
                         ? {
                             texto: "Colilla pago enviada a cliente",
@@ -537,9 +543,9 @@ export function LiquidacionesClient({
                               "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
                             title: `Aviso de imposiciones pagadas enviado el ${formatFecha(c.fecha_correo_previred_enviado)} (desde el modal de la fila)`,
                           }
-                        : c.fecha_previred_pagado
+                        : fechaPago
                           ? {
-                              texto: `Pagado ${formatFecha(c.fecha_previred_pagado)}`,
+                              texto: `${c.fecha_previred_pagado ? "Pagado" : "DNP pagado"} ${formatFecha(fechaPago)}`,
                               clase:
                                 "border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100",
                               title:
@@ -686,9 +692,10 @@ export function LiquidacionesClient({
 
             <p className="text-xs text-muted-foreground">
               El paso «Liquidaciones enviadas» se marca con el checkbox de la
-              tabla. Con «Previred pagado» y el monto guardados, abajo puedes
-              enviar el aviso inmediato al cliente (además del resumen de
-              Comunicación mensual).
+              tabla. Con la fecha de pago («Previred pagado» — o «DNP pagado»
+              en modalidad DNP) y el monto guardados, abajo puedes enviar el
+              aviso inmediato al cliente (además del resumen de Comunicación
+              mensual).
             </p>
 
             <form
@@ -710,8 +717,8 @@ export function LiquidacionesClient({
                 </select>
                 <p className="text-xs text-muted-foreground">
                   {modalidadModal === "dnp"
-                    ? "Modalidad DNP: declara sin pago — registra abajo la fecha de declaración."
-                    : "¿Este cliente declara sin pagar? Cambia la modalidad a DNP y aparecerá el campo «DNP declarado»."}
+                    ? "Modalidad DNP: declara sin pago — registra la fecha de declaración y, cuando el cliente pague, la fecha en «DNP pagado»."
+                    : "¿Este cliente declara sin pagar? Cambia la modalidad a DNP y aparecerán los campos «DNP declarado» y «DNP pagado»."}
                 </p>
               </div>
               <div className="flex flex-col gap-1.5">
@@ -752,6 +759,18 @@ export function LiquidacionesClient({
                       defaultValue={editando.monto_previred_total ?? ""}
                     />
                   </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="fecha_dnp_pagado">DNP pagado</Label>
+                    <Input
+                      id="fecha_dnp_pagado"
+                      name="fecha_dnp_pagado"
+                      type="date"
+                      defaultValue={editando.fecha_dnp_pagado ?? ""}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Fecha en que la planilla declarada quedó pagada.
+                    </p>
+                  </div>
                   <input type="hidden" name="fecha_previred_listo_pago" value={editando.fecha_previred_listo_pago ?? ""} />
                   <input type="hidden" name="fecha_previred_pagado" value={editando.fecha_previred_pagado ?? ""} />
                 </>
@@ -788,6 +807,7 @@ export function LiquidacionesClient({
                     />
                   </div>
                   <input type="hidden" name="fecha_dnp_declarado" value={editando.fecha_dnp_declarado ?? ""} />
+                  <input type="hidden" name="fecha_dnp_pagado" value={editando.fecha_dnp_pagado ?? ""} />
                 </>
               )}
 
@@ -802,8 +822,15 @@ export function LiquidacionesClient({
               </div>
             </form>
 
-            {/* Aviso al cliente: imposiciones pagadas (solo modalidad pago) */}
-            {modalidadModal !== "dnp" ? (
+            {/* Aviso al cliente: imposiciones pagadas. En modalidad pago exige
+                «Previred pagado»; en DNP exige «DNP pagado» y el correo informa
+                además la fecha en que se declaró el DNP. */}
+            {(() => {
+              const esDnp = modalidadModal === "dnp";
+              const fechaPagoGuardada = esDnp
+                ? editando.fecha_dnp_pagado
+                : editando.fecha_previred_pagado;
+              return (
               <div className="rounded-xl border bg-muted/30 p-3">
                 <div className="mb-1.5 flex flex-wrap items-center gap-2">
                   <p className="mr-auto text-sm font-semibold">
@@ -837,7 +864,9 @@ export function LiquidacionesClient({
                           {" "}con copia a <b>{editando.correos_adicionales.join(", ")}</b>
                         </>
                       ) : null}
-                      , indicando el período y el monto pagado.
+                      {esDnp
+                        ? ", indicando el período, la fecha en que se declaró el DNP, la fecha en que se pagó y el monto."
+                        : ", indicando el período y el monto pagado."}
                     </>
                   ) : (
                     <span className="text-red-600">
@@ -852,7 +881,7 @@ export function LiquidacionesClient({
                     variant={editando.fecha_correo_previred_enviado ? "outline" : "default"}
                     disabled={
                       enviandoLiq ||
-                      !editando.fecha_previred_pagado ||
+                      !fechaPagoGuardada ||
                       !editando.monto_previred_total ||
                       (!editando.correo_empresa &&
                         !editando.contacto_correo &&
@@ -867,15 +896,17 @@ export function LiquidacionesClient({
                         ? "Reenviar aviso"
                         : "Enviar aviso de pago"}
                   </Button>
-                  {!editando.fecha_previred_pagado || !editando.monto_previred_total ? (
+                  {!fechaPagoGuardada || !editando.monto_previred_total ? (
                     <span className="text-xs text-muted-foreground">
-                      Requiere fecha de «Previred pagado» y monto <b>guardados</b> (si los acabas de
-                      escribir, guarda primero y vuelve a abrir).
+                      Requiere fecha de «{esDnp ? "DNP pagado" : "Previred pagado"}» y monto{" "}
+                      <b>guardados</b> (si los acabas de escribir, guarda primero y vuelve a
+                      abrir).
                     </span>
                   ) : null}
                 </div>
               </div>
-            ) : null}
+              );
+            })()}
 
             <DialogFooter>
               <Button

@@ -22,6 +22,7 @@ export type GuardarLiquidacionInput = {
   fechaPreviredListoPago: string | null;
   fechaPreviredPagado: string | null;
   fechaDnpDeclarado: string | null;
+  fechaDnpPagado: string | null;
   monto: string | null;
   observaciones: string | null;
   origResponsableDefaultId: string | null;
@@ -45,6 +46,7 @@ export async function guardarLiquidacion(
       fecha_previred_listo_pago: input.fechaPreviredListoPago,
       fecha_previred_pagado: input.fechaPreviredPagado,
       fecha_dnp_declarado: input.fechaDnpDeclarado,
+      fecha_dnp_pagado: input.fechaDnpPagado,
       monto_previred_total: input.monto,
       observaciones: input.observaciones,
     })
@@ -163,9 +165,11 @@ export async function enviarLiquidacionesCliente(
 /**
  * Aviso al cliente de que sus imposiciones del período quedaron pagadas
  * (correo inmediato desde el modal, independiente del resumen de Comunicación
- * mensual). Requiere fecha de pago y monto guardados en el ciclo. Va al correo
- * de la empresa con copia a los correos adicionales, y estampa
- * `fecha_correo_previred_enviado` para el estado Enviar→Reenviar.
+ * mensual). Requiere fecha de pago y monto guardados en el ciclo: en modalidad
+ * pago usa «Previred pagado»; en DNP usa «DNP pagado» e informa además la
+ * fecha de declaración. Va al correo de la empresa con copia a los correos
+ * adicionales, y estampa `fecha_correo_previred_enviado` para el estado
+ * Enviar→Reenviar.
  */
 export async function enviarAvisoPreviredPagado(
   cicloId: string,
@@ -177,7 +181,9 @@ export async function enviarAvisoPreviredPagado(
   const [{ data: ciclo }, { data: cli }] = await Promise.all([
     supabase
       .from("ciclo_liquidaciones")
-      .select("fecha_previred_pagado, monto_previred_total")
+      .select(
+        "fecha_previred_pagado, fecha_dnp_declarado, fecha_dnp_pagado, monto_previred_total",
+      )
       .eq("id", cicloId)
       .maybeSingle(),
     supabase
@@ -187,13 +193,15 @@ export async function enviarAvisoPreviredPagado(
       .maybeSingle(),
   ]);
 
-  if (!ciclo?.fecha_previred_pagado) {
+  const fechaPago = ciclo?.fecha_previred_pagado ?? ciclo?.fecha_dnp_pagado ?? null;
+  if (!fechaPago) {
     return {
       ok: false,
-      error: "Primero registra (y guarda) la fecha de «Previred pagado».",
+      error:
+        "Primero registra (y guarda) la fecha de «Previred pagado» — o la de «DNP pagado» si el período quedó con DNP.",
     };
   }
-  const monto = Number(ciclo.monto_previred_total);
+  const monto = Number(ciclo?.monto_previred_total);
   if (!Number.isFinite(monto) || monto <= 0) {
     return {
       ok: false,
@@ -213,10 +221,32 @@ export async function enviarAvisoPreviredPagado(
 
   const etiqueta = etiquetaPeriodo(periodo);
   const montoTexto = `$${Math.round(monto).toLocaleString("es-CL")}`;
-  const [anio, mes, dia] = ciclo.fecha_previred_pagado.split("-");
-  const fechaPagoTexto = `${dia}-${mes}-${anio}`;
+  const fmt = (iso: string) => {
+    const [anio, mes, dia] = iso.split("-");
+    return `${dia}-${mes}-${anio}`;
+  };
+  const fechaPagoTexto = fmt(fechaPago);
+  // Flujo DNP: la planilla se declaró sin pago y el cliente la pagó después —
+  // el correo informa ambas fechas (declaración y pago).
+  const esDnp = !ciclo?.fecha_previred_pagado && !!ciclo?.fecha_dnp_pagado;
+  const fechaDeclaradoTexto = ciclo?.fecha_dnp_declarado
+    ? fmt(ciclo.fecha_dnp_declarado)
+    : null;
   const usuario = await getUsuarioActual();
   const cc = await correosCopiaCliente([clienteId], [destino]);
+
+  const tdEtiqueta = `padding:12px 18px;font-size:13px;color:#475569;`;
+  const tdValor = `padding:12px 18px;font-size:14px;font-weight:700;color:#0B2545;`;
+  const filasDnp = esDnp
+    ? `${
+        fechaDeclaradoTexto
+          ? `<tr><td style="${tdEtiqueta}border-bottom:1px solid #e2e8f0;">DNP declarado</td><td style="${tdValor}border-bottom:1px solid #e2e8f0;">${fechaDeclaradoTexto}</td></tr>`
+          : ""
+      }<tr><td style="${tdEtiqueta}border-bottom:1px solid #e2e8f0;">DNP pagado</td><td style="${tdValor}border-bottom:1px solid #e2e8f0;">${fechaPagoTexto}</td></tr>`
+    : "";
+  const parrafo = esDnp
+    ? `Les informamos que las cotizaciones previsionales (Previred) de <strong>${cli?.razon_social ?? ""}</strong> correspondientes a las remuneraciones de <strong>${etiqueta}</strong>${fechaDeclaradoTexto ? `, que habían quedado <strong>declaradas sin pago (DNP)</strong> con fecha ${fechaDeclaradoTexto},` : ", que habían quedado <strong>declaradas sin pago (DNP)</strong>,"} quedaron <strong>pagadas</strong> con fecha ${fechaPagoTexto}.`
+    : `Les informamos que las cotizaciones previsionales (Previred) de <strong>${cli?.razon_social ?? ""}</strong> correspondientes a las remuneraciones de <strong>${etiqueta}</strong> quedaron <strong>pagadas</strong> con fecha ${fechaPagoTexto}.`;
 
   const res = await enviarCorreo({
     para: destino,
@@ -226,10 +256,11 @@ export async function enviarAvisoPreviredPagado(
       titulo: `Imposiciones previsionales · ${etiqueta}`,
       cuerpo: `
         <p style="margin:0 0 12px;">Estimados,</p>
-        <p style="margin:0 0 16px;">Les informamos que las cotizaciones previsionales (Previred) de <strong>${cli?.razon_social ?? ""}</strong> correspondientes a las remuneraciones de <strong>${etiqueta}</strong> quedaron <strong>pagadas</strong> con fecha ${fechaPagoTexto}.</p>
+        <p style="margin:0 0 16px;">${parrafo}</p>
         <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border:1px solid #e2e8f0;border-radius:8px;">
+          ${filasDnp}
           <tr>
-            <td style="padding:12px 18px;font-size:13px;color:#475569;">Monto pagado</td>
+            <td style="${tdEtiqueta}">Monto pagado</td>
             <td style="padding:12px 18px;font-size:18px;font-weight:700;color:#0B2545;">${montoTexto}</td>
           </tr>
         </table>

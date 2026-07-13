@@ -26,6 +26,7 @@ export type LiquidacionRow = {
   fecha_previred_listo_pago: string | null;
   fecha_previred_pagado: string | null;
   fecha_dnp_declarado: string | null;
+  fecha_dnp_pagado: string | null;
   monto_previred_total: number | string | null;
   observaciones: string | null;
   /** Aviso de imposiciones pagadas: fecha del correo + destinatarios a mostrar. */
@@ -130,6 +131,8 @@ export type ComunicacionRow = {
   grupo_id: string | null; // grupos_cliente: empresas del mismo cliente van en un solo correo
   grupo_nombre: string | null;
   dnp_declarado: boolean; // el ciclo de Liquidaciones quedó con DNP (declaración sin pago)
+  fecha_dnp_declarado: string | null; // fecha en que se declaró el DNP
+  fecha_dnp_pagado: string | null; // fecha en que el cliente pagó la planilla DNP
   f29_postergacion_monto: number | string | null; // opción de postergar IVA (del módulo F29)
   f29_comentario: string | null; // comentario personalizado del contador (del módulo F29)
   correos_adicionales: string[] | null; // casillas extra del cliente — van en copia
@@ -192,6 +195,7 @@ export function claseEstado(estado: string): string {
     case "Pagado":
     case "Previred pagado":
     case "DNP declarado":
+    case "DNP pagado":
     case "Conciliado":
     case "Enviado":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -213,7 +217,12 @@ export function claseEstado(estado: string): string {
 
 /** Clase de color para la celda de días restantes. */
 export function claseDias(estado: string, dias: number | null): string {
-  if (estado === "Pagado" || estado === "Previred pagado" || estado === "DNP declarado")
+  if (
+    estado === "Pagado" ||
+    estado === "Previred pagado" ||
+    estado === "DNP declarado" ||
+    estado === "DNP pagado"
+  )
     return "text-muted-foreground";
   if (dias === null) return "text-muted-foreground";
   if (dias <= 5) return "font-semibold text-red-600";

@@ -18,6 +18,9 @@ export type EmpresaComunicacion = {
   monto_f29: number | string | null;
   plazo_f29: string | null;
   dnp_declarado: boolean;
+  /** Fechas del DNP: cuándo se declaró y (si ya ocurrió) cuándo se pagó. */
+  fecha_dnp_declarado?: string | null;
+  fecha_dnp_pagado?: string | null;
   f29_postergacion_monto: number | string | null;
   f29_comentario: string | null;
   /** Desglose del F29 — solo los conceptos con monto salen en el correo. */
@@ -104,12 +107,22 @@ function filaSeccion(
 }
 
 /**
- * Aviso de DNP dentro de la sección de imposiciones: la planilla ya quedó
- * declarada, no es necesario pagarla de inmediato, y lo recomendable es
- * pagarla dentro del mes.
+ * Aviso de DNP dentro de la sección de imposiciones. Informa la fecha en que
+ * se declaró el DNP y, si el pago ya se hizo, la fecha en que se pagó (caja
+ * verde); mientras no se pague, mantiene la recomendación de pagar dentro del
+ * mes (caja ámbar).
  */
-function filaAvisoDnp(): string {
-  return `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #ef9f27;background:#faeeda;border-radius:6px;padding:10px 12px;font-size:12px;color:#633806;line-height:1.55;"><strong style="color:#854f0b;">Planilla declarada sin pago (DNP).</strong> Sus cotizaciones de este período <strong>ya quedaron declaradas</strong>, por lo que <strong>no es necesario que las pague de inmediato</strong>. Lo recomendable es pagarlas dentro del mes, para no tener problemas con las cotizaciones previsionales de sus trabajadores.</div></td></tr>`;
+function filaAvisoDnp(
+  fechaDeclarado?: string | null,
+  fechaPagado?: string | null,
+): string {
+  const declaradoTxt = fechaDeclarado
+    ? ` con fecha <strong>${formatFecha(fechaDeclarado)}</strong>`
+    : "";
+  if (fechaPagado) {
+    return `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #34a06a;background:#e7f6ee;border-radius:6px;padding:10px 12px;font-size:12px;color:#14532d;line-height:1.55;"><strong style="color:#166534;">Planilla DNP pagada.</strong> Sus cotizaciones de este período se declararon sin pago (DNP)${declaradoTxt} y quedaron <strong>pagadas con fecha ${formatFecha(fechaPagado)}</strong>. No tiene nada pendiente por este concepto.</div></td></tr>`;
+  }
+  return `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #ef9f27;background:#faeeda;border-radius:6px;padding:10px 12px;font-size:12px;color:#633806;line-height:1.55;"><strong style="color:#854f0b;">Planilla declarada sin pago (DNP).</strong> Sus cotizaciones de este período <strong>ya quedaron declaradas</strong>${declaradoTxt}, por lo que <strong>no es necesario que las pague de inmediato</strong>. Lo recomendable es pagarlas dentro del mes, para no tener problemas con las cotizaciones previsionales de sus trabajadores.</div></td></tr>`;
 }
 
 /** Fila con botón de pago directo al portal correspondiente (Previred / SII). */
@@ -204,7 +217,8 @@ export function construirCorreoComunicacion({
           formatMonto(montoPrevired),
         );
       }
-      if (emp.dnp_declarado) cuerpoTabla += filaAvisoDnp();
+      if (emp.dnp_declarado)
+        cuerpoTabla += filaAvisoDnp(emp.fecha_dnp_declarado, emp.fecha_dnp_pagado);
       if (!esGrupo) cuerpoTabla += filaBoton("Pagar en Previred", URL_PREVIRED);
     }
 
