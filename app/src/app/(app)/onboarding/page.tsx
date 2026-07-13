@@ -5,6 +5,8 @@ import type {
   Catalogos,
   GrupoClienteOpcion,
   CambioPropuestoRow,
+  InvitacionRow,
+  LinkPagoOpcion,
 } from "@/lib/onboarding";
 
 export const metadata = { title: "Onboarding — RS Tax & Legal" };
@@ -12,7 +14,7 @@ export const metadata = { title: "Onboarding — RS Tax & Legal" };
 export default async function OnboardingPage() {
   const supabase = await createClient();
 
-  const [empresasRes, gruposRes, cambiosRes, catRes] = await Promise.all([
+  const [empresasRes, gruposRes, cambiosRes, catRes, invRes, linksRes] = await Promise.all([
     supabase
       .from("clientes")
       .select(
@@ -34,6 +36,14 @@ export default async function OnboardingPage() {
       .eq("activo", true)
       .order("orden")
       .order("etiqueta"),
+    supabase
+      .from("onboarding_invitaciones")
+      .select("*, empresa:clientes(razon_social)")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("gerencia_links_planes")
+      .select("id, nombre, monto, link")
+      .order("orden"),
   ]);
 
   const gruposRaw = gruposRes.data ?? [];
@@ -103,6 +113,23 @@ export default async function OnboardingPage() {
     }));
   }
 
+  const invitaciones: InvitacionRow[] = (invRes.data ?? []).map((i) => ({
+    id: i.id,
+    token: i.token,
+    nombre_cliente: i.nombre_cliente,
+    cliente_id: i.cliente_id,
+    link_pago: i.link_pago,
+    link_pago_nombre: i.link_pago_nombre,
+    mensaje: i.mensaje,
+    estado: i.estado,
+    respuestas: i.respuestas,
+    completada_at: i.completada_at,
+    created_at: i.created_at,
+    empresa_razon:
+      (i.empresa as { razon_social: string } | null)?.razon_social ?? null,
+  }));
+  const linksPago: LinkPagoOpcion[] = (linksRes.data ?? []) as LinkPagoOpcion[];
+
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
       <OnboardingClient
@@ -110,6 +137,8 @@ export default async function OnboardingPage() {
         grupos={grupos}
         cambios={cambios}
         catalogos={catalogos}
+        invitaciones={invitaciones}
+        linksPago={linksPago}
         errorCarga={empresasRes.error?.message ?? null}
       />
     </main>

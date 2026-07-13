@@ -496,6 +496,60 @@ export async function setOnboardingEstado(
   return { ok: true };
 }
 
+// ===================== Invitaciones de onboarding =====================
+
+/**
+ * Crea una invitación de onboarding: genera el token del link público
+ * /bienvenida/[token] con el link de pago del plan del cliente. Si se asocia
+ * a una empresa existente, la deja en etapa "invitado".
+ */
+export async function crearInvitacion(input: {
+  nombre_cliente: string;
+  cliente_id: string | null;
+  link_pago: string | null;
+  link_pago_nombre: string | null;
+  mensaje: string | null;
+}): Promise<Resp & { token?: string }> {
+  const nombre = input.nombre_cliente.trim();
+  if (!nombre) return { ok: false, error: "El nombre del cliente es obligatorio" };
+  const supabase = await createClient();
+
+  const { data: u } = await supabase.auth.getUser();
+  let usuarioId: string | null = null;
+  if (u.user?.email) {
+    const { data: fila } = await supabase
+      .from("usuarios")
+      .select("id")
+      .eq("correo", u.user.email.toLowerCase())
+      .maybeSingle();
+    usuarioId = fila?.id ?? null;
+  }
+
+  const { data, error } = await supabase
+    .from("onboarding_invitaciones")
+    .insert({
+      nombre_cliente: nombre,
+      cliente_id: input.cliente_id || null,
+      link_pago: input.link_pago?.trim() || null,
+      link_pago_nombre: input.link_pago_nombre?.trim() || null,
+      mensaje: input.mensaje?.trim() || null,
+      creada_por: usuarioId,
+    })
+    .select("token")
+    .single();
+  if (error) return { ok: false, error: error.message };
+
+  if (input.cliente_id) {
+    await supabase
+      .from("clientes")
+      .update({ onboarding_estado: "invitado", onboarding_invitado_at: new Date().toISOString() })
+      .eq("id", input.cliente_id);
+  }
+
+  revalidatePath("/onboarding");
+  return { ok: true, token: data.token };
+}
+
 /** Aprueba un cambio propuesto: aplica el valor a la tabla productiva. */
 export async function aprobarCambio(id: string): Promise<Resp> {
   const supabase = await createClient();

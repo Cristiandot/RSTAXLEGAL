@@ -198,6 +198,31 @@ export type FaltanteRow = {
   registro_rut: string | null;
 };
 
+/** Invitación de onboarding (link público /bienvenida/[token]). */
+export type InvitacionRow = {
+  id: string;
+  token: string;
+  nombre_cliente: string;
+  cliente_id: string | null;
+  link_pago: string | null;
+  link_pago_nombre: string | null;
+  mensaje: string | null;
+  estado: "creada" | "completada";
+  respuestas: Record<string, unknown> | null;
+  completada_at: string | null;
+  created_at: string;
+  /** Razón social de la empresa vinculada (si la invitación ya se aplicó). */
+  empresa_razon: string | null;
+};
+
+/** Link de pago disponible para las invitaciones (fila de gerencia_links_planes). */
+export type LinkPagoOpcion = {
+  id: string;
+  nombre: string;
+  monto: string | null;
+  link: string;
+};
+
 /** Fila de la cola de validación (`cambios_propuestos` + nombres). */
 export type CambioPropuestoRow = {
   id: string;

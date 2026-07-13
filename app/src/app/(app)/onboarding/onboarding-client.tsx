@@ -35,6 +35,8 @@ import {
   type Catalogos,
   type GrupoClienteOpcion,
   type CambioPropuestoRow,
+  type InvitacionRow,
+  type LinkPagoOpcion,
 } from "@/lib/onboarding";
 import {
   aprobarCambio,
@@ -43,11 +45,12 @@ import {
   crearCliente,
   type NuevaEmpresaInput,
 } from "./actions";
+import { InvitacionesTab } from "./invitaciones-tab";
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-type Tab = "altas" | "validacion";
+type Tab = "altas" | "invitaciones" | "validacion";
 
 /** Carpeta OneDrive de la empresa: nombre real, o el de su cliente, o pendiente. */
 function CarpetaCell({ e }: { e: AltaEmpresaRow }) {
@@ -89,12 +92,16 @@ export function OnboardingClient({
   grupos,
   cambios,
   catalogos,
+  invitaciones,
+  linksPago,
   errorCarga,
 }: {
   empresas: AltaEmpresaRow[];
   grupos: GrupoClienteOpcion[];
   cambios: CambioPropuestoRow[];
   catalogos: Catalogos;
+  invitaciones: InvitacionRow[];
+  linksPago: LinkPagoOpcion[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -279,6 +286,11 @@ export function OnboardingClient({
 
       <div className="inline-flex gap-1 rounded-lg bg-muted p-1">
         {tabBtn("altas", "Altas")}
+        {tabBtn(
+          "invitaciones",
+          "Invitaciones",
+          invitaciones.filter((i) => i.estado === "creada").length,
+        )}
         {tabBtn("validacion", "Validación", cambios.length)}
       </div>
 
@@ -286,6 +298,15 @@ export function OnboardingClient({
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
           Error al cargar: {errorCarga}
         </div>
+      ) : null}
+
+      {/* ====================== INVITACIONES ====================== */}
+      {tab === "invitaciones" ? (
+        <InvitacionesTab
+          invitaciones={invitaciones}
+          linksPago={linksPago}
+          empresas={empresas}
+        />
       ) : null}
 
       {/* ====================== ALTAS ====================== */}
