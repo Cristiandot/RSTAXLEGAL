@@ -5,8 +5,17 @@ import type { CampoDef, Catalogos, GrupoClienteOpcion } from "@/lib/onboarding";
 
 export const metadata = { title: "Empresas — RS Tax & Legal" };
 
-/** Campos con render propio (encabezado del diálogo o sección dedicada). */
-const CAMPOS_ESPECIALES = new Set(["rut_empresa", "razon_social", "socios"]);
+/** Campos con render propio (encabezado del diálogo o sección dedicada).
+ * Las credenciales van en la card Accesos con puntitos — nunca como campo
+ * de texto plano. */
+const CAMPOS_ESPECIALES = new Set([
+  "rut_empresa",
+  "razon_social",
+  "socios",
+  "clave_sii",
+  "previred_rut",
+  "previred_clave",
+]);
 
 export default async function EmpresasPage() {
   const supabase = await createClient();
@@ -16,7 +25,7 @@ export default async function EmpresasPage() {
       supabase
         .from("clientes")
         .select(
-          "id, razon_social, rut_empresa, grupo_id, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, correos_adicionales, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono",
+          "id, razon_social, rut_empresa, grupo_id, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, correos_adicionales, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono, clave_sii, previred_rut, previred_clave",
         )
         .order("razon_social"),
       supabase
@@ -97,6 +106,10 @@ export default async function EmpresasPage() {
       pct: pctPorEmpresa.get(e.id)?.pct ?? null,
       faltan: pctPorEmpresa.get(e.id)?.faltan ?? 0,
       valores,
+      // Las claves se reducen a booleano acá — no viajan al navegador.
+      previred_rut: e.previred_rut,
+      tiene_clave_sii: Boolean(e.clave_sii),
+      tiene_clave_previred: Boolean(e.previred_clave),
       socios: Array.isArray(e.socios) ? (e.socios as Socio[]) : [],
       correos_adicionales: Array.isArray(e.correos_adicionales)
         ? (e.correos_adicionales as string[])

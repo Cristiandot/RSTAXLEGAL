@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Search, ChevronRight, Plus, X, Pencil } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
+import { ClaveCell, RutPreviredCell } from "@/components/credencial-celdas";
 import { ThSort } from "@/components/th-sort";
 import { Progreso } from "@/components/progreso";
 import { CampoConValor } from "@/components/campos-editables";
@@ -58,6 +59,10 @@ export type EmpresaFichaRow = {
   faltan: number;
   /** Valor mostrable de cada campo de la ficha; null = falta (editable). */
   valores: Record<string, string | null>;
+  /** Accesos: solo el RUT viaja; de las claves llega un booleano (card Accesos). */
+  previred_rut: string | null;
+  tiene_clave_sii: boolean;
+  tiene_clave_previred: boolean;
   socios: Socio[];
   /** Correos adicionales: todo envío al cliente va con copia a esta lista. */
   correos_adicionales: string[];
@@ -214,6 +219,54 @@ function CorreosCard({ empresa }: { empresa: EmpresaFichaRow }) {
         >
           <Plus className="size-4" /> Agregar
         </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Sección dedicada: accesos SII/Previred con puntitos (cuentan en el %). */
+function AccesosCard({ empresa }: { empresa: EmpresaFichaRow }) {
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="mb-1 text-sm font-semibold">Accesos</div>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Claves SII y Previred. Ver o copiar una clave queda auditado; la vista
+        completa de la cartera está en Credenciales.
+      </p>
+      <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">
+            Clave SII{!empresa.tiene_clave_sii ? " *" : ""}
+          </div>
+          <ClaveCell
+            clienteId={empresa.id}
+            campo="clave_sii"
+            etiqueta="Clave SII"
+            razonSocial={empresa.razon_social}
+            tiene={empresa.tiene_clave_sii}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">
+            RUT Previred{!empresa.previred_rut ? " *" : ""}
+          </div>
+          <RutPreviredCell
+            clienteId={empresa.id}
+            valorInicial={empresa.previred_rut}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">
+            Clave Previred{!empresa.tiene_clave_previred ? " *" : ""}
+          </div>
+          <ClaveCell
+            clienteId={empresa.id}
+            campo="previred_clave"
+            etiqueta="Clave Previred"
+            razonSocial={empresa.razon_social}
+            tiene={empresa.tiene_clave_previred}
+          />
+        </div>
       </div>
     </div>
   );
@@ -617,6 +670,7 @@ export function EmpresasClient({
                   ) : null}
                 </div>
               ))}
+              <AccesosCard empresa={empSel} />
             </div>
           </DialogContent>
         ) : null}

@@ -64,5 +64,7 @@ export async function guardarCredencial(
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/credenciales");
+  revalidatePath("/empresas");
+  revalidatePath("/onboarding");
   return { ok: true };
 }
