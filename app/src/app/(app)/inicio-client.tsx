@@ -205,7 +205,7 @@ export function InicioClient({
   }, [pendientes, buscar, tipoF, respF, orden]);
 
   const sinAsignar = pendientes.filter((g) => g.responsable_id === null).length;
-  const atrasadas = pendientes.filter((g) => diasDesde(g.created_at) > 7).length;
+  const atrasadas = pendientes.filter((g) => diasDesde(g.created_at) > 3).length;
   const nuevasSemana = pendientes.filter((g) => diasDesde(g.created_at) <= 7).length;
 
   function asignar(g: GestionRow, responsableId: string | null) {
@@ -514,7 +514,7 @@ export function InicioClient({
           activo={respF === "sin"}
           onClick={() => setRespF(respF === "sin" ? "" : "sin")}
         />
-        <KpiTile label="Esperando +7 días" valor={atrasadas} alerta />
+        <KpiTile label="Esperando más de 3 días" valor={atrasadas} alerta />
         <KpiTile label="Recibidas últimos 7 días" valor={nuevasSemana} />
       </div>
 
