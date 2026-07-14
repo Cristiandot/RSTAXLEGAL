@@ -472,8 +472,9 @@ export function InicioClient({
             Requerimientos de la oficina
           </h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Todo lo que llega de los clientes, para asignar y trabajar. Clic en
-            una fila para ir directo a la gestión.
+            Bandeja única de requerimientos: asígnalos, edita sus datos y hazles
+            seguimiento por días de espera hasta cerrarlos. Lo que no está acá, no
+            existe: todo requerimiento debe registrarse aquí.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
