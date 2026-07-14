@@ -38,6 +38,7 @@ import {
 import {
   agregarCorreoAdicional,
   agregarSocio,
+  editarSocio,
   marcarServicioEmpresa,
   quitarCorreoAdicional,
   quitarSocio,
@@ -332,12 +333,18 @@ function AccesosCard({ empresa }: { empresa: EmpresaFichaRow }) {
   );
 }
 
-/** Sección dedicada: socios con RUT y % de participación, agregables. */
+/** Sección dedicada: socios con RUT y % de participación — agregables,
+ * editables en línea y quitables. */
 function SociosCard({ empresa }: { empresa: EmpresaFichaRow }) {
   const router = useRouter();
   const [nombre, setNombre] = useState("");
   const [rut, setRut] = useState("");
   const [part, setPart] = useState("");
+  // Edición en línea de un socio existente (índice + valores del formulario).
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editNombre, setEditNombre] = useState("");
+  const [editRut, setEditRut] = useState("");
+  const [editPart, setEditPart] = useState("");
   const [trabajando, start] = useTransition();
 
   function agregar() {
@@ -354,11 +361,38 @@ function SociosCard({ empresa }: { empresa: EmpresaFichaRow }) {
     });
   }
 
+  function empezarEdicion(i: number) {
+    const s = empresa.socios[i];
+    setEditIdx(i);
+    setEditNombre(s.nombre ?? "");
+    setEditRut(s.rut ?? "");
+    setEditPart(s.participacion != null ? String(s.participacion) : "");
+  }
+
+  function guardarEdicion() {
+    if (editIdx === null || !editRut.trim() || trabajando) return;
+    start(async () => {
+      const res = await editarSocio(
+        empresa.id,
+        editIdx,
+        editNombre,
+        editRut,
+        editPart,
+      );
+      if (res.ok) {
+        toast.success("Socio actualizado");
+        setEditIdx(null);
+        router.refresh();
+      } else toast.error(res.error ?? "Error al editar el socio");
+    });
+  }
+
   function quitar(i: number) {
     start(async () => {
       const res = await quitarSocio(empresa.id, i);
       if (res.ok) {
         toast.success("Socio quitado");
+        if (editIdx === i) setEditIdx(null);
         router.refresh();
       } else toast.error(res.error ?? "Error al quitar el socio");
     });
@@ -384,29 +418,100 @@ function SociosCard({ empresa }: { empresa: EmpresaFichaRow }) {
 
       {empresa.socios.length ? (
         <div className="mb-3 space-y-1">
-          {empresa.socios.map((s, i) => (
-            <div
-              key={`${s.rut ?? "s"}-${i}`}
-              className="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm"
-            >
-              <span className="min-w-0 flex-1 truncate font-medium">
-                {s.nombre ?? "—"}
-              </span>
-              <RutCopiable rut={s.rut} />
-              <span className="w-14 text-right text-muted-foreground">
-                {s.participacion != null ? `${s.participacion}%` : "—"}
-              </span>
-              <button
-                type="button"
-                className="rounded p-0.5 text-muted-foreground hover:bg-red-50 hover:text-red-600"
-                title="Quitar socio"
-                disabled={trabajando}
-                onClick={() => quitar(i)}
+          {empresa.socios.map((s, i) =>
+            editIdx === i ? (
+              <div
+                key={`${s.rut ?? "s"}-${i}`}
+                className="grid grid-cols-1 items-end gap-2 rounded-md border border-input bg-muted/40 px-2 py-1.5 sm:grid-cols-[1fr_9rem_5.5rem_auto]"
               >
-                <X className="size-3.5" />
-              </button>
-            </div>
-          ))}
+                <Input
+                  className="h-8 bg-card text-sm"
+                  placeholder="Nombre del socio"
+                  value={editNombre}
+                  autoFocus
+                  onChange={(e) => setEditNombre(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") guardarEdicion();
+                    if (e.key === "Escape") setEditIdx(null);
+                  }}
+                />
+                <Input
+                  className="h-8 bg-card text-sm"
+                  placeholder="12.345.678-9"
+                  value={editRut}
+                  onChange={(e) => setEditRut(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") guardarEdicion();
+                    if (e.key === "Escape") setEditIdx(null);
+                  }}
+                />
+                <Input
+                  className="h-8 bg-card text-sm"
+                  type="number"
+                  min={0}
+                  max={100}
+                  placeholder="%"
+                  value={editPart}
+                  onChange={(e) => setEditPart(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") guardarEdicion();
+                    if (e.key === "Escape") setEditIdx(null);
+                  }}
+                />
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    className="h-8"
+                    disabled={trabajando || !editRut.trim()}
+                    onClick={guardarEdicion}
+                  >
+                    {trabajando ? "…" : "Guardar"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 px-2"
+                    title="Cancelar edición"
+                    disabled={trabajando}
+                    onClick={() => setEditIdx(null)}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div
+                key={`${s.rut ?? "s"}-${i}`}
+                className="flex items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-sm"
+              >
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {s.nombre ?? "—"}
+                </span>
+                <RutCopiable rut={s.rut} />
+                <span className="w-14 text-right text-muted-foreground">
+                  {s.participacion != null ? `${s.participacion}%` : "—"}
+                </span>
+                <button
+                  type="button"
+                  className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  title="Editar socio"
+                  disabled={trabajando}
+                  onClick={() => empezarEdicion(i)}
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+                <button
+                  type="button"
+                  className="rounded p-0.5 text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                  title="Quitar socio"
+                  disabled={trabajando}
+                  onClick={() => quitar(i)}
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            ),
+          )}
         </div>
       ) : (
         <p className="mb-3 text-sm text-muted-foreground">

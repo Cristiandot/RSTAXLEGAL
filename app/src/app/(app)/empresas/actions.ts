@@ -156,6 +156,55 @@ export async function quitarCorreoAdicional(
   return { ok: true };
 }
 
+/** Edita un socio existente (por índice): nombre, RUT y % de participación. */
+export async function editarSocio(
+  empresaId: string,
+  indice: number,
+  nombre: string,
+  rut: string,
+  participacion: string,
+): Promise<Resp> {
+  if (!validarRut(rut))
+    return { ok: false, error: "RUT inválido (dígito verificador)" };
+  const rutFmt = formatearRut(rut);
+  let part: number | null = null;
+  if (participacion.trim()) {
+    part = Number(participacion.replace("%", "").replace(",", "."));
+    if (!Number.isFinite(part) || part <= 0 || part > 100)
+      return { ok: false, error: "Participación inválida (0–100)" };
+  }
+
+  const supabase = await createClient();
+  const { data: fila, error: e0 } = await supabase
+    .from("clientes")
+    .select("socios")
+    .eq("id", empresaId)
+    .maybeSingle();
+  if (e0) return { ok: false, error: e0.message };
+
+  const actuales: Socio[] = Array.isArray(fila?.socios)
+    ? (fila.socios as Socio[])
+    : [];
+  if (indice < 0 || indice >= actuales.length)
+    return { ok: false, error: "Socio no encontrado" };
+  if (actuales.some((s, i) => i !== indice && s.rut === rutFmt))
+    return { ok: false, error: `El socio ${rutFmt} ya está registrado` };
+
+  const nuevos = actuales.map((s, i) =>
+    i === indice
+      ? { nombre: nombre.trim() || null, rut: rutFmt, participacion: part }
+      : s,
+  );
+  const { error } = await supabase
+    .from("clientes")
+    .update({ socios: nuevos })
+    .eq("id", empresaId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidarFichas();
+  return { ok: true };
+}
+
 /** Quita un socio (por índice) del jsonb `socios` de la empresa. */
 export async function quitarSocio(
   empresaId: string,
