@@ -15,6 +15,11 @@ import {
   type CatalogoOpcion,
   type FaltanteRow,
 } from "@/lib/onboarding";
+import {
+  REGIONES_CHILE,
+  comunaEnRegion,
+  regionDeComunaNombre,
+} from "@/lib/comunas-chile";
 import { guardarCampo } from "@/app/(app)/onboarding/actions";
 
 const selectCls =
@@ -52,6 +57,17 @@ export function EditorCampo({
   const [saving, startSave] = useTransition();
   const tipo = tipoCampo(item.campo);
 
+  // Selector de comuna: filtro EXCLUYENTE por región (romano + nombre) antes
+  // de la comuna. Al editar un valor existente, parte en su región.
+  const esComuna = selector === "comuna";
+  const [region, setRegion] = useState<string>(() =>
+    esComuna ? (regionDeComunaNombre(inicial) ?? "") : "",
+  );
+  const opcionesFiltradas = useMemo(() => {
+    if (!esComuna || !region) return opciones ?? [];
+    return (opciones ?? []).filter((o) => comunaEnRegion(o.codigo, region));
+  }, [esComuna, region, opciones]);
+
   function guardar() {
     startSave(async () => {
       const res = await guardarCampo(
@@ -78,6 +94,28 @@ export function EditorCampo({
 
   return (
     <div className="w-full space-y-1.5">
+      {esComuna ? (
+        <select
+          aria-label="Región"
+          className={`${selectCls} h-8 w-full min-w-0`}
+          value={region}
+          onChange={(e) => {
+            const r = e.target.value;
+            setRegion(r);
+            setConfirmando(false);
+            // Filtro excluyente: si la comuna elegida no es de la región
+            // nueva, se limpia para obligar a elegir una de la región.
+            if (r && valor && !comunaEnRegion(valor, r)) setValor("");
+          }}
+        >
+          <option value="">Región — todas</option>
+          {REGIONES_CHILE.map((r) => (
+            <option key={r.numero} value={r.numero}>
+              {r.numero} — {r.nombre}
+            </option>
+          ))}
+        </select>
+      ) : null}
       <div className="flex w-full items-start gap-1.5">
         {selector ? (
           <select
@@ -90,7 +128,7 @@ export function EditorCampo({
             }}
           >
             <option value="">— Elegir —</option>
-            {(opciones ?? []).map((o) => (
+            {opcionesFiltradas.map((o) => (
               <option key={o.codigo} value={o.codigo}>
                 {o.etiqueta}
               </option>
