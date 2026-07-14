@@ -13,6 +13,7 @@ import {
   Copy,
   Check,
   Mail,
+  BarChart3,
 } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { comparar, type Orden } from "@/lib/ordenar";
@@ -140,6 +141,7 @@ export function InicioClient({
   usuarios,
   clientes,
   cumplimiento,
+  porEmpresa,
   errorCarga,
 }: {
   pendientes: GestionRow[];
@@ -155,6 +157,17 @@ export function InicioClient({
     justificados: number;
     pct_a_tiempo: number | null;
   }[];
+  porEmpresa: {
+    cliente_id: string | null;
+    empresa: string;
+    cliente_grupo: string | null;
+    cliente_codigo: string | null;
+    total: number;
+    pendientes: number;
+    a_tiempo: number;
+    atrasados: number;
+    pct_cumplimiento: number | null;
+  }[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -163,6 +176,7 @@ export function InicioClient({
   const [respF, setRespF] = useState("");
   const [verHistorial, setVerHistorial] = useState(false);
   const [verCumplimiento, setVerCumplimiento] = useState(false);
+  const [verEmpresas, setVerEmpresas] = useState(false);
   const [casillaCopiada, setCasillaCopiada] = useState(false);
   const [orden, setOrden] = useState<Orden>(null);
   const [asignando, startAsignar] = useTransition();
@@ -846,6 +860,71 @@ export function InicioClient({
                           </TableCell>
                           <TableCell className="tabular-nums font-semibold">
                             {c.pct_a_tiempo ?? "—"}%
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : null}
+          </div>
+
+          <div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setVerEmpresas((v) => !v)}
+            >
+              <BarChart3 className="size-4" />
+              {verEmpresas
+                ? "Ocultar ranking por empresa"
+                : "Requerimientos por empresa"}
+            </Button>
+            {verEmpresas ? (
+              <div className="card-soft mt-3 max-h-[520px] overflow-y-auto rounded-xl bg-card">
+                <Table stickyHeader>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Empresa</TableHead>
+                      <TableHead>Cliente</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead>Pendientes</TableHead>
+                      <TableHead>A tiempo</TableHead>
+                      <TableHead>Atrasados</TableHead>
+                      <TableHead>% cumpl.</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {porEmpresa.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={7}
+                          className="py-8 text-center text-muted-foreground"
+                        >
+                          Sin requerimientos registrados.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      porEmpresa.map((e) => (
+                        <TableRow key={e.cliente_id ?? e.empresa}>
+                          <TableCell className="font-medium">
+                            <span className="block max-w-[260px] truncate" title={e.empresa}>
+                              {e.empresa}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-xs text-muted-foreground">
+                              {e.cliente_grupo ?? "—"}
+                              {e.cliente_codigo ? ` · ${e.cliente_codigo}` : ""}
+                            </span>
+                          </TableCell>
+                          <TableCell className="tabular-nums font-semibold">{e.total}</TableCell>
+                          <TableCell className="tabular-nums">{e.pendientes}</TableCell>
+                          <TableCell className="tabular-nums text-emerald-700">{e.a_tiempo}</TableCell>
+                          <TableCell className="tabular-nums text-red-700">{e.atrasados}</TableCell>
+                          <TableCell className="tabular-nums font-semibold">
+                            {e.pct_cumplimiento != null ? `${e.pct_cumplimiento}%` : "—"}
                           </TableCell>
                         </TableRow>
                       ))

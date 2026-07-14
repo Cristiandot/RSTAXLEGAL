@@ -61,6 +61,11 @@ export default async function HomePage() {
     .from("v_cumplimiento_encargado")
     .select("*");
 
+  // Ranking de requerimientos por empresa (total + cumplimiento).
+  const porEmpresaRes = await supabase
+    .from("v_requerimientos_empresa")
+    .select("*");
+
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
       <header className="mb-6">
@@ -93,6 +98,19 @@ export default async function HomePage() {
             atrasados: number;
             justificados: number;
             pct_a_tiempo: number | null;
+          }[]
+        }
+        porEmpresa={
+          (porEmpresaRes.data ?? []) as {
+            cliente_id: string | null;
+            empresa: string;
+            cliente_grupo: string | null;
+            cliente_codigo: string | null;
+            total: number;
+            pendientes: number;
+            a_tiempo: number;
+            atrasados: number;
+            pct_cumplimiento: number | null;
           }[]
         }
         errorCarga={pendientesRes.error?.message ?? null}
