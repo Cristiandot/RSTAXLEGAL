@@ -17,8 +17,13 @@ import { ThSort } from "@/components/th-sort";
 import {
   CANAL_LABEL,
   CANALES_TAREA,
+  categoriaDe,
+  claseCategoria,
   claseTipoGestion,
   diasDesde,
+  formatDuracion,
+  semaforoSla,
+  urgenciaSla,
   TIPO_GESTION_HREF,
   TIPO_GESTION_LABEL,
   type GestionRow,
@@ -187,7 +192,15 @@ export function InicioClient({
       }
       return true;
     });
-    if (!orden) return out;
+    // Orden por defecto (sin orden manual): por urgencia SLA — lo más pasado de
+    // su plazo, arriba. Requerimientos sin categoría (p.ej. W) van al final.
+    if (!orden) {
+      return [...out].sort(
+        (a, b) =>
+          urgenciaSla(b.created_at, b.cliente_codigo) -
+          urgenciaSla(a.created_at, a.cliente_codigo),
+      );
+    }
     const valor = (g: GestionRow): unknown => {
       switch (orden.col) {
         case "tipo": return TIPO_GESTION_LABEL[g.tipo] ?? g.tipo;
@@ -294,6 +307,21 @@ export function InicioClient({
   function filaGestion(g: GestionRow, esHistorial: boolean) {
     const dias = diasDesde(g.created_at);
     const esTarea = g.fuente === "tareas_oficina";
+    // Categoría del cliente (letra del código) y semáforo SLA (solo pendientes).
+    const cat = categoriaDe(g.cliente_codigo);
+    const sem = !esHistorial && cat ? semaforoSla(g.created_at, cat.horas) : null;
+    const semCls = !sem
+      ? ""
+      : sem.estado === "rojo"
+        ? "border-red-200 bg-red-50 text-red-700"
+        : sem.estado === "amarillo"
+          ? "border-amber-200 bg-amber-50 text-amber-700"
+          : "border-emerald-200 bg-emerald-50 text-emerald-700";
+    const semTxt = !sem
+      ? ""
+      : sem.estado === "rojo"
+        ? `vencido +${formatDuracion(-sem.restante)}`
+        : `quedan ${formatDuracion(sem.restante)}`;
     const empresasGrupo = g.grupo_id ? empresasPorGrupo.get(g.grupo_id) ?? [] : [];
     // La empresa se puede cambiar solo en requerimientos (tareas) cuyo cliente
     // (grupo) tenga empresas donde elegir.
@@ -318,9 +346,18 @@ export function InicioClient({
           <span className="block max-w-[200px] truncate" title={g.cliente ?? ""}>
             {g.cliente ?? "—"}
             {g.cliente_codigo ? (
-              <span className="ml-1 text-xs font-normal text-muted-foreground">
-                {g.cliente_codigo}
-              </span>
+              cat ? (
+                <span
+                  className={`ml-1 inline-flex rounded border px-1 py-px text-[10px] font-semibold ${claseCategoria(cat.letra)}`}
+                  title={`${g.cliente_codigo} · ${cat.label} · SLA ${cat.horas}h`}
+                >
+                  {g.cliente_codigo} · {cat.label}
+                </span>
+              ) : (
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  {g.cliente_codigo}
+                </span>
+              )
             ) : null}
           </span>
         </TableCell>
@@ -391,7 +428,15 @@ export function InicioClient({
         <TableCell>
           <span className="text-sm tabular-nums">{formatFecha(fechaLocal(g.created_at))}</span>
           {!esHistorial ? (
-            dias > 7 ? (
+            sem ? (
+              <span
+                className={`ml-1.5 inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[11px] font-semibold ${semCls}`}
+                title={`${cat?.label} · SLA ${sem.slaHoras}h · lleva ${formatDuracion(sem.horas)}`}
+              >
+                <span aria-hidden>●</span>
+                {semTxt}
+              </span>
+            ) : dias > 7 ? (
               <span className="ml-1.5 inline-flex rounded-full border border-red-200 bg-red-50 px-1.5 py-px text-[11px] font-semibold text-red-700">
                 hace {dias} días
               </span>

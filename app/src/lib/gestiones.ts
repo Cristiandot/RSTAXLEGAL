@@ -96,6 +96,87 @@ export function claseTipoGestion(tipo: string): string {
   }
 }
 
+/**
+ * SLA de atención por categoría del cliente, leída de la primera letra de su
+ * código (A.2 → A). Reloj 24/7 (horas corridas). Open es la máxima prioridad.
+ */
+export const SLA_CATEGORIA: Record<
+  string,
+  { label: string; horas: number; orden: number }
+> = {
+  A: { label: "Open", horas: 12, orden: 1 },
+  B: { label: "Segunda", horas: 24, orden: 2 },
+  C: { label: "Tercera", horas: 36, orden: 3 },
+  D: { label: "Puba", horas: 72, orden: 4 },
+};
+
+export type Categoria = {
+  letra: string;
+  label: string;
+  horas: number;
+  orden: number;
+};
+
+/** Categoría a partir del código del cliente/grupo (A.2 → Open). null si no aplica (p.ej. W). */
+export function categoriaDe(codigo: string | null): Categoria | null {
+  if (!codigo) return null;
+  const letra = codigo[0]?.toUpperCase() ?? "";
+  const s = SLA_CATEGORIA[letra];
+  return s ? { letra, ...s } : null;
+}
+
+/** Clase Tailwind del badge de categoría (más prominente mientras más alta). */
+export function claseCategoria(letra: string): string {
+  switch (letra) {
+    case "A":
+      return "border-amber-300 bg-amber-100 text-amber-800";
+    case "B":
+      return "border-sky-200 bg-sky-50 text-sky-700";
+    case "C":
+      return "border-slate-200 bg-slate-100 text-slate-600";
+    case "D":
+      return "border-zinc-200 bg-zinc-100 text-zinc-500";
+    default:
+      return "border-slate-200 bg-slate-100 text-slate-600";
+  }
+}
+
+export type Semaforo = {
+  estado: "verde" | "amarillo" | "rojo";
+  horas: number; // horas transcurridas desde que llegó (24/7)
+  slaHoras: number;
+  restante: number; // horas hasta vencer (negativo si ya venció)
+};
+
+/**
+ * Semáforo SLA: horas corridas desde `createdAtIso` vs SLA de la categoría.
+ * Verde <50% del SLA, amarillo 50–100%, rojo al vencer (≥100%).
+ */
+export function semaforoSla(createdAtIso: string, slaHoras: number): Semaforo {
+  const horas = Math.max(0, (Date.now() - new Date(createdAtIso).getTime()) / 3_600_000);
+  const ratio = slaHoras > 0 ? horas / slaHoras : 0;
+  const estado = ratio >= 1 ? "rojo" : ratio >= 0.5 ? "amarillo" : "verde";
+  return { estado, horas, slaHoras, restante: slaHoras - horas };
+}
+
+/**
+ * Urgencia SLA para ordenar la bandeja: horas transcurridas / SLA de la
+ * categoría. >1 = vencido. Devuelve -1 si el cliente no tiene categoría (va al final).
+ */
+export function urgenciaSla(createdAtIso: string, codigo: string | null): number {
+  const c = categoriaDe(codigo);
+  if (!c) return -1;
+  const horas = Math.max(0, (Date.now() - new Date(createdAtIso).getTime()) / 3_600_000);
+  return horas / c.horas;
+}
+
+/** "5h", "18h", "2d", "3d" — duración compacta en horas/días. */
+export function formatDuracion(horas: number): string {
+  const h = Math.round(Math.abs(horas));
+  if (h < 48) return `${h}h`;
+  return `${Math.round(h / 24)}d`;
+}
+
 /** Días transcurridos desde una fecha ISO (timestamptz) hasta hoy. */
 export function diasDesde(iso: string): number {
   const d = new Date(iso);
