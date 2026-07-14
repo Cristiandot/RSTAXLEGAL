@@ -8,6 +8,8 @@ export type LiquidacionRow = {
   cliente_id: string;
   periodo: string;
   razon_social: string;
+  /** 'empresa' | 'casa_particular' (empleador persona natural, asesora del hogar). */
+  tipo_cliente: string;
   rut_empresa: string | null;
   previred_rut: string | null;
   modalidad_previred: string;

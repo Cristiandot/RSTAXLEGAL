@@ -56,6 +56,8 @@ export type EmpresaFichaRow = {
   grupo_id: string | null;
   grupo_codigo: string | null;
   grupo_nombre: string | null;
+  /** 'empresa' | 'casa_particular' — a casa particular solo se le exige RUT + clave Previred. */
+  tipo_cliente: string;
   /** % de completitud de la ficha (campos obligatorios de la empresa). */
   pct: number | null;
   faltan: number;
@@ -651,6 +653,14 @@ export function EmpresasClient({
                     >
                       {e.razon_social}
                     </span>
+                    {e.tipo_cliente === "casa_particular" ? (
+                      <Badge
+                        variant="outline"
+                        className="mt-0.5 border-violet-300 bg-violet-50 text-[10px] font-normal text-violet-700"
+                      >
+                        Casa particular
+                      </Badge>
+                    ) : null}
                     {!e.activo ? (
                       <Badge
                         variant="outline"
@@ -709,7 +719,19 @@ export function EmpresasClient({
               </DialogDescription>
             </DialogHeader>
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {camposPorGrupo.map(([grupo, defs]) => (
+              {/* Casa particular (empleador persona natural): la ficha es solo
+                  RUT + clave Previred — los campos societarios no aplican. */}
+              {empSel.tipo_cliente === "casa_particular" ? (
+                <p className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-800">
+                  Empleador de casa particular. Su ficha completa es el RUT y la
+                  clave Previred de la card Accesos; no lleva datos societarios
+                  ni ciclo F29 / Comunicación mensual.
+                </p>
+              ) : null}
+              {(empSel.tipo_cliente === "casa_particular"
+                ? []
+                : camposPorGrupo
+              ).map(([grupo, defs]) => (
                 <div key={grupo} className="contents">
                   <div className="rounded-lg border p-3">
                     <div className="mb-2 text-sm font-semibold">{grupo}</div>

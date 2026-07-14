@@ -25,7 +25,7 @@ export default async function EmpresasPage() {
       supabase
         .from("clientes")
         .select(
-          "id, razon_social, rut_empresa, grupo_id, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, correos_adicionales, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono, clave_sii, previred_rut, previred_clave, activo, fecha_termino_servicio",
+          "id, razon_social, rut_empresa, grupo_id, tipo_cliente, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, correos_adicionales, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono, clave_sii, previred_rut, previred_clave, activo, fecha_termino_servicio",
         )
         // Registros internos de la oficina (contador, etc.): fuera de Empresas.
         .eq("es_oficina", false)
@@ -105,6 +105,7 @@ export default async function EmpresasPage() {
       grupo_id: e.grupo_id,
       grupo_codigo: g?.codigo ?? null,
       grupo_nombre: g?.nombre ?? null,
+      tipo_cliente: e.tipo_cliente ?? "empresa",
       pct: pctPorEmpresa.get(e.id)?.pct ?? null,
       faltan: pctPorEmpresa.get(e.id)?.faltan ?? 0,
       valores,

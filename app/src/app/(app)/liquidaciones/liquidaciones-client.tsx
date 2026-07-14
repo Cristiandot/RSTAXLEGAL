@@ -451,6 +451,14 @@ export function LiquidacionesClient({
                     >
                       {c.razon_social}
                     </span>
+                    {c.tipo_cliente === "casa_particular" ? (
+                      <Badge
+                        variant="outline"
+                        className="mt-0.5 border-violet-300 bg-violet-50 text-[10px] text-violet-700"
+                      >
+                        Casa particular
+                      </Badge>
+                    ) : null}
                     <a
                       href={`/liquidaciones/${c.cliente_id}?periodo=${c.periodo}`}
                       onClick={(e) => e.stopPropagation()}
