@@ -148,7 +148,6 @@ export function InicioClient({
   const [ntDetalle, setNtDetalle] = useState("");
   const [ntCliente, setNtCliente] = useState("");
   const [ntCanal, setNtCanal] = useState("dashboard");
-  const [ntPlazo, setNtPlazo] = useState("");
   const [ntResp, setNtResp] = useState("");
   const [creando, startCrear] = useTransition();
   // Diálogo de edición de texto de un requerimiento (tarea).
@@ -262,7 +261,7 @@ export function InicioClient({
         detalle: ntDetalle.trim() || null,
         clienteId: ntCliente || null,
         canal: ntCanal,
-        plazo: ntPlazo || null,
+        plazo: null,
         responsableId: ntResp || null,
       });
       if (res.ok) {
@@ -272,7 +271,6 @@ export function InicioClient({
         setNtDetalle("");
         setNtCliente("");
         setNtCanal("dashboard");
-        setNtPlazo("");
         setNtResp("");
         router.refresh();
       } else {
@@ -765,15 +763,6 @@ export function InicioClient({
                     </option>
                   ))}
                 </select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="nt_plazo">Plazo de entrega</Label>
-                <Input
-                  id="nt_plazo"
-                  type="date"
-                  value={ntPlazo}
-                  onChange={(e) => setNtPlazo(e.target.value)}
-                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="nt_resp">Responsable</Label>
