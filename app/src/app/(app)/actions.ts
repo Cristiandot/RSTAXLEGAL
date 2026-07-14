@@ -99,6 +99,52 @@ export async function editarTextoTarea(
 }
 
 /**
+ * Guarda (o actualiza) la justificación de atraso de una gestión en
+ * `gestion_seguimiento`. Sirve para cualquier fuente de la bandeja. No toca
+ * `resuelto_at` (lo maneja el trigger). Registra quién justificó.
+ */
+export async function justificarAtraso(
+  fuente: string,
+  gestionId: string,
+  texto: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!TABLAS_GESTION.has(fuente)) {
+    return { ok: false, error: "Tipo de gestión no permitido" };
+  }
+  const t = texto.trim();
+  if (!t) return { ok: false, error: "Escribe la justificación del atraso." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let uid: string | null = null;
+  if (user?.email) {
+    const { data: u } = await supabase
+      .from("usuarios")
+      .select("id")
+      .eq("correo", user.email.toLowerCase())
+      .maybeSingle();
+    uid = u?.id ?? null;
+  }
+
+  const { error } = await supabase.from("gestion_seguimiento").upsert(
+    {
+      fuente,
+      gestion_id: gestionId,
+      justificacion_atraso: t,
+      justificado_por: uid,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "fuente,gestion_id" },
+  );
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/**
  * Cambia la empresa (cliente_id) de una tarea/requerimiento desde la bandeja.
  * Útil cuando la auto-identificación (correo/WhatsApp) eligió una empresa del
  * grupo distinta a la correcta. Solo aplica a `tareas_oficina`. Valida que la

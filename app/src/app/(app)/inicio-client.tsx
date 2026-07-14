@@ -38,6 +38,7 @@ import {
   completarTarea,
   crearTarea,
   editarTextoTarea,
+  justificarAtraso,
 } from "./actions";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -138,12 +139,22 @@ export function InicioClient({
   historial,
   usuarios,
   clientes,
+  cumplimiento,
   errorCarga,
 }: {
   pendientes: GestionRow[];
   historial: GestionRow[];
   usuarios: UsuarioOpcion[];
   clientes: { id: string; razon_social: string; grupo_id: string | null }[];
+  cumplimiento: {
+    responsable_id: string | null;
+    responsable: string;
+    resueltos: number;
+    a_tiempo: number;
+    atrasados: number;
+    justificados: number;
+    pct_a_tiempo: number | null;
+  }[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -151,6 +162,7 @@ export function InicioClient({
   const [tipoF, setTipoF] = useState("");
   const [respF, setRespF] = useState("");
   const [verHistorial, setVerHistorial] = useState(false);
+  const [verCumplimiento, setVerCumplimiento] = useState(false);
   const [casillaCopiada, setCasillaCopiada] = useState(false);
   const [orden, setOrden] = useState<Orden>(null);
   const [asignando, startAsignar] = useTransition();
@@ -168,6 +180,12 @@ export function InicioClient({
   const [editTitulo, setEditTitulo] = useState("");
   const [editDetalle, setEditDetalle] = useState("");
   const [editando, startEditar] = useTransition();
+  // Diálogo de justificación de atraso (fila en rojo).
+  const [justOpen, setJustOpen] = useState(false);
+  const [justFuente, setJustFuente] = useState("");
+  const [justId, setJustId] = useState<string | null>(null);
+  const [justTexto, setJustTexto] = useState("");
+  const [justificando, startJustificar] = useTransition();
 
   // Empresas agrupadas por cliente (grupo), para el desplegable de Empresa por
   // fila: al abrirlo se ofrecen todas las sociedades de ese cliente.
@@ -270,6 +288,28 @@ export function InicioClient({
         router.refresh();
       } else {
         toast.error(res.error ?? "Error al editar el requerimiento");
+      }
+    });
+  }
+
+  function abrirJustificacion(g: GestionRow) {
+    setJustFuente(g.fuente);
+    setJustId(g.gestion_id);
+    setJustTexto(g.justificacion_atraso ?? "");
+    setJustOpen(true);
+  }
+
+  function guardarJustificacion() {
+    if (!justId) return;
+    startJustificar(async () => {
+      const res = await justificarAtraso(justFuente, justId, justTexto);
+      if (res.ok) {
+        toast.success("Justificación guardada");
+        setJustOpen(false);
+        setJustId(null);
+        router.refresh();
+      } else {
+        toast.error(res.error ?? "Error al guardar la justificación");
       }
     });
   }
@@ -465,6 +505,22 @@ export function InicioClient({
                 {dias === 0 ? "hoy" : `hace ${dias} d`}
               </span>
             )
+          ) : null}
+          {sem?.estado === "rojo" ? (
+            <div className="mt-1" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => abrirJustificacion(g)}
+                className={`inline-flex items-center gap-1 rounded border px-1.5 py-px text-[11px] font-medium transition-colors ${
+                  g.justificacion_atraso
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                    : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                }`}
+                title={g.justificacion_atraso ?? "Justificar el atraso"}
+              >
+                {g.justificacion_atraso ? "✓ Justificado" : "Justificar atraso"}
+              </button>
+            </div>
           ) : null}
         </TableCell>
         <TableCell>
@@ -729,6 +785,62 @@ export function InicioClient({
               </div>
             ) : null}
           </div>
+
+          <div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setVerCumplimiento((v) => !v)}
+            >
+              <CheckCircle2 className="size-4" />
+              {verCumplimiento
+                ? "Ocultar cumplimiento"
+                : "Cumplimiento por encargado"}
+            </Button>
+            {verCumplimiento ? (
+              <div className="card-soft mt-3 rounded-xl bg-card">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead>Encargado</TableHead>
+                      <TableHead>Resueltos</TableHead>
+                      <TableHead>A tiempo</TableHead>
+                      <TableHead>Atrasados</TableHead>
+                      <TableHead>Justificados</TableHead>
+                      <TableHead>% a tiempo</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cumplimiento.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={6}
+                          className="py-8 text-center text-muted-foreground"
+                        >
+                          Aún no hay gestiones resueltas con SLA registrado.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      cumplimiento.map((c) => (
+                        <TableRow key={c.responsable_id ?? "sin"}>
+                          <TableCell className="font-medium">{c.responsable}</TableCell>
+                          <TableCell className="tabular-nums">{c.resueltos}</TableCell>
+                          <TableCell className="tabular-nums text-emerald-700">{c.a_tiempo}</TableCell>
+                          <TableCell className="tabular-nums text-red-700">{c.atrasados}</TableCell>
+                          <TableCell className="tabular-nums">
+                            {c.justificados}/{c.atrasados}
+                          </TableCell>
+                          <TableCell className="tabular-nums font-semibold">
+                            {c.pct_a_tiempo ?? "—"}%
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : null}
+          </div>
       </div>
 
       {/* Diálogo de edición de texto de un requerimiento (tarea) */}
@@ -782,6 +894,52 @@ export function InicioClient({
             </Button>
             <Button onClick={guardarEdicion} disabled={editando || !editTitulo.trim()}>
               {editando ? "Guardando…" : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={justOpen}
+        onOpenChange={(o) => {
+          if (!o) {
+            setJustOpen(false);
+            setJustId(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Justificar atraso</DialogTitle>
+            <DialogDescription>
+              Este requerimiento superó su plazo de atención (SLA). Explica el
+              motivo del atraso; queda en el registro de cumplimiento.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="just_texto">Justificación *</Label>
+            <Textarea
+              id="just_texto"
+              rows={5}
+              value={justTexto}
+              onChange={(e) => setJustTexto(e.target.value)}
+              placeholder="Ej.: a la espera de antecedentes del cliente; feriado; complejidad del caso…"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setJustOpen(false);
+                setJustId(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={guardarJustificacion} disabled={justificando || !justTexto.trim()}>
+              {justificando ? "Guardando…" : "Guardar"}
             </Button>
           </DialogFooter>
         </DialogContent>

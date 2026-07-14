@@ -56,6 +56,11 @@ export default async function HomePage() {
     .eq("activo", true)
     .order("razon_social");
 
+  // Registro de cumplimiento SLA por encargado (gestiones resueltas).
+  const cumplimientoRes = await supabase
+    .from("v_cumplimiento_encargado")
+    .select("*");
+
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
       <header className="mb-6">
@@ -77,6 +82,17 @@ export default async function HomePage() {
             id: string;
             razon_social: string;
             grupo_id: string | null;
+          }[]
+        }
+        cumplimiento={
+          (cumplimientoRes.data ?? []) as {
+            responsable_id: string | null;
+            responsable: string;
+            resueltos: number;
+            a_tiempo: number;
+            atrasados: number;
+            justificados: number;
+            pct_a_tiempo: number | null;
           }[]
         }
         errorCarga={pendientesRes.error?.message ?? null}

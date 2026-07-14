@@ -28,6 +28,10 @@ export type GestionRow = {
   updated_at: string | null;
   canal: string | null; // portal | dashboard | correo | wati | telefono | otro
   plazo: string | null; // plazo de entrega (tareas manuales)
+  resuelto_at: string | null; // cuándo salió de pendiente (estampado por trigger)
+  justificacion_atraso: string | null; // nota del atraso (si se justificó)
+  sla_horas: number | null; // SLA de su categoría, en horas
+  cumplimiento: "a_tiempo" | "atrasado" | null; // solo cuando ya está resuelto
 };
 
 /** Canales por los que puede llegar un requerimiento. Correo/Wati aún no
