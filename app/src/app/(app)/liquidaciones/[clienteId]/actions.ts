@@ -503,7 +503,9 @@ function partirRut(rut: string | null): { num: string; dv: string } {
 /**
  * Genera el archivo de carga electrónica de Previred (Formato Largo Variable,
  * 105 campos) para el período. Filtra por unidad de negocio (centro de costo)
- * si se indica. Recalcula cada trabajador con los datos actuales.
+ * si se indica. Solo incluye trabajadores con liquidación guardada en el período
+ * y ancla las rentas a esas liquidaciones (la nómina Previred siempre debe
+ * cuadrar con las liquidaciones de sueldo).
  */
 export async function descargarNominaPrevired(
   clienteId: string,
@@ -526,8 +528,13 @@ export async function descargarNominaPrevired(
   let trabQuery = supabase.from("trabajadores").select("*").eq("cliente_id", clienteId).eq("activo", true);
   if (unidadNegocio) trabQuery = trabQuery.eq("sucursal", unidadNegocio);
   const trabRes = await trabQuery.order("apellidos");
-  const trabajadores = trabRes.data ?? [];
-  if (trabajadores.length === 0) return { ok: false, error: "No hay trabajadores para esa unidad de negocio." };
+  // La nómina Previred SIEMPRE se ancla a las liquidaciones del período: solo entran
+  // trabajadores con liquidación guardada. Un trabajador activo sin liquidación (p. ej.
+  // ingresa el mes siguiente, o se decidió no liquidarlo) NO va al archivo.
+  const idsConLiquidacion = new Set((liqRes.data ?? []).map((l) => l.trabajador_id as string));
+  const trabajadores = (trabRes.data ?? []).filter((t) => idsConLiquidacion.has(t.id));
+  if (trabajadores.length === 0)
+    return { ok: false, error: `No hay liquidaciones guardadas en ${periodo}${unidadNegocio ? " para esa unidad de negocio" : ""}: el archivo Previred se genera desde las liquidaciones del período.` };
 
   const ids = trabajadores.map((t) => t.id);
   const [novRes, contRes] = await Promise.all([
