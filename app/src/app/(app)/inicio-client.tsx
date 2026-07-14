@@ -340,11 +340,25 @@ export function InicioClient({
   }
 
   function completar(g: GestionRow, terminada: boolean) {
+    // Al cerrar una tarea VENCIDA (roja) sin justificar, exigimos la
+    // justificación primero: abrimos el diálogo en vez de intentar cerrar.
+    if (terminada && !g.justificacion_atraso) {
+      const cat = categoriaDe(g.cliente_codigo);
+      const roja = cat ? semaforoSla(g.created_at, cat.horas).estado === "rojo" : false;
+      if (roja) {
+        toast.warning("Justifica el atraso para poder cerrar esta tarea.");
+        abrirJustificacion(g);
+        return;
+      }
+    }
     startAsignar(async () => {
       const res = await completarTarea(g.gestion_id, terminada);
       if (res.ok) {
         toast.success(terminada ? "Tarea terminada" : "Tarea reabierta");
         router.refresh();
+      } else if (res.error?.includes("JUSTIFICACION_REQUERIDA")) {
+        toast.warning("Justifica el atraso para poder cerrar esta tarea.");
+        abrirJustificacion(g);
       } else {
         toast.error(res.error ?? "Error al actualizar la tarea");
       }
