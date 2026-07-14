@@ -6,6 +6,11 @@
 
 import { formatFecha, formatMonto } from "./format";
 import { etiquetaPeriodo } from "./periodos";
+import {
+  cajaNotaContador,
+  cajaPostergacionIva,
+  filasDesgloseF29,
+} from "./f29-correo";
 
 export type EmpresaComunicacion = {
   comunicacion_id: string;
@@ -232,36 +237,28 @@ export function construirCorreoComunicacion({
         emp.plazo_f29,
         "23:59 hrs",
       );
-      // Desglose por concepto: solo los que tienen monto (los demás se omiten).
-      const conceptos: [string, number | string | null | undefined][] = [
-        ["IVA", emp.f29_iva],
-        ["Impuesto Único", emp.f29_imp_unico],
-        ["Retenciones", emp.f29_retenciones],
-        ["PPM", emp.f29_ppm],
-        ["Otros", emp.f29_otros],
-      ];
-      const conDesglose = conceptos.some(
-        ([, v]) => v !== null && v !== undefined && Number(v) > 0,
-      );
-      for (const [nombre, v] of conceptos) {
-        if (v !== null && v !== undefined && Number(v) > 0) {
-          cuerpoTabla += filaDetalle(nombre, formatMonto(v));
-        }
-      }
+      // Desglose por concepto: salen todos los con monto distinto de cero,
+      // negativos incluidos (helper compartido con el aviso del módulo F29).
+      const { filas: filasDesglose, conDesglose } = filasDesgloseF29({
+        iva: emp.f29_iva,
+        impUnico: emp.f29_imp_unico,
+        retenciones: emp.f29_retenciones,
+        ppm: emp.f29_ppm,
+        otros: emp.f29_otros,
+      });
+      cuerpoTabla += filasDesglose;
       cuerpoTabla += filaDetalle(
         conDesglose ? "TOTAL F29 a pagar" : "Monto a pagar F29",
         formatMonto(montoF29),
         conDesglose,
       );
-      // Opción de postergar IVA y comentario del contador (módulo F29).
+      // Opción de postergar el IVA: caja con explicación completa (misma
+      // redacción que el aviso del módulo F29), no solo el monto.
       if (emp.f29_postergacion_monto !== null && Number(emp.f29_postergacion_monto) > 0) {
-        cuerpoTabla += filaDetalle(
-          "Opción de postergar",
-          formatMonto(emp.f29_postergacion_monto),
-        );
+        cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;">${cajaPostergacionIva(emp.f29_postergacion_monto, montoF29)}</td></tr>`;
       }
       if ((emp.f29_comentario ?? "").trim()) {
-        cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #b5d4f4;background:#e6f1fb;border-radius:6px;padding:9px 12px;font-size:12px;color:#0c447c;line-height:1.55;"><strong>Nota de su contador:</strong> ${emp.f29_comentario!.trim()}</div></td></tr>`;
+        cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;">${cajaNotaContador(emp.f29_comentario!)}</td></tr>`;
       }
       if (!esGrupo) cuerpoTabla += filaBoton("Pagar el F29 en el SII", URL_PAGO_F29);
     } else if (montoF29 === 0) {
@@ -274,7 +271,7 @@ export function construirCorreoComunicacion({
       );
       cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #34a06a;background:#e7f6ee;border-radius:6px;padding:10px 12px;font-size:12px;color:#14532d;line-height:1.55;"><strong style="color:#166534;">F29 declarado sin pago.</strong> El Formulario 29 de este período quedó presentado con <strong>$0 a pagar</strong>. No requiere ninguna acción de su parte por este concepto.</div></td></tr>`;
       if ((emp.f29_comentario ?? "").trim()) {
-        cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #b5d4f4;background:#e6f1fb;border-radius:6px;padding:9px 12px;font-size:12px;color:#0c447c;line-height:1.55;"><strong>Nota de su contador:</strong> ${emp.f29_comentario!.trim()}</div></td></tr>`;
+        cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;">${cajaNotaContador(emp.f29_comentario!)}</td></tr>`;
       }
     }
 

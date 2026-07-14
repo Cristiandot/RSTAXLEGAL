@@ -6,7 +6,8 @@ import { getUsuarioActual } from "@/lib/auth";
 import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
 import { correosCopiaCliente } from "@/lib/correos-cliente";
 import { etiquetaPeriodo } from "@/lib/periodos";
-import { formatFecha, formatMonto } from "@/lib/format";
+import { formatMonto } from "@/lib/format";
+import { construirCorreoAvisoF29, fechaLarga } from "@/lib/f29-correo";
 
 export type GuardarF29Input = {
   cicloId: string;
@@ -154,29 +155,15 @@ export async function actualizarPagoF29(
   return { ok: true };
 }
 
-const DIAS_SEMANA = [
-  "domingo",
-  "lunes",
-  "martes",
-  "miércoles",
-  "jueves",
-  "viernes",
-  "sábado",
-];
-
-/** "2026-06-22" → "lunes 22-06-2026" (sin desfase de zona horaria). */
-function fechaLarga(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  return `${DIAS_SEMANA[dow]} ${formatFecha(iso)}`;
-}
-
 /**
- * Envía al cliente el aviso del F29 del período: PPM pagado, monto a pagar y
- * plazo (ya corrido al día hábil). Si el pago lo gestiona RS, incluye el aviso
- * de recepción de fondos (2 días hábiles antes del vencimiento). Sale a nombre
- * del usuario conectado (reply-to + copia oculta) y deja registrada la fecha de
- * envío para el botón Enviar/Reenviar.
+ * Envía al cliente el aviso del F29 del período: desglose completo (IVA,
+ * Impuesto Único, Retenciones, PPM, Otros — solo los con monto), total, plazo
+ * (ya corrido al día hábil), opción de postergar el IVA y nota del contador
+ * (el cuerpo lo arma lib/f29-correo.ts, compartido con las vistas previas).
+ * Si el pago lo gestiona RS, incluye el aviso de recepción de fondos (2 días
+ * hábiles antes del vencimiento). Sale a nombre del usuario conectado
+ * (reply-to + copia oculta) y deja registrada la fecha de envío para el botón
+ * Enviar/Reenviar.
  *
  * El `correo` es el valor escrito en la casilla; si viene, se persiste en la
  * ficha del cliente antes de enviar.
@@ -190,7 +177,7 @@ export async function enviarCorreoF29(
   const { data: row, error: errRow } = await supabase
     .from("v_checklist_f29")
     .select(
-      "cliente_id, razon_social, periodo, monto_a_pagar, ppm, pago_por, plazo_f29, correo_empresa",
+      "cliente_id, razon_social, periodo, monto_a_pagar, ppm, pago_por, plazo_f29, correo_empresa, monto_iva, imp_unico, monto_retenciones, monto_otros, postergacion_monto, comentario_correo",
     )
     .eq("ciclo_id", cicloId)
     .single();
@@ -226,7 +213,6 @@ export async function enviarCorreoF29(
       .eq("id", row.cliente_id);
   }
 
-  const etiqueta = etiquetaPeriodo(row.periodo);
   const esPagaRs = row.pago_por === "rs";
 
   // Recepción de fondos = 2 días hábiles antes del vencimiento (solo si paga RS
@@ -240,80 +226,30 @@ export async function enviarCorreoF29(
     recepcion = (rec as string | null) ?? null;
   }
 
-  const filaPpm =
-    row.ppm !== null && row.ppm !== undefined
-      ? `<tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">PPM</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${formatMonto(row.ppm)}</td></tr>`
-      : "";
-
-  const cajaFondos =
-    esPagaRs && recepcion
-      ? `<div style="border:1px solid #ef9f27;background:#faeeda;border-radius:8px;padding:14px 16px;margin:0 0 16px;">
-           <p style="margin:0 0 6px;font-weight:bold;color:#854f0b;font-size:14px;">Importante — si el pago lo gestionamos nosotros</p>
-           <p style="margin:0 0 12px;color:#633806;font-size:13px;line-height:1.55;">Para pagar su F29 a través de RS Tax &amp; Legal, debemos recibir los fondos a más tardar <strong>2 días hábiles antes</strong> del vencimiento, es decir el <strong>${fechaLarga(recepcion)}</strong>. Pasada esa fecha no podemos garantizar el pago dentro de plazo y el F29 podría quedar afecto a multas e intereses de cargo del contribuyente.</p>
-           <p style="margin:0 0 6px;font-weight:bold;color:#854f0b;font-size:13px;">Datos para la transferencia:</p>
-           <div style="background:#ffffff;border:1px solid #f0d9a8;border-radius:6px;padding:10px 12px;font-size:13px;color:#3a2a10;line-height:1.7;">
-             <div><span style="color:#7a5a18;">Titular:</span> Rodríguez Samith Servicios Legales y Contables II Limitada</div>
-             <div><span style="color:#7a5a18;">RUT:</span> 78.073.973-8</div>
-             <div><span style="color:#7a5a18;">Banco:</span> Mercado Pago</div>
-             <div><span style="color:#7a5a18;">Tipo de cuenta:</span> Cuenta Vista</div>
-             <div><span style="color:#7a5a18;">N° de cuenta:</span> <strong>1093709982</strong></div>
-             <div><span style="color:#7a5a18;">Correo:</span> admin@rstaxlegal.cl</div>
-           </div>
-           <p style="margin:12px 0 0;"><a href="https://rstaxlegal-panel.vercel.app/datos-transferencia" style="display:inline-block;background:#854f0b;color:#ffffff;text-decoration:none;font-weight:bold;font-size:13px;padding:9px 16px;border-radius:6px;">Copiar datos para transferir →</a></p>
-         </div>`
-      : "";
-
-  // Si el pago lo hace el cliente y hay monto, se incluye el acceso directo al
-  // portal del SII; con $0 no hay nada que pagar.
-  const linkPagoSii = !esPagaRs && !esMontoCero
-    ? `<p style="margin:0 0 8px;">Puede revisar y pagar su F29 directamente en el portal del SII:</p>
-       <p style="margin:0 0 16px;"><a href="https://www4.sii.cl/propuestaf29ui/index.html#/default" style="display:inline-block;background:#0b2545;color:#ffffff;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 20px;border-radius:8px;">Pagar el F29 en el SII</a></p>`
-    : "";
-
-  // Caja informativa cuando el F29 quedó declarado sin monto a pagar.
-  const cajaSinPago = esMontoCero
-    ? `<div style="border:1px solid #34a06a;background:#e7f6ee;border-radius:8px;padding:14px 16px;margin:0 0 18px;">
-         <p style="margin:0;font-weight:bold;color:#0f6e56;font-size:15px;">F29 declarado sin pago</p>
-         <p style="margin:6px 0 0;color:#0f6e56;font-size:13px;line-height:1.55;">Su Formulario 29 de este período quedó presentado con <strong>$0 a pagar</strong>. Este correo es solo informativo: no requiere ninguna acción de su parte.</p>
-       </div>`
-    : "";
-
-  const filaPlazo = esMontoCero
-    ? ""
-    : `<tr><td style="padding:9px 0;color:#445;">Fecha límite de pago</td><td style="padding:9px 0;text-align:right;"><strong>${row.plazo_f29 ? fechaLarga(row.plazo_f29) : "—"}</strong></td></tr>`;
-
-  const notaVencimiento = esMontoCero
-    ? ""
-    : `<p style="margin:0 0 16px;font-size:12px;color:#64748b;">El vencimiento legal del F29 es el día 20; si cae sábado, domingo o feriado, el plazo se traslada al siguiente día hábil.</p>`;
-
-  const cuerpo = `
-    ${cajaSinPago}
-    <p style="margin:0 0 12px;">Estimados,</p>
-    <p style="margin:0 0 16px;">Les informamos que hemos presentado el Formulario 29 de <strong>${row.razon_social}</strong> correspondiente al período <strong>${etiqueta}</strong>. A continuación, el detalle de lo declarado:</p>
-    <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;">
-      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Empresa</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${row.razon_social}</td></tr>
-      ${filaPpm}
-      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Monto total a pagar (F29)</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;font-weight:bold;">${formatMonto(row.monto_a_pagar)}</td></tr>
-      ${filaPlazo}
-    </table>
-    ${notaVencimiento}
-    ${linkPagoSii}
-    ${cajaFondos}
-    <p style="margin:0 0 4px;">Quedamos atentos a cualquier consulta.</p>`;
+  const { asunto, titulo, cuerpo } = construirCorreoAvisoF29({
+    razonSocial: row.razon_social,
+    periodo: row.periodo,
+    montoTotal: row.monto_a_pagar,
+    desglose: {
+      iva: row.monto_iva,
+      impUnico: row.imp_unico,
+      retenciones: row.monto_retenciones,
+      ppm: row.ppm,
+      otros: row.monto_otros,
+    },
+    postergacionMonto: row.postergacion_monto,
+    comentarioContador: row.comentario_correo,
+    plazoF29: row.plazo_f29,
+    pagaRs: esPagaRs,
+    fechaRecepcionFondos: recepcion,
+  });
 
   const usuario = await getUsuarioActual();
   const res = await enviarCorreo({
     para: destino,
     cc: await correosCopiaCliente([row.cliente_id], [destino]),
-    asunto: esMontoCero
-      ? `F29 ${etiqueta} declarado sin pago — RS Tax & Legal`
-      : `F29 ${etiqueta} — RS Tax & Legal`,
-    html: htmlCorreoDocumento({
-      titulo: esMontoCero
-        ? `F29 período ${etiqueta} — Sin monto a pagar`
-        : `F29 período ${etiqueta}`,
-      cuerpo,
-    }),
+    asunto,
+    html: htmlCorreoDocumento({ titulo, cuerpo }),
     de: { nombre: usuario.nombre, correo: usuario.correo },
   });
   if (!res.ok) return { ok: false, error: res.error };
