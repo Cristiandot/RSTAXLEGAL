@@ -69,6 +69,13 @@ const selectCls =
 /** Casilla de Make a la que el equipo reenvía correos para crear requerimientos. */
 const CASILLA_REQUERIMIENTOS = "s1r5oi7fmu3wve1t6fyhpma4at7rnr9m@hook.us2.make.com";
 
+/** 'YYYY-MM' → "julio 2026". */
+function mesLabel(mes: string): string {
+  const [y, m] = mes.split("-").map(Number);
+  return new Intl.DateTimeFormat("es-CL", { month: "long", year: "numeric" })
+    .format(new Date(y, (m || 1) - 1, 1));
+}
+
 /** Color semántico del estado de la gestión (pendiente=ámbar, avanzada=celeste). */
 function claseEstadoGestion(estado: string): string {
   switch (estado) {
@@ -142,6 +149,8 @@ export function InicioClient({
   clientes,
   cumplimiento,
   porEmpresa,
+  mesEmpresas,
+  mesesEmpresas,
   errorCarga,
 }: {
   pendientes: GestionRow[];
@@ -168,6 +177,8 @@ export function InicioClient({
     atrasados: number;
     pct_cumplimiento: number | null;
   }[];
+  mesEmpresas: string;
+  mesesEmpresas: string[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -871,16 +882,32 @@ export function InicioClient({
           </div>
 
           <div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setVerEmpresas((v) => !v)}
-            >
-              <BarChart3 className="size-4" />
-              {verEmpresas
-                ? "Ocultar ranking por empresa"
-                : "Requerimientos por empresa"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setVerEmpresas((v) => !v)}
+              >
+                <BarChart3 className="size-4" />
+                {verEmpresas
+                  ? "Ocultar ranking por empresa"
+                  : "Requerimientos por empresa"}
+              </Button>
+              {verEmpresas ? (
+                <select
+                  aria-label="Mes del ranking"
+                  className={`${selectCls} h-8 capitalize`}
+                  value={mesEmpresas}
+                  onChange={(e) => router.push(`/?mes=${e.target.value}`)}
+                >
+                  {mesesEmpresas.map((m) => (
+                    <option key={m} value={m}>
+                      {mesLabel(m)}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+            </div>
             {verEmpresas ? (
               <div className="card-soft mt-3 max-h-[520px] overflow-y-auto rounded-xl bg-card">
                 <Table stickyHeader>
@@ -902,7 +929,7 @@ export function InicioClient({
                           colSpan={7}
                           className="py-8 text-center text-muted-foreground"
                         >
-                          Sin requerimientos registrados.
+                          Sin requerimientos en {mesLabel(mesEmpresas)}.
                         </TableCell>
                       </TableRow>
                     ) : (

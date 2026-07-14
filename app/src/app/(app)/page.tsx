@@ -24,7 +24,23 @@ function fechaHoyLarga(): string {
   }).format(new Date());
 }
 
-export default async function HomePage() {
+/** Mes en curso en hora de Chile, formato 'YYYY-MM'. */
+function mesActualCL(): string {
+  const p = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Santiago",
+    year: "numeric",
+    month: "2-digit",
+  }).format(new Date());
+  return p.slice(0, 7); // 'YYYY-MM'
+}
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mes?: string }>;
+}) {
+  const sp = await searchParams;
+  const mesSel = /^\d{4}-\d{2}$/.test(sp.mes ?? "") ? sp.mes! : mesActualCL();
   const usuario = await getUsuarioActual();
   const primerNombre = usuario.nombre.split(" ")[0];
   const supabase = await createClient();
@@ -61,10 +77,16 @@ export default async function HomePage() {
     .from("v_cumplimiento_encargado")
     .select("*");
 
-  // Ranking de requerimientos por empresa (total + cumplimiento).
-  const porEmpresaRes = await supabase
-    .from("v_requerimientos_empresa")
-    .select("*");
+  // Ranking de requerimientos por empresa del mes seleccionado + meses con datos.
+  const [porEmpresaRes, mesesRes] = await Promise.all([
+    supabase.rpc("ranking_empresa_mes", { p_mes: mesSel }),
+    supabase.from("v_meses_requerimientos").select("mes"),
+  ]);
+  // El mes en curso siempre disponible en el selector, aunque aún no tenga datos.
+  const mesesData = (mesesRes.data ?? []) as { mes: string }[];
+  const meses = Array.from(
+    new Set([mesActualCL(), ...mesesData.map((m) => m.mes)]),
+  ).sort((a, b) => (a < b ? 1 : -1));
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
@@ -113,6 +135,8 @@ export default async function HomePage() {
             pct_cumplimiento: number | null;
           }[]
         }
+        mesEmpresas={mesSel}
+        mesesEmpresas={meses}
         errorCarga={pendientesRes.error?.message ?? null}
       />
     </main>
