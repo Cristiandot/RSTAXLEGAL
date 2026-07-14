@@ -32,6 +32,7 @@ export type GestionRow = {
   justificacion_atraso: string | null; // nota del atraso (si se justificó)
   sla_horas: number | null; // SLA de su categoría, en horas
   cumplimiento: "a_tiempo" | "atrasado" | null; // solo cuando ya está resuelto
+  numero: number | null; // correlativo global del requerimiento (#N), asignado al crearse
 };
 
 /** Canales por los que puede llegar un requerimiento. Correo/Wati aún no

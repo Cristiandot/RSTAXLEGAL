@@ -237,7 +237,7 @@ export function InicioClient({
       if (respF === "sin" && g.responsable_id !== null) return false;
       if (respF && respF !== "sin" && g.responsable_id !== respF) return false;
       if (q) {
-        const t = `${g.cliente ?? ""} ${g.cliente_codigo ?? ""} ${g.razon_social ?? ""} ${g.trabajador ?? ""} ${g.detalle ?? ""}`.toLowerCase();
+        const t = `#${g.numero ?? ""} ${g.numero ?? ""} ${g.cliente ?? ""} ${g.cliente_codigo ?? ""} ${g.razon_social ?? ""} ${g.trabajador ?? ""} ${g.detalle ?? ""}`.toLowerCase();
         if (!t.includes(q)) return false;
       }
       return true;
@@ -435,9 +435,19 @@ export function InicioClient({
         className={esTarea ? undefined : "cursor-pointer"}
       >
         <TableCell>
-          <Badge variant="outline" className={claseTipoGestion(g.tipo)}>
-            {TIPO_GESTION_LABEL[g.tipo] ?? g.tipo}
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            {g.numero != null && (
+              <span
+                className="font-mono text-xs font-semibold text-muted-foreground"
+                title={`Requerimiento #${g.numero}`}
+              >
+                #{g.numero}
+              </span>
+            )}
+            <Badge variant="outline" className={claseTipoGestion(g.tipo)}>
+              {TIPO_GESTION_LABEL[g.tipo] ?? g.tipo}
+            </Badge>
+          </div>
         </TableCell>
         <TableCell className="font-medium">
           <span className="block max-w-[200px] truncate" title={g.cliente ?? ""}>
