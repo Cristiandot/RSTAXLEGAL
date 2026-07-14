@@ -7,10 +7,7 @@ import { toast } from "sonner";
 import {
   Search,
   ExternalLink,
-  ChevronLeft,
-  ChevronRight,
   History,
-  CalendarDays,
   Plus,
   CheckCircle2,
 } from "lucide-react";
@@ -116,11 +113,6 @@ function KpiTile({
   );
 }
 
-const MESES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-];
-const DIAS_SEMANA = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 /** "2026-07-10" local de un timestamptz ISO. */
 function fechaLocal(iso: string): string {
@@ -128,137 +120,7 @@ function fechaLocal(iso: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function hoyLocal(): string {
-  return fechaLocal(new Date().toISOString());
-}
 
-/**
- * Calendario mensual compacto: muestra cuántas gestiones pendientes llegaron
- * cada día; al hacer clic en un día se filtra la bandeja.
- */
-function CalendarioGestiones({
-  gestiones,
-  diaSel,
-  onDia,
-}: {
-  gestiones: GestionRow[];
-  diaSel: string | null;
-  onDia: (dia: string | null) => void;
-}) {
-  const hoy = new Date();
-  const [anio, setAnio] = useState(hoy.getFullYear());
-  const [mes, setMes] = useState(hoy.getMonth()); // 0-11
-
-  const porDia = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const g of gestiones) {
-      const k = fechaLocal(g.created_at);
-      m.set(k, (m.get(k) ?? 0) + 1);
-    }
-    return m;
-  }, [gestiones]);
-
-  function mover(delta: number) {
-    const d = new Date(anio, mes + delta, 1);
-    setAnio(d.getFullYear());
-    setMes(d.getMonth());
-  }
-
-  const primerDia = new Date(anio, mes, 1);
-  const diasEnMes = new Date(anio, mes + 1, 0).getDate();
-  // Lunes = 0 … Domingo = 6 (semana laboral chilena).
-  const offset = (primerDia.getDay() + 6) % 7;
-  const celdas: (number | null)[] = [
-    ...Array<null>(offset).fill(null),
-    ...Array.from({ length: diasEnMes }, (_, i) => i + 1),
-  ];
-  const hoyIso = hoyLocal();
-
-  const enMesActual = anio === hoy.getFullYear() && mes === hoy.getMonth();
-
-  return (
-    <div className="card-soft h-fit rounded-xl bg-card p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <CalendarDays className="size-5 text-[var(--brand-teal,#17A2B8)]" />
-          <span className="font-heading text-lg font-semibold">
-            {MESES[mes]} {anio}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          {!enMesActual ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs"
-              onClick={() => {
-                setAnio(hoy.getFullYear());
-                setMes(hoy.getMonth());
-              }}
-            >
-              Hoy
-            </Button>
-          ) : null}
-          <Button variant="ghost" size="icon" onClick={() => mover(-1)} aria-label="Mes anterior">
-            <ChevronLeft className="size-5" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => mover(1)} aria-label="Mes siguiente">
-            <ChevronRight className="size-5" />
-          </Button>
-        </div>
-      </div>
-      <div className="grid grid-cols-7 gap-1.5 text-center">
-        {DIAS_SEMANA.map((d, i) => (
-          <div
-            key={i}
-            className={`py-1.5 text-xs font-semibold tracking-wide ${
-              i >= 5 ? "text-muted-foreground/60" : "text-muted-foreground"
-            }`}
-          >
-            {d}
-          </div>
-        ))}
-        {celdas.map((dia, i) => {
-          if (dia === null) return <div key={`v-${i}`} />;
-          const iso = `${anio}-${String(mes + 1).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
-          const n = porDia.get(iso) ?? 0;
-          const esHoy = iso === hoyIso;
-          const sel = iso === diaSel;
-          return (
-            <button
-              key={iso}
-              type="button"
-              onClick={() => onDia(sel ? null : iso)}
-              title={n > 0 ? `${n} gestión(es) recibidas el ${formatFecha(iso)}` : formatFecha(iso)}
-              className={`relative flex h-14 flex-col items-center justify-center rounded-lg text-base transition sm:h-16 ${
-                sel
-                  ? "bg-[var(--brand-teal,#17A2B8)] font-semibold text-white shadow-sm"
-                  : n > 0
-                    ? "bg-accent font-medium hover:bg-accent/70"
-                    : "hover:bg-muted"
-              } ${esHoy && !sel ? "ring-2 ring-[var(--brand-teal,#17A2B8)]" : ""}`}
-            >
-              <span className="leading-none">{dia}</span>
-              {n > 0 ? (
-                <span
-                  className={`mt-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none ${
-                    sel ? "bg-white/25 text-white" : "bg-red-500 text-white"
-                  }`}
-                >
-                  {n}
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-      <p className="mt-3 text-xs text-muted-foreground">
-        El número rojo indica gestiones pendientes recibidas ese día. Clic en un
-        día filtra la bandeja; clic de nuevo la limpia.
-      </p>
-    </div>
-  );
-}
 
 export function InicioClient({
   pendientes,
@@ -277,7 +139,6 @@ export function InicioClient({
   const [buscar, setBuscar] = useState("");
   const [tipoF, setTipoF] = useState("");
   const [respF, setRespF] = useState("");
-  const [diaSel, setDiaSel] = useState<string | null>(null);
   const [verHistorial, setVerHistorial] = useState(false);
   const [orden, setOrden] = useState<Orden>(null);
   const [asignando, startAsignar] = useTransition();
@@ -321,7 +182,6 @@ export function InicioClient({
       if (tipoF && g.tipo !== tipoF) return false;
       if (respF === "sin" && g.responsable_id !== null) return false;
       if (respF && respF !== "sin" && g.responsable_id !== respF) return false;
-      if (diaSel && fechaLocal(g.created_at) !== diaSel) return false;
       if (q) {
         const t = `${g.cliente ?? ""} ${g.cliente_codigo ?? ""} ${g.razon_social ?? ""} ${g.trabajador ?? ""} ${g.detalle ?? ""}`.toLowerCase();
         if (!t.includes(q)) return false;
@@ -337,14 +197,13 @@ export function InicioClient({
         case "detalle": return g.trabajador ?? g.detalle;
         case "canal": return g.canal;
         case "recibida": return g.created_at;
-        case "plazo": return g.plazo;
         case "estado": return g.estado;
         case "responsable": return g.responsable;
         default: return null;
       }
     };
     return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
-  }, [pendientes, buscar, tipoF, respF, diaSel, orden]);
+  }, [pendientes, buscar, tipoF, respF, orden]);
 
   const sinAsignar = pendientes.filter((g) => g.responsable_id === null).length;
   const atrasadas = pendientes.filter((g) => diasDesde(g.created_at) > 7).length;
@@ -446,9 +305,6 @@ export function InicioClient({
     const faltaActual =
       g.cliente_id !== null && !empresasGrupo.some((e) => e.id === g.cliente_id);
     const href = `${TIPO_GESTION_HREF[g.tipo] ?? "/"}?gestion=${g.gestion_id}`;
-    const plazoVencido =
-      g.plazo !== null && !esHistorial && diasDesde(g.plazo + "T12:00:00") >= 0 &&
-      g.plazo < hoyLocal();
     return (
       <TableRow
         key={`${g.fuente}-${g.gestion_id}`}
@@ -549,18 +405,6 @@ export function InicioClient({
               </span>
             )
           ) : null}
-        </TableCell>
-        <TableCell>
-          {g.plazo ? (
-            <span
-              className={`text-sm tabular-nums ${plazoVencido ? "font-semibold text-red-600" : ""}`}
-              title={plazoVencido ? "Plazo de entrega vencido" : "Plazo de entrega"}
-            >
-              {formatFecha(g.plazo)}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )}
         </TableCell>
         <TableCell>
           <Badge variant="outline" className={claseEstadoGestion(g.estado)}>
@@ -676,8 +520,7 @@ export function InicioClient({
         <KpiTile label="Recibidas últimos 7 días" valor={nuevasSemana} />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_400px] xl:grid-cols-[1fr_460px]">
-        <div className="space-y-3">
+      <div className="space-y-3">
           <div className="card-soft rounded-xl bg-card">
             <div className="flex flex-wrap items-center gap-2 border-b p-3">
             <div className="relative">
@@ -716,15 +559,6 @@ export function InicioClient({
                 </option>
               ))}
             </select>
-            {diaSel ? (
-              <Badge
-                variant="outline"
-                className="cursor-pointer border-[var(--brand-teal,#17A2B8)] text-[var(--brand-teal,#17A2B8)]"
-                onClick={() => setDiaSel(null)}
-              >
-                Día {formatFecha(diaSel)} ✕
-              </Badge>
-            ) : null}
             <span className="ml-auto text-sm text-muted-foreground">
               {filtradas.length} de {pendientes.length}
             </span>
@@ -738,7 +572,6 @@ export function InicioClient({
                   <ThSort col="detalle" orden={orden} setOrden={setOrden}>Trabajador / detalle</ThSort>
                   <ThSort col="canal" orden={orden} setOrden={setOrden}>Canal</ThSort>
                   <ThSort col="recibida" orden={orden} setOrden={setOrden}>Recibida</ThSort>
-                  <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>
                   <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
                   <ThSort col="responsable" orden={orden} setOrden={setOrden} className="w-[190px]">Responsable</ThSort>
                   <TableHead />
@@ -748,7 +581,7 @@ export function InicioClient({
                 {filtradas.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={10}
+                      colSpan={9}
                       className="py-10 text-center text-muted-foreground"
                     >
                       {pendientes.length === 0
@@ -785,7 +618,6 @@ export function InicioClient({
                       <TableHead>Trabajador / detalle</TableHead>
                       <TableHead>Canal</TableHead>
                       <TableHead>Recibida</TableHead>
-                      <TableHead>Plazo</TableHead>
                       <TableHead>Estado</TableHead>
                       <TableHead>Responsable</TableHead>
                       <TableHead />
@@ -795,7 +627,7 @@ export function InicioClient({
                     {historial.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={10}
+                          colSpan={9}
                           className="py-8 text-center text-muted-foreground"
                         >
                           Sin gestiones terminadas recientes.
@@ -809,13 +641,6 @@ export function InicioClient({
               </div>
             ) : null}
           </div>
-        </div>
-
-        <CalendarioGestiones
-          gestiones={pendientes}
-          diaSel={diaSel}
-          onDia={setDiaSel}
-        />
       </div>
 
       {/* Diálogo de edición de texto de un requerimiento (tarea) */}
