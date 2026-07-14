@@ -1,113 +1,52 @@
 "use client";
 
-import { useState } from "react";
-import { toast } from "sonner";
-import { ClipboardCopy, Eye, EyeOff, KeyRound } from "lucide-react";
-import { revelarClaveOficina } from "@/app/(app)/credenciales/actions";
+import { KeyRound } from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
-import { Button } from "@/components/ui/button";
+import { ClaveCell } from "@/components/credencial-celdas";
 
 export type CuentaOficina = {
-  id: string;
+  id: string; // clientes.id (registro con es_oficina = true)
   etiqueta: string;
   rut: string | null;
   tieneClave: boolean;
 };
 
 /**
- * Tarjeta con las cuentas de la oficina (credenciales_oficina), p. ej. la
- * cuenta Previred del contador con la que se opera la cartera. La clave se
- * muestra con puntitos y se revela/copia vía server action auditada — nunca
- * viene en el HTML inicial.
+ * Banner con las cuentas Previred de la oficina (registros de `clientes` con
+ * es_oficina = true, p. ej. Danilo el contador, con cuya cuenta se operan
+ * varias empresas de la cartera). Reutiliza ClaveCell: puntitos + revelar/
+ * copiar auditado vía revelarCredencial — la clave nunca viaja en el HTML.
  */
 export function CuentaPreviredOficina({ cuentas }: { cuentas: CuentaOficina[] }) {
   if (cuentas.length === 0) return null;
   return (
-    <div className="card-soft flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl bg-card px-4 py-3">
+    <div className="card-soft flex flex-wrap items-center gap-x-8 gap-y-2 rounded-xl bg-card px-4 py-3">
       {cuentas.map((c) => (
-        <CuentaFila key={c.id} cuenta={c} />
-      ))}
-    </div>
-  );
-}
-
-function CuentaFila({ cuenta }: { cuenta: CuentaOficina }) {
-  const [valor, setValor] = useState<string | null>(null);
-  const [visible, setVisible] = useState(false);
-  const [ocupado, setOcupado] = useState(false);
-
-  async function traer(accion: "revelar" | "copiar"): Promise<string | null> {
-    if (valor !== null) return valor;
-    const res = await revelarClaveOficina(cuenta.id, accion);
-    if (!res.ok) {
-      toast.error(res.error ?? "No se pudo obtener la clave.");
-      return null;
-    }
-    setValor(res.valor ?? "");
-    return res.valor ?? "";
-  }
-
-  async function ver() {
-    if (visible) {
-      setVisible(false);
-      return;
-    }
-    setOcupado(true);
-    const v = await traer("revelar");
-    setOcupado(false);
-    if (v !== null) setVisible(true);
-  }
-
-  async function copiar() {
-    setOcupado(true);
-    const v = await traer("copiar");
-    setOcupado(false);
-    if (!v) return;
-    navigator.clipboard.writeText(v);
-    toast.success("Clave copiada");
-  }
-
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-      <span className="flex items-center gap-1.5 font-medium">
-        <KeyRound className="size-4 text-muted-foreground" />
-        {cuenta.etiqueta}
-      </span>
-      {cuenta.rut ? (
-        <span className="flex items-center gap-1 text-muted-foreground">
-          RUT
-          <RutCopiable rut={cuenta.rut} />
-        </span>
-      ) : null}
-      {cuenta.tieneClave ? (
-        <span className="flex items-center gap-0.5 text-muted-foreground">
-          Clave
-          <span
-            className="ml-1 font-mono text-xs tracking-wider select-all"
-            title={visible ? undefined : "Clave oculta"}
-          >
-            {visible && valor !== null ? valor : "••••••••"}
+        <div
+          key={c.id}
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm"
+        >
+          <span className="flex items-center gap-1.5 font-medium">
+            <KeyRound className="size-4 text-muted-foreground" />
+            Previred oficina · {c.etiqueta}
           </span>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            disabled={ocupado}
-            aria-label={visible ? "Ocultar clave" : "Ver clave"}
-            onClick={ver}
-          >
-            {visible ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            disabled={ocupado}
-            aria-label="Copiar clave"
-            onClick={copiar}
-          >
-            <ClipboardCopy className="size-3.5" />
-          </Button>
-        </span>
-      ) : null}
+          <span className="flex items-center gap-1 text-muted-foreground">
+            RUT
+            <RutCopiable rut={c.rut} />
+          </span>
+          <span className="flex items-center gap-1 text-muted-foreground">
+            Clave
+            <ClaveCell
+              clienteId={c.id}
+              campo="previred_clave"
+              etiqueta="Clave Previred"
+              razonSocial={c.etiqueta}
+              tiene={c.tieneClave}
+              compacto
+            />
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

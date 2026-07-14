@@ -27,11 +27,13 @@ export default async function LiquidacionesPage({
       .select("cliente_id, fecha_correo_enviado")
       .eq("periodo", periodo),
     supabase.from("clientes").select("id, previred_clave"),
-    // Cuentas de oficina (p. ej. la Previred del contador) — la clave no viaja.
+    // Cuentas Previred de la oficina (registros es_oficina, p. ej. Danilo el
+    // contador) — banner superior; al navegador solo viaja el booleano.
     supabase
-      .from("credenciales_oficina")
-      .select("id, etiqueta, rut, clave")
-      .order("orden"),
+      .from("clientes")
+      .select("id, razon_social, previred_rut, previred_clave")
+      .eq("es_oficina", true)
+      .order("razon_social"),
   ]);
 
   const comunicacion: Record<string, string | null> = {};
@@ -45,12 +47,14 @@ export default async function LiquidacionesPage({
     clavesPrevired[c.id] = Boolean(c.previred_clave);
   }
 
-  const cuentasOficina = (oficinaRes.data ?? []).map((c) => ({
-    id: c.id as string,
-    etiqueta: c.etiqueta as string,
-    rut: (c.rut as string | null) ?? null,
-    tieneClave: Boolean(c.clave),
-  }));
+  const cuentasOficina = (oficinaRes.data ?? [])
+    .filter((c) => c.previred_rut || c.previred_clave)
+    .map((c) => ({
+      id: c.id,
+      etiqueta: c.razon_social,
+      rut: c.previred_rut,
+      tieneClave: Boolean(c.previred_clave),
+    }));
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
