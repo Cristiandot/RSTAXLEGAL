@@ -10,6 +10,9 @@ import {
   History,
   Plus,
   CheckCircle2,
+  Copy,
+  Check,
+  Mail,
 } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { comparar, type Orden } from "@/lib/ordenar";
@@ -60,6 +63,9 @@ import {
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** Casilla de Make a la que el equipo reenvía correos para crear requerimientos. */
+const CASILLA_REQUERIMIENTOS = "s1r5oi7fmu3wve1t6fyhpma4at7rnr9m@hook.us2.make.com";
 
 /** Color semántico del estado de la gestión (pendiente=ámbar, avanzada=celeste). */
 function claseEstadoGestion(estado: string): string {
@@ -145,6 +151,7 @@ export function InicioClient({
   const [tipoF, setTipoF] = useState("");
   const [respF, setRespF] = useState("");
   const [verHistorial, setVerHistorial] = useState(false);
+  const [casillaCopiada, setCasillaCopiada] = useState(false);
   const [orden, setOrden] = useState<Orden>(null);
   const [asignando, startAsignar] = useTransition();
   // Diálogo del botón "+": tarea manual con canal y plazo de entrega.
@@ -302,6 +309,17 @@ export function InicioClient({
         toast.error(res.error ?? "Error al actualizar la tarea");
       }
     });
+  }
+
+  async function copiarCasilla() {
+    try {
+      await navigator.clipboard.writeText(CASILLA_REQUERIMIENTOS);
+      setCasillaCopiada(true);
+      toast.success("Casilla copiada");
+      setTimeout(() => setCasillaCopiada(false), 2000);
+    } catch {
+      toast.error("No se pudo copiar; selecciona el correo a mano");
+    }
   }
 
   function filaGestion(g: GestionRow, esHistorial: boolean) {
@@ -521,6 +539,32 @@ export function InicioClient({
             seguimiento por días de espera hasta cerrarlos. Lo que no está acá, no
             existe: todo requerimiento debe registrarse aquí.
           </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+            <Mail className="size-4 shrink-0 text-[var(--brand-teal,#17A2B8)]" />
+            <span className="text-muted-foreground">
+              ¿Te llegó por correo? <strong className="font-medium text-foreground">Reenvíalo</strong> a esta
+              casilla y se registra solo:
+            </span>
+            <code className="rounded bg-card px-1.5 py-0.5 font-mono text-xs">
+              {CASILLA_REQUERIMIENTOS}
+            </code>
+            <button
+              type="button"
+              onClick={copiarCasilla}
+              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium shadow-sm transition-colors hover:bg-accent"
+              title="Copiar la casilla"
+            >
+              {casillaCopiada ? (
+                <>
+                  <Check className="size-3.5 text-emerald-600" /> Copiada
+                </>
+              ) : (
+                <>
+                  <Copy className="size-3.5" /> Copiar
+                </>
+              )}
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <Button size="sm" onClick={() => setNuevaOpen(true)}>
