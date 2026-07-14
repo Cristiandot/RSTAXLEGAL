@@ -14,7 +14,7 @@ export default async function LiquidacionesPage({
   const periodo = normalizarPeriodo(p);
   const supabase = await createClient();
 
-  const [usuariosRes, filasRes, comRes, clavesRes] = await Promise.all([
+  const [usuariosRes, filasRes, comRes, clavesRes, oficinaRes] = await Promise.all([
     supabase.from("usuarios").select("id, nombre").eq("activo", true).order("nombre"),
     supabase
       .from("v_checklist_mensual")
@@ -27,6 +27,11 @@ export default async function LiquidacionesPage({
       .select("cliente_id, fecha_correo_enviado")
       .eq("periodo", periodo),
     supabase.from("clientes").select("id, previred_clave"),
+    // Cuentas de oficina (p. ej. la Previred del contador) — la clave no viaja.
+    supabase
+      .from("credenciales_oficina")
+      .select("id, etiqueta, rut, clave")
+      .order("orden"),
   ]);
 
   const comunicacion: Record<string, string | null> = {};
@@ -40,6 +45,13 @@ export default async function LiquidacionesPage({
     clavesPrevired[c.id] = Boolean(c.previred_clave);
   }
 
+  const cuentasOficina = (oficinaRes.data ?? []).map((c) => ({
+    id: c.id as string,
+    etiqueta: c.etiqueta as string,
+    rut: (c.rut as string | null) ?? null,
+    tieneClave: Boolean(c.clave),
+  }));
+
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
       <LiquidacionesClient
@@ -48,6 +60,7 @@ export default async function LiquidacionesPage({
         usuarios={(usuariosRes.data ?? []) as UsuarioOpcion[]}
         comunicacion={comunicacion}
         clavesPrevired={clavesPrevired}
+        cuentasOficina={cuentasOficina}
         errorCarga={filasRes.error?.message ?? null}
       />
     </main>

@@ -11,6 +11,10 @@ import { ThSort } from "@/components/th-sort";
 import { RutCopiable } from "@/components/rut-copiable";
 import { ClaveCell } from "@/components/credencial-celdas";
 import {
+  CuentaPreviredOficina,
+  type CuentaOficina,
+} from "@/components/cuenta-previred-oficina";
+import {
   claseDias,
   claseEstado,
   type LiquidacionRow,
@@ -114,6 +118,7 @@ export function LiquidacionesClient({
   usuarios,
   comunicacion,
   clavesPrevired,
+  cuentasOficina,
   errorCarga,
 }: {
   periodo: string;
@@ -123,6 +128,8 @@ export function LiquidacionesClient({
   comunicacion: Record<string, string | null>;
   /** cliente_id → tiene clave Previred guardada (el valor se revela on demand). */
   clavesPrevired: Record<string, boolean>;
+  /** Cuentas de oficina (p. ej. la Previred del contador) — banner superior. */
+  cuentasOficina: CuentaOficina[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -328,6 +335,8 @@ export function LiquidacionesClient({
           Ciclo mensual de liquidaciones de sueldo y presentación en Previred.
         </p>
       </div>
+
+      <CuentaPreviredOficina cuentas={cuentasOficina} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {resumen.map((r) => (

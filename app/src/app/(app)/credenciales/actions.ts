@@ -43,6 +43,32 @@ export async function revelarCredencial(
 }
 
 /**
+ * Devuelve la clave de una cuenta de oficina (credenciales_oficina), p. ej.
+ * la cuenta Previred del contador. Igual que revelarCredencial: el valor se
+ * pide recién al apretar "ver" o "copiar" y cada revelación queda auditada.
+ */
+export async function revelarClaveOficina(
+  id: string,
+  accion: "revelar" | "copiar" = "revelar",
+): Promise<{ ok: boolean; valor?: string | null; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("credenciales_oficina")
+    .select("clave")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "Cuenta no encontrada." };
+
+  await supabase.rpc("registrar_revelacion_credencial_oficina", {
+    p_id: id,
+    p_accion: accion,
+  });
+
+  return { ok: true, valor: data.clave ?? null };
+}
+
+/**
  * Guarda una clave o el RUT Previred de una empresa. Texto vacío la borra
  * (queda null). El trigger de auditoría de `clientes` registra el cambio.
  */
