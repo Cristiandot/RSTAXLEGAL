@@ -59,6 +59,9 @@ export type EmpresaFichaRow = {
   grupo_nombre: string | null;
   /** 'empresa' | 'casa_particular' — a casa particular solo se le exige RUT + clave Previred. */
   tipo_cliente: string;
+  /** true = solo llevamos RRHH (sin F29 ni contabilidad): la ficha no exige los
+   * campos tributarios/SII. Deriva de los flags de servicio. */
+  esRrhh: boolean;
   /** % de completitud de la ficha (campos obligatorios de la empresa). */
   pct: number | null;
   faltan: number;
@@ -766,6 +769,14 @@ export function EmpresasClient({
                         Casa particular
                       </Badge>
                     ) : null}
+                    {e.esRrhh ? (
+                      <Badge
+                        variant="outline"
+                        className="mt-0.5 border-sky-300 bg-sky-50 text-[10px] font-normal text-sky-700"
+                      >
+                        Recursos Humanos
+                      </Badge>
+                    ) : null}
                     {!e.activo ? (
                       <Badge
                         variant="outline"
@@ -831,6 +842,16 @@ export function EmpresasClient({
                   Empleador de casa particular. Su ficha completa es el RUT y la
                   clave Previred de la card Accesos; no lleva datos societarios
                   ni ciclo F29 / Comunicación mensual.
+                </p>
+              ) : null}
+              {empSel.esRrhh ? (
+                <p className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800">
+                  Cliente de <strong>Recursos Humanos</strong>: solo llevamos sus
+                  remuneraciones, no su contabilidad ni SII. No se exigen los
+                  datos tributarios (tipo de sociedad, régimen, giro, inicio de
+                  actividades ni clave SII); la ficha se completa con
+                  identificación, domicilio, representante legal, contacto y
+                  Previred.
                 </p>
               ) : null}
               {(empSel.tipo_cliente === "casa_particular"
