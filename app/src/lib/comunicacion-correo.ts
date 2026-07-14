@@ -177,7 +177,9 @@ export function construirCorreoComunicacion({
 
     // Solo se comunica lo que la empresa tiene: las secciones sin monto se
     // omiten, y una empresa del grupo sin nada que cobrar queda fuera.
-    if (!montoPrevired && !montoF29 && facturas.length === 0) continue;
+    // OJO: F29 en $0 es un dato (declarado sin pago), distinto de null (sin
+    // informar): la empresa entra igual y la sección sale como informativo.
+    if (!montoPrevired && montoF29 === null && facturas.length === 0) continue;
     idsIncluidos.push(emp.comunicacion_id);
     let subtotal = 0;
 
@@ -262,6 +264,18 @@ export function construirCorreoComunicacion({
         cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #b5d4f4;background:#e6f1fb;border-radius:6px;padding:9px 12px;font-size:12px;color:#0c447c;line-height:1.55;"><strong>Nota de su contador:</strong> ${emp.f29_comentario!.trim()}</div></td></tr>`;
       }
       if (!esGrupo) cuerpoTabla += filaBoton("Pagar el F29 en el SII", URL_PAGO_F29);
+    } else if (montoF29 === 0) {
+      // F29 declarado en $0: informativo, sin plazo en rojo ni botón de pago,
+      // y no suma al total. El cliente igual recibe la noticia de que su F29
+      // del período quedó presentado.
+      cuerpoTabla += filaSeccion(
+        `Formulario 29 (SII)<span style="font-weight:normal;color:#0f6e56;font-size:12px;"> — sin monto a pagar</span>`,
+        null,
+      );
+      cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #34a06a;background:#e7f6ee;border-radius:6px;padding:10px 12px;font-size:12px;color:#14532d;line-height:1.55;"><strong style="color:#166534;">F29 declarado sin pago.</strong> El Formulario 29 de este período quedó presentado con <strong>$0 a pagar</strong>. No requiere ninguna acción de su parte por este concepto.</div></td></tr>`;
+      if ((emp.f29_comentario ?? "").trim()) {
+        cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;"><div style="border:1px solid #b5d4f4;background:#e6f1fb;border-radius:6px;padding:9px 12px;font-size:12px;color:#0c447c;line-height:1.55;"><strong>Nota de su contador:</strong> ${emp.f29_comentario!.trim()}</div></td></tr>`;
+      }
     }
 
     if (facturas.length > 0) {

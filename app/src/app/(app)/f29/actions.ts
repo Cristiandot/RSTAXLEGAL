@@ -203,9 +203,12 @@ export async function enviarCorreoF29(
     return {
       ok: false,
       error:
-        "Falta el monto TOTAL a pagar del F29: escríbelo en el formulario y reintenta (sin monto, el aviso saldría con «—»).",
+        "Falta el monto TOTAL a pagar del F29: escríbelo en el formulario y reintenta (sin monto, el aviso saldría con «—»). Si el F29 quedó sin pago, escribe 0: el aviso sale como informativo.",
     };
   }
+  // F29 declarado en $0: el aviso sale como informativo (sin botón de pago,
+  // sin plazo de pago y sin caja de fondos).
+  const esMontoCero = Number(row.monto_a_pagar) === 0;
 
   const destino = (correo ?? "").trim() || (row.correo_empresa ?? "").trim();
   if (!destino) {
@@ -226,9 +229,10 @@ export async function enviarCorreoF29(
   const etiqueta = etiquetaPeriodo(row.periodo);
   const esPagaRs = row.pago_por === "rs";
 
-  // Recepción de fondos = 2 días hábiles antes del vencimiento (solo si paga RS).
+  // Recepción de fondos = 2 días hábiles antes del vencimiento (solo si paga RS
+  // y hay monto que pagar).
   let recepcion: string | null = null;
-  if (esPagaRs && row.plazo_f29) {
+  if (esPagaRs && !esMontoCero && row.plazo_f29) {
     const { data: rec } = await supabase.rpc("rs_restar_dias_habiles", {
       d: row.plazo_f29,
       n: 2,
@@ -259,22 +263,40 @@ export async function enviarCorreoF29(
          </div>`
       : "";
 
-  // Si el pago lo hace el cliente, se incluye el acceso directo al portal del SII.
-  const linkPagoSii = !esPagaRs
+  // Si el pago lo hace el cliente y hay monto, se incluye el acceso directo al
+  // portal del SII; con $0 no hay nada que pagar.
+  const linkPagoSii = !esPagaRs && !esMontoCero
     ? `<p style="margin:0 0 8px;">Puede revisar y pagar su F29 directamente en el portal del SII:</p>
        <p style="margin:0 0 16px;"><a href="https://www4.sii.cl/propuestaf29ui/index.html#/default" style="display:inline-block;background:#0b2545;color:#ffffff;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 20px;border-radius:8px;">Pagar el F29 en el SII</a></p>`
     : "";
 
+  // Caja informativa cuando el F29 quedó declarado sin monto a pagar.
+  const cajaSinPago = esMontoCero
+    ? `<div style="border:1px solid #34a06a;background:#e7f6ee;border-radius:8px;padding:14px 16px;margin:0 0 18px;">
+         <p style="margin:0;font-weight:bold;color:#0f6e56;font-size:15px;">F29 declarado sin pago</p>
+         <p style="margin:6px 0 0;color:#0f6e56;font-size:13px;line-height:1.55;">Su Formulario 29 de este período quedó presentado con <strong>$0 a pagar</strong>. Este correo es solo informativo: no requiere ninguna acción de su parte.</p>
+       </div>`
+    : "";
+
+  const filaPlazo = esMontoCero
+    ? ""
+    : `<tr><td style="padding:9px 0;color:#445;">Fecha límite de pago</td><td style="padding:9px 0;text-align:right;"><strong>${row.plazo_f29 ? fechaLarga(row.plazo_f29) : "—"}</strong></td></tr>`;
+
+  const notaVencimiento = esMontoCero
+    ? ""
+    : `<p style="margin:0 0 16px;font-size:12px;color:#64748b;">El vencimiento legal del F29 es el día 20; si cae sábado, domingo o feriado, el plazo se traslada al siguiente día hábil.</p>`;
+
   const cuerpo = `
+    ${cajaSinPago}
     <p style="margin:0 0 12px;">Estimados,</p>
     <p style="margin:0 0 16px;">Les informamos que hemos presentado el Formulario 29 de <strong>${row.razon_social}</strong> correspondiente al período <strong>${etiqueta}</strong>. A continuación, el detalle de lo declarado:</p>
     <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;">
       <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Empresa</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${row.razon_social}</td></tr>
       ${filaPpm}
       <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Monto total a pagar (F29)</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;font-weight:bold;">${formatMonto(row.monto_a_pagar)}</td></tr>
-      <tr><td style="padding:9px 0;color:#445;">Fecha límite de pago</td><td style="padding:9px 0;text-align:right;"><strong>${row.plazo_f29 ? fechaLarga(row.plazo_f29) : "—"}</strong></td></tr>
+      ${filaPlazo}
     </table>
-    <p style="margin:0 0 16px;font-size:12px;color:#64748b;">El vencimiento legal del F29 es el día 20; si cae sábado, domingo o feriado, el plazo se traslada al siguiente día hábil.</p>
+    ${notaVencimiento}
     ${linkPagoSii}
     ${cajaFondos}
     <p style="margin:0 0 4px;">Quedamos atentos a cualquier consulta.</p>`;
@@ -283,8 +305,15 @@ export async function enviarCorreoF29(
   const res = await enviarCorreo({
     para: destino,
     cc: await correosCopiaCliente([row.cliente_id], [destino]),
-    asunto: `F29 ${etiqueta} — RS Tax & Legal`,
-    html: htmlCorreoDocumento({ titulo: `F29 período ${etiqueta}`, cuerpo }),
+    asunto: esMontoCero
+      ? `F29 ${etiqueta} declarado sin pago — RS Tax & Legal`
+      : `F29 ${etiqueta} — RS Tax & Legal`,
+    html: htmlCorreoDocumento({
+      titulo: esMontoCero
+        ? `F29 período ${etiqueta} — Sin monto a pagar`
+        : `F29 período ${etiqueta}`,
+      cuerpo,
+    }),
     de: { nombre: usuario.nombre, correo: usuario.correo },
   });
   if (!res.ok) return { ok: false, error: res.error };

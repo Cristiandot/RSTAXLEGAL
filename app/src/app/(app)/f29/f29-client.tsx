@@ -196,6 +196,8 @@ export function F29Client({
   const [presentadoChk, setPresentadoChk] = useState(false);
   // Correo del cliente (ficha) editable desde el modal.
   const [correoCli, setCorreoCli] = useState("");
+  // Monto TOTAL controlado: permite el botón "Sin pago ($0)" del modal.
+  const [montoTotal, setMontoTotal] = useState("");
   // N° de operación del pago (cuando paga la oficina), editable desde el modal.
   const [numOp, setNumOp] = useState("");
   const [guardando, startGuardar] = useTransition();
@@ -207,6 +209,7 @@ export function F29Client({
     setPresentadoChk(c.fecha_f29_presentado !== null);
     setCorreoCli(c.correo_empresa ?? "");
     setNumOp(c.numero_operacion ?? "");
+    setMontoTotal(c.monto_a_pagar === null ? "" : String(c.monto_a_pagar));
     setEditando(c);
   }
 
@@ -710,13 +713,30 @@ export function F29Client({
               </div>
               <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="monto">Monto TOTAL a pagar</Label>
-                <Input
-                  id="monto"
-                  name="monto"
-                  type="number"
-                  inputMode="numeric"
-                  defaultValue={editando.monto_a_pagar ?? ""}
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="monto"
+                    name="monto"
+                    type="number"
+                    inputMode="numeric"
+                    className="flex-1"
+                    value={montoTotal}
+                    onChange={(e) => setMontoTotal(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setMontoTotal("0")}
+                    title="F29 declarado sin monto a pagar: deja el monto en $0"
+                  >
+                    Sin pago ($0)
+                  </Button>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  Si el F29 quedó sin monto a pagar, usa «Sin pago ($0)»: el
+                  aviso y la Comunicación mensual salen como informativo, sin
+                  botón de pago ni plazo.
+                </span>
               </div>
               <div className="col-span-2 grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-3">
                 <div className="col-span-2 text-xs font-semibold text-muted-foreground sm:col-span-3">

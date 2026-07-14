@@ -566,7 +566,8 @@ export function ComunicacionClient({
                 <span className="block text-xs text-muted-foreground">
                   Del módulo F29: {formatMonto(editando.monto_f29_ciclo)}. Déjalo
                   vacío para usar ese monto; escribe uno solo si necesitas
-                  corregirlo aquí.
+                  corregirlo aquí. Con 0, el F29 sale en el correo como
+                  informativo (declarado sin pago).
                 </span>
               </div>
 
