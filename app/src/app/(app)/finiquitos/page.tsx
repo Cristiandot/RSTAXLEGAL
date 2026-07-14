@@ -29,6 +29,7 @@ export default async function FiniquitosPage() {
             vacacionesDias?: number;
             indemAviso?: number;
             indemAnios?: number;
+            descuentoAnticipos?: number;
           };
           calculado_en?: string;
         }
@@ -55,6 +56,7 @@ export default async function FiniquitosPage() {
               vacacionesDias: r.vacacionesDias ?? 0,
               indemAviso: r.indemAviso ?? 0,
               indemAnios: r.indemAnios ?? 0,
+              descuentoAnticipos: r.descuentoAnticipos ?? 0,
             }
           : null,
       // ficha del trabajador primero; lo informado por el portal de respaldo

@@ -92,6 +92,8 @@ export type EntradaFiniquito = {
   diasObtenidosManual: number | null;
   remuneracionPendiente: number; // días trabajados del último mes, en $
   descuentoAfc: number; // aporte empleador AFC descontable (Art. 13 Ley 19.728)
+  /** Anticipos de sueldo u otras sumas ya pagadas al trabajador que se descuentan del líquido. */
+  descuentoAnticipos: number;
 };
 
 export type ResultadoFiniquito = {
@@ -119,6 +121,7 @@ export type ResultadoFiniquito = {
   };
   remuneracionPendiente: number;
   descuentoAfc: number;
+  descuentoAnticipos: number;
   total: number;
   notas: string[];
 };
@@ -307,12 +310,16 @@ export function calcularFiniquito(e: EntradaFiniquito): ResultadoFiniquito {
     );
   }
 
+  // Cálculos guardados antes de existir el campo no lo traen: tratar como 0.
+  const descuentoAnticipos = e.descuentoAnticipos ?? 0;
+
   const total = redondear(
     e.remuneracionPendiente +
       indemAviso +
       indemAnios +
       montoVacaciones -
-      e.descuentoAfc,
+      e.descuentoAfc -
+      descuentoAnticipos,
   );
 
   return {
@@ -340,6 +347,7 @@ export function calcularFiniquito(e: EntradaFiniquito): ResultadoFiniquito {
     },
     remuneracionPendiente: redondear(e.remuneracionPendiente),
     descuentoAfc: redondear(e.descuentoAfc),
+    descuentoAnticipos: redondear(descuentoAnticipos),
     total,
     notas,
   };

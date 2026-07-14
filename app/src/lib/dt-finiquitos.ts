@@ -498,6 +498,8 @@ export type EntradaFilaDt = {
   indemAvisoPrevio: number | null;
   indemServicio: number | null;
   remuneracionPendiente: number | null;
+  /** Anticipos ya pagados que se descuentan del finiquito (columna AnticipoSueldo). */
+  anticipoSueldo: number | null;
   email: string | null;
   comunaPersonal: string | null; // nombre (domicilio del trabajador)
   direccionPersonal: string | null; // "calle número"
@@ -593,7 +595,9 @@ export function construirFilaDt(e: EntradaFilaDt): FilaDt {
     "0", // DescuentoSeguridadSocial
     "0", // DescuentoImpuestos
     "0", // DescuentoAfc — el instructivo manda digitar 0 (lo calcula el sistema)
-    "0", "0", "0", "0", "0", "0", "0", // DescuentoAnticipado…VacacionesAnticipadas (33-39)
+    "0", "0", "0", "0", "0", // DescuentoAnticipado…PrestamoAdeudado (33-37)
+    monto(e.anticipoSueldo), // AnticipoSueldo — anticipos descontados en el cálculo
+    "0", // VacacionesAnticipadas
     req((e.email ?? "").trim(), "Email"),
     req(comunaPersonalId ? String(comunaPersonalId) : "", "CodigoComunaPersonal"),
     req(dirPersonal.calle.slice(0, 50), "CallePersonal"),

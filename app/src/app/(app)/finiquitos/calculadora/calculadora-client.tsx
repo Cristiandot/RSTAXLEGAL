@@ -187,6 +187,7 @@ export function CalculadoraClient({
     guardado?.remuneracionPendiente ?? gestion?.remuneracionPendiente ?? 0,
   );
   const [descuentoAfc, setDescuentoAfc] = useState(guardado?.descuentoAfc ?? 0);
+  const [descuentoAnticipos, setDescuentoAnticipos] = useState(guardado?.descuentoAnticipos ?? 0);
   const [ufManual, setUfManual] = useState<number | null>(null);
 
   // ── Carta de aviso (Art. 162) ──
@@ -270,8 +271,9 @@ export function CalculadoraClient({
       diasObtenidosManual: obtenidosManual,
       remuneracionPendiente: remPendiente,
       descuentoAfc,
+      descuentoAnticipos,
     }),
-    [causal, fechaInicio, fechaTermino, avisoCon30, sueldoBase, gratificacion, otras, colacion, movilizacion, incluirNoImp, ufValor, zonaExtrema, diasTomados, obtenidosManual, remPendiente, descuentoAfc],
+    [causal, fechaInicio, fechaTermino, avisoCon30, sueldoBase, gratificacion, otras, colacion, movilizacion, incluirNoImp, ufValor, zonaExtrema, diasTomados, obtenidosManual, remPendiente, descuentoAfc, descuentoAnticipos],
   );
 
   const r = useMemo(() => calcularFiniquito(entrada), [entrada]);
@@ -288,6 +290,7 @@ export function CalculadoraClient({
       vacacionesMonto: r.vacaciones.monto,
       vacacionesDias: Math.round(r.vacaciones.diasCorridosPago * 100) / 100,
       descuentoAfc: r.descuentoAfc,
+      descuentoAnticipos: r.descuentoAnticipos,
       baseIndemnizatoria: r.baseIndemnizatoria,
       aniosComputables: r.aniosComputables,
       ufValor,
@@ -542,6 +545,9 @@ export function CalculadoraClient({
               <Campo label="Descuento aporte empleador AFC (Art. 13 Ley 19.728)">
                 {numInput(descuentoAfc, setDescuentoAfc)}
               </Campo>
+              <Campo label="Descuento anticipos (sumas ya pagadas al trabajador)">
+                {numInput(descuentoAnticipos, setDescuentoAnticipos)}
+              </Campo>
             </div>
           </SeccionCard>
 
@@ -625,6 +631,9 @@ export function CalculadoraClient({
             />
             {r.descuentoAfc > 0 ? (
               <Linea label="Descuento aporte AFC" valor={`− ${formatMonto(r.descuentoAfc)}`} />
+            ) : null}
+            {r.descuentoAnticipos > 0 ? (
+              <Linea label="Descuento anticipos" valor={`− ${formatMonto(r.descuentoAnticipos)}`} />
             ) : null}
             <div className="mt-2 flex items-baseline justify-between rounded-lg bg-primary/5 px-3 py-2">
               <span className="font-heading font-semibold">Total finiquito</span>

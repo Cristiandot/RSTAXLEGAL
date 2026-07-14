@@ -78,6 +78,7 @@ export type ResumenCalculo = {
   vacacionesMonto: number;
   vacacionesDias: number;
   descuentoAfc: number;
+  descuentoAnticipos: number;
   baseIndemnizatoria: number;
   aniosComputables: number;
   ufValor: number | null;
@@ -133,6 +134,7 @@ export async function exportarCsvDt(
             vacacionesMonto?: number;
             vacacionesDias?: number;
             remuneracionPendiente?: number;
+            descuentoAnticipos?: number;
           };
         }
       | undefined;
@@ -162,6 +164,7 @@ export async function exportarCsvDt(
         indemAvisoPrevio: calculo.resumen.indemAviso ?? null,
         indemServicio: calculo.resumen.indemAnios ?? null,
         remuneracionPendiente: calculo.resumen.remuneracionPendiente ?? null,
+        anticipoSueldo: calculo.resumen.descuentoAnticipos ?? null,
         // ficha del trabajador primero; lo informado por el portal de respaldo
         email: (t?.correo as string) ?? str("correo_trabajador"),
         comunaPersonal: (t?.comuna as string) ?? null,

@@ -76,6 +76,8 @@ export type ResumenCorreo = {
   vacacionesDias: number;
   indemAviso: number;
   indemAnios: number;
+  /** Anticipos ya pagados que se descuentan del total (cálculos antiguos no lo traen). */
+  descuentoAnticipos?: number;
   total: number;
 };
 
@@ -117,6 +119,9 @@ export function textoCorreoFiniquito(d: DatosCorreoFiniquito): string {
   }
   if (r.indemAviso > 0) {
     lineas.push(`· Indemnización sustitutiva del aviso previo: ${formatMonto(r.indemAviso)}`);
+  }
+  if ((r.descuentoAnticipos ?? 0) > 0) {
+    lineas.push(`· Descuento anticipos ya pagados: − ${formatMonto(r.descuentoAnticipos ?? 0)}`);
   }
   lineas.push(`TOTAL FINIQUITO A PAGO: ${formatMonto(r.total)}`);
   lineas.push("");
