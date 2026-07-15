@@ -177,7 +177,7 @@ export async function enviarCorreoF29(
   const { data: row, error: errRow } = await supabase
     .from("v_checklist_f29")
     .select(
-      "cliente_id, razon_social, periodo, monto_a_pagar, ppm, pago_por, plazo_f29, correo_empresa, monto_iva, imp_unico, monto_retenciones, monto_otros, postergacion_monto, comentario_correo",
+      "cliente_id, razon_social, periodo, monto_a_pagar, ppm, pago_por, plazo_f29, correo_empresa, monto_iva, imp_unico, monto_retenciones, monto_otros, postergacion_monto, comentario_correo, fecha_f29_presentado",
     )
     .eq("ciclo_id", cicloId)
     .single();
@@ -254,9 +254,17 @@ export async function enviarCorreoF29(
   });
   if (!res.ok) return { ok: false, error: res.error };
 
+  // Enviar el aviso deja el F29 como «Guardado y enviado»: se estampa la fecha
+  // de envío y, si aún no estaba, la de presentación (la contadora ya presentó
+  // el F29 ante el SII antes de mandar el aviso). El estado lo recalcula la vista.
+  const ahora = new Date().toISOString();
   await supabase
     .from("ciclo_f29")
-    .update({ fecha_correo_f29_enviado: new Date().toISOString() })
+    .update({
+      fecha_correo_f29_enviado: ahora,
+      fecha_f29_presentado:
+        (row.fecha_f29_presentado as string | null) ?? ahora.slice(0, 10),
+    })
     .eq("id", cicloId);
 
   revalidatePath("/f29");

@@ -46,7 +46,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const ESTADOS = ["Sin iniciar", "Pendiente presentación", "Cerrado", "Pagado"];
+const ESTADOS = [
+  "Sin iniciar",
+  "Pendiente presentación",
+  "Cerrado",
+  "Guardado y enviado",
+  "Fondos en RS",
+  "Pagado",
+];
 
 /** Paso único del F29 marcable con checkbox inline: F29 enviado (cierra el ciclo). */
 const PASOS_F29: {
@@ -200,6 +207,9 @@ export function F29Client({
   const [montoTotal, setMontoTotal] = useState("");
   // N° de operación del pago (cuando paga la oficina), editable desde el modal.
   const [numOp, setNumOp] = useState("");
+  // Quién paga, en vivo: al elegir "Paga RS" aparecen de inmediato la fecha de
+  // transferencia a la oficina y el bloque para marcar pagado + avisar.
+  const [pagoPorSel, setPagoPorSel] = useState("");
   const [guardando, startGuardar] = useTransition();
   const [marcando, startMarcar] = useTransition();
   const [enviando, startEnviar] = useTransition();
@@ -209,6 +219,7 @@ export function F29Client({
     setPresentadoChk(c.fecha_f29_presentado !== null);
     setCorreoCli(c.correo_empresa ?? "");
     setNumOp(c.numero_operacion ?? "");
+    setPagoPorSel(c.pago_por ?? "");
     setMontoTotal(c.monto_a_pagar === null ? "" : String(c.monto_a_pagar));
     setEditando(c);
   }
@@ -282,12 +293,12 @@ export function F29Client({
       valor: filas.filter((c) => c.estado === "Sin iniciar").length,
     },
     {
-      label: "Por presentar",
-      valor: filas.filter((c) => c.estado === "Pendiente presentación").length,
+      label: "Guardado y enviado",
+      valor: filas.filter((c) => c.estado === "Guardado y enviado").length,
     },
     {
-      label: "Cerrados",
-      valor: filas.filter((c) => c.estado === "Cerrado").length,
+      label: "Fondos en RS",
+      valor: filas.filter((c) => c.estado === "Fondos en RS").length,
     },
     {
       label: "Pagados",
@@ -422,7 +433,7 @@ export function F29Client({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {resumen.map((r) => (
           <ResumenCard key={r.label} label={r.label} valor={r.valor} />
         ))}
@@ -805,25 +816,39 @@ export function F29Client({
                   id="pago_por"
                   name="pago_por"
                   className={selectCls}
-                  defaultValue={editando.pago_por ?? ""}
+                  value={pagoPorSel}
+                  onChange={(e) => setPagoPorSel(e.target.value)}
                 >
                   <option value="">Sin definir</option>
-                  <option value="rs">Paga RS</option>
-                  <option value="cliente">Paga el cliente</option>
+                  <option value="rs">Transfiere a RS (paga la oficina)</option>
+                  <option value="cliente">Paga el cliente (directo al SII)</option>
                 </select>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="fecha_pago_oficina">Pago a la oficina</Label>
-                <Input
-                  id="fecha_pago_oficina"
+              {pagoPorSel === "rs" ? (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="fecha_pago_oficina">
+                    Cliente transfirió los fondos a RS
+                  </Label>
+                  <Input
+                    id="fecha_pago_oficina"
+                    name="fecha_pago_oficina"
+                    type="date"
+                    defaultValue={editando.fecha_pago_oficina ?? ""}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Fecha en que el cliente transfirió los fondos a la oficina.
+                    Al registrarla, el F29 pasa a «Fondos en RS».
+                  </span>
+                </div>
+              ) : (
+                // Se conserva el valor guardado aunque no se muestre el campo,
+                // para no borrarlo al guardar cuando "quién paga" no es RS.
+                <input
+                  type="hidden"
                   name="fecha_pago_oficina"
-                  type="date"
-                  defaultValue={editando.fecha_pago_oficina ?? ""}
+                  value={editando.fecha_pago_oficina ?? ""}
                 />
-                <span className="text-xs text-muted-foreground">
-                  Si paga RS: fecha en que el cliente pagó a la oficina (para acreditar el pago).
-                </span>
-              </div>
+              )}
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="folio">Folio F29</Label>
                 <Input
@@ -859,39 +884,38 @@ export function F29Client({
                   {enviando
                     ? "Guardando y enviando aviso…"
                     : editando.fecha_correo_f29_enviado
-                      ? `Último aviso enviado: ${formatFecha(editando.fecha_correo_f29_enviado.slice(0, 10))}`
-                      : "Guarda lo escrito en el formulario y envía al cliente el aviso de F29 (PPM, monto y plazo). El correo se guarda en su ficha."}
+                      ? `Guardado y enviado el ${formatFecha(editando.fecha_correo_f29_enviado.slice(0, 10))}.`
+                      : "Guarda el formulario, marca el F29 como presentado y envía al cliente el aviso (desglose, monto y plazo). El F29 pasa a «Guardado y enviado» y el correo se guarda en su ficha."}
                 </span>
               </div>
-              {editando.pago_por === "rs" ? (
-                <div className="col-span-2 flex flex-col gap-1.5 rounded-lg border border-border bg-muted/20 p-3">
-                  <Label htmlFor="numero_operacion">
-                    N° de operación del pago (paga RS)
+              {pagoPorSel === "rs" ? (
+                <div className="col-span-2 flex flex-col gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
+                  <Label htmlFor="numero_operacion" className="text-emerald-900">
+                    Marcar F29 como pagado por RS y avisar al cliente
                   </Label>
                   <div className="flex items-center gap-2">
                     <Input
                       id="numero_operacion"
-                      placeholder="Ej.: 104839271"
+                      placeholder="N° de operación — ej.: 104839271"
                       value={numOp}
                       onChange={(e) => setNumOp(e.target.value)}
-                      className="flex-1"
+                      className="flex-1 bg-card"
                     />
                     <Button
                       type="button"
-                      variant="outline"
                       onClick={enviarAvisoPago}
                       disabled={enviandoPago || !numOp.trim() || !correoCli.trim()}
                     >
                       <Send className="size-4" />
-                      {editando.fecha_correo_pago_enviado ? "Reenviar pago" : "Avisar pago"}
+                      {editando.fecha_correo_pago_enviado ? "Reenviar aviso de pago" : "Marcar pagado y avisar"}
                     </Button>
                   </div>
                   <span className="text-xs text-muted-foreground">
                     {enviandoPago
-                      ? "Guardando y enviando aviso de pago…"
+                      ? "Guardando, marcando pagado y enviando el comprobante…"
                       : editando.fecha_correo_pago_enviado
-                        ? `Aviso de pago enviado: ${formatFecha(editando.fecha_correo_pago_enviado.slice(0, 10))}`
-                        : "Guarda el formulario y avisa al cliente que su F29 quedó pagado (monto, fecha y N° de operación). Usa el correo de arriba."}
+                        ? `Pagado y avisado el ${formatFecha(editando.fecha_correo_pago_enviado.slice(0, 10))}. El F29 quedó en estado «Pagado».`
+                        : "Al hacer clic: guarda el formulario, marca el F29 como «Pagado» (con la fecha de hoy si no había) y envía al cliente el comprobante (monto, fecha y N° de operación). Usa el correo de arriba."}
                   </span>
                 </div>
               ) : null}
