@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Download, Upload, Trash2, BookText } from "lucide-react";
+import { Download, Trash2, BookText, Search, ChevronsUpDown, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatMonto } from "@/lib/format";
+import { Checkbox } from "@/components/ui/checkbox";
+import { formatMonto, formatFecha } from "@/lib/format";
 import { componerPeriodo } from "@/lib/periodos";
-import { subirLibro, descargarLibro, marcarEstado, eliminarLibro } from "./actions";
+import { descargarLibro, marcarEstado, eliminarLibro } from "./actions";
 
 export type EmpresaOpcion = {
   id: string;
@@ -35,14 +36,83 @@ const MESES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
-const ESTADOS: Record<string, { label: string; clase: string }> = {
-  cargado: { label: "Cargado", clase: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200" },
-  subido_dt: { label: "Subido a DT", clase: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" },
-  declarado: { label: "Declarado", clase: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" },
-  observaciones: { label: "Con observaciones", clase: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300" },
-};
-
 const ANIOS = ["2026", "2025"];
+
+const norm = (s: string) =>
+  s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+
+/** Combobox con buscador para elegir empresa entre toda la cartera. */
+function BuscadorEmpresa({
+  empresas,
+  valor,
+  onChange,
+}: {
+  empresas: EmpresaOpcion[];
+  valor: string;
+  onChange: (id: string) => void;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [q, setQ] = useState("");
+  const sel = empresas.find((e) => e.id === valor);
+  const filtradas = useMemo(() => {
+    const n = norm(q.trim());
+    if (!n) return empresas;
+    return empresas.filter(
+      (e) => norm(e.razon_social).includes(n) || (e.rut_empresa ?? "").includes(n),
+    );
+  }, [empresas, q]);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-left text-sm"
+      >
+        <span className="truncate">{sel?.razon_social ?? "Selecciona empresa…"}</span>
+        <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+      </button>
+      {abierto ? (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setAbierto(false)} />
+          <div className="absolute z-20 mt-1 w-full rounded-md border bg-popover shadow-md">
+            <div className="flex items-center gap-2 border-b px-3">
+              <Search className="size-4 opacity-50" />
+              <input
+                autoFocus
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Buscar por razón social o RUT…"
+                className="h-9 w-full bg-transparent text-sm outline-none"
+              />
+            </div>
+            <ul className="max-h-72 overflow-y-auto py-1">
+              {filtradas.length === 0 ? (
+                <li className="px-3 py-2 text-sm text-muted-foreground">Sin resultados</li>
+              ) : (
+                filtradas.map((e) => (
+                  <li key={e.id}>
+                    <button
+                      type="button"
+                      onClick={() => { onChange(e.id); setAbierto(false); setQ(""); }}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent"
+                    >
+                      <Check className={`size-4 shrink-0 ${e.id === valor ? "opacity-100" : "opacity-0"}`} />
+                      <span className="truncate">{e.razon_social}</span>
+                      {e.rut_empresa ? (
+                        <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">{e.rut_empresa}</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 export function LibroClient({
   empresas,
@@ -57,11 +127,6 @@ export function LibroClient({
   const [pending, startTransition] = useTransition();
   const [empresaId, setEmpresaId] = useState(empresas[0]?.id ?? "");
   const [anio, setAnio] = useState("2026");
-  const [subiendo, setSubiendo] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const periodoObjetivo = useRef<string>("");
-
-  const empresa = empresas.find((e) => e.id === empresaId) ?? null;
 
   const porPeriodo = useMemo(() => {
     const m = new Map<string, LibroRow>();
@@ -74,37 +139,6 @@ export function LibroClient({
     [porPeriodo, anio],
   );
 
-  function pedirArchivo(periodo: string) {
-    periodoObjetivo.current = periodo;
-    fileRef.current?.click();
-  }
-
-  function onArchivo(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !empresaId) return;
-    const periodo = periodoObjetivo.current;
-    const fd = new FormData();
-    fd.set("clienteId", empresaId);
-    fd.set("periodo", periodo);
-    fd.set("archivo", file);
-    setSubiendo(periodo);
-    startTransition(async () => {
-      const r = await subirLibro(fd);
-      setSubiendo(null);
-      if (!r.ok) { toast.error(r.error ?? "No se pudo subir."); return; }
-      const av: string[] = [];
-      if (r.resumen?.jornadaProvisional) av.push(`jornada provisional en ${r.resumen.jornadaProvisional}`);
-      if (r.resumen?.causalProvisional) av.push(`${r.resumen.causalProvisional} causal(es) provisional(es)`);
-      if (r.resumen?.faltaRegionComuna) av.push(`${r.resumen.faltaRegionComuna} sin región/comuna`);
-      toast.success(
-        `LRE cargado y corregido · ${r.resumen?.nTrabajadores} trabajadores · líquido ${formatMonto(r.resumen?.totalLiquido)}`,
-        { description: av.length ? `Ojo: ${av.join(", ")}.` : "Formato DT validado." },
-      );
-      router.refresh();
-    });
-  }
-
   function descargar(id: string) {
     startTransition(async () => {
       const r = await descargarLibro(id);
@@ -113,16 +147,17 @@ export function LibroClient({
     });
   }
 
-  function cambiarEstado(id: string, estado: LibroRow["estado"]) {
+  function toggleSubidoDt(row: LibroRow, subido: boolean) {
     startTransition(async () => {
-      const r = await marcarEstado(id, estado as "cargado" | "subido_dt" | "declarado" | "observaciones");
+      const r = await marcarEstado(row.id, subido ? "subido_dt" : "cargado");
       if (!r.ok) { toast.error(r.error ?? "No se pudo actualizar."); return; }
+      toast.success(subido ? "Marcado como subido a la DT." : "Marca de DT quitada.");
       router.refresh();
     });
   }
 
-  function borrar(id: string, periodo: string) {
-    if (!confirm(`¿Eliminar el LRE de ${periodo}? Se borra el archivo cargado.`)) return;
+  function borrar(id: string, etiqueta: string) {
+    if (!confirm(`¿Eliminar el LRE de ${etiqueta}? Se borra el archivo cargado.`)) return;
     startTransition(async () => {
       const r = await eliminarLibro(id);
       if (!r.ok) { toast.error(r.error ?? "No se pudo eliminar."); return; }
@@ -150,17 +185,9 @@ export function LibroClient({
       ) : null}
 
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-1 min-w-[240px] flex-col gap-1 text-sm">
+        <label className="flex flex-1 min-w-[260px] flex-col gap-1 text-sm">
           <span className="font-medium text-muted-foreground">Empresa</span>
-          <select
-            value={empresaId}
-            onChange={(e) => setEmpresaId(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-          >
-            {empresas.map((e) => (
-              <option key={e.id} value={e.id}>{e.razon_social}</option>
-            ))}
-          </select>
+          <BuscadorEmpresa empresas={empresas} valor={empresaId} onChange={setEmpresaId} />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium text-muted-foreground">Año</span>
@@ -178,25 +205,22 @@ export function LibroClient({
         </div>
       </div>
 
-      <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={onArchivo} />
-
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-4 py-2.5 text-left">Período</th>
-              <th className="px-4 py-2.5 text-left">Estado DT</th>
               <th className="px-4 py-2.5 text-right">Trab.</th>
               <th className="px-4 py-2.5 text-right">Total líquido</th>
-              <th className="px-4 py-2.5 text-right">Acciones</th>
+              <th className="px-4 py-2.5 text-center">Subido a la DT</th>
+              <th className="px-4 py-2.5 text-right">Archivo</th>
             </tr>
           </thead>
           <tbody>
             {MESES.map((mes, i) => {
               const periodo = componerPeriodo(anio, i + 1);
               const row = porPeriodo.get(periodo);
-              const estado = row ? ESTADOS[row.estado] ?? ESTADOS.cargado : null;
-              const cargando = subiendo === periodo && pending;
+              const subido = row?.estado === "subido_dt" || row?.estado === "declarado";
               return (
                 <tr key={periodo} className="border-t">
                   <td className="px-4 py-2.5">
@@ -208,25 +232,26 @@ export function LibroClient({
                       </Badge>
                     ) : null}
                   </td>
-                  <td className="px-4 py-2.5">
-                    {row ? (
-                      <select
-                        value={row.estado}
-                        onChange={(e) => cambiarEstado(row.id, e.target.value as LibroRow["estado"])}
-                        disabled={pending}
-                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${estado?.clase}`}
-                      >
-                        {Object.entries(ESTADOS).map(([k, v]) => (
-                          <option key={k} value={k}>{v.label}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Sin subir</span>
-                    )}
-                  </td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{row?.n_trabajadores ?? "—"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">
                     {row?.total_liquido != null ? formatMonto(row.total_liquido) : "—"}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {row ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Checkbox
+                          checked={subido}
+                          onCheckedChange={(v) => toggleSubidoDt(row, v === true)}
+                          disabled={pending}
+                          aria-label="Subido a la DT"
+                        />
+                        {subido && row.fecha_carga_dt ? (
+                          <span className="text-xs text-muted-foreground">{formatFecha(row.fecha_carga_dt)}</span>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="text-center text-xs text-muted-foreground">—</div>
+                    )}
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1.5">
@@ -235,18 +260,13 @@ export function LibroClient({
                           <Button size="sm" variant="outline" onClick={() => descargar(row.id)} disabled={pending}>
                             <Download className="size-3.5" /> Descargar
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => pedirArchivo(periodo)} disabled={pending}>
-                            <Upload className="size-3.5" /> Reemplazar
-                          </Button>
                           <Button size="sm" variant="ghost" onClick={() => borrar(row.id, `${mes} ${anio}`)} disabled={pending}
                             className="text-rose-600 hover:text-rose-700">
                             <Trash2 className="size-3.5" />
                           </Button>
                         </>
                       ) : (
-                        <Button size="sm" variant="outline" onClick={() => pedirArchivo(periodo)} disabled={pending}>
-                          <Upload className="size-3.5" /> {cargando ? "Subiendo…" : "Subir LRE"}
-                        </Button>
+                        <span className="text-xs text-muted-foreground">Pendiente de carga</span>
                       )}
                     </div>
                   </td>
@@ -258,8 +278,9 @@ export function LibroClient({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Al subir el CSV de KAME se corrige automáticamente al formato DT (fechas dd/mm/aaaa, columnas obligatorias, causal de término).
-        La <strong>jornada</strong> y la <strong>causal</strong> que KAME no exporta quedan en valor provisional (jornada 101, causal 6) para cuadrar en la nómina real de junio.
+        Los LRE los carga el equipo desde la carpeta compartida: se corrigen al formato DT (fechas dd/mm/aaaa, columnas obligatorias, causal de término)
+        y quedan aquí para descargar. La <strong>jornada</strong> y la <strong>causal</strong> que KAME no exporta van en valor provisional
+        (jornada 101, causal 6) para cuadrar en la nómina real de junio.
       </p>
     </div>
   );
