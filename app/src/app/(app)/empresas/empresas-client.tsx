@@ -62,6 +62,9 @@ export type EmpresaFichaRow = {
   /** true = solo llevamos RRHH (sin F29 ni contabilidad): la ficha no exige los
    * campos tributarios/SII. Deriva de los flags de servicio. */
   esRrhh: boolean;
+  /** true = solo llevamos lo legal/societario (sin RRHH ni tributario): la ficha
+   * solo exige la identidad societaria. Deriva del flag hace_legal. */
+  esLegal: boolean;
   /** % de completitud de la ficha (campos obligatorios de la empresa). */
   pct: number | null;
   faltan: number;
@@ -777,6 +780,14 @@ export function EmpresasClient({
                         Recursos Humanos
                       </Badge>
                     ) : null}
+                    {e.esLegal ? (
+                      <Badge
+                        variant="outline"
+                        className="mt-0.5 border-amber-300 bg-amber-50 text-[10px] font-normal text-amber-700"
+                      >
+                        Legal
+                      </Badge>
+                    ) : null}
                     {!e.activo ? (
                       <Badge
                         variant="outline"
@@ -852,6 +863,16 @@ export function EmpresasClient({
                   actividades ni clave SII); la ficha se completa con
                   identificación, domicilio, representante legal, contacto y
                   Previred.
+                </p>
+              ) : null}
+              {empSel.esLegal ? (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  Cliente <strong>Legal</strong>: solo llevamos lo
+                  societario/legal, no sus remuneraciones, contabilidad ni SII.
+                  No se exigen el régimen tributario, giro, inicio de actividades
+                  ni clave SII; la ficha se completa con la identidad societaria
+                  (RUT, razón social, tipo de sociedad, representante legal,
+                  domicilio y contacto).
                 </p>
               ) : null}
               {(empSel.tipo_cliente === "casa_particular"

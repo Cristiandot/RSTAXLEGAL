@@ -25,7 +25,7 @@ export default async function EmpresasPage() {
       supabase
         .from("clientes")
         .select(
-          "id, razon_social, rut_empresa, grupo_id, tipo_cliente, hace_liquidaciones, hace_f29, hace_contabilidad_completa, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, correos_adicionales, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono, clave_sii, previred_rut, previred_clave, activo, fecha_termino_servicio",
+          "id, razon_social, rut_empresa, grupo_id, tipo_cliente, hace_liquidaciones, hace_f29, hace_contabilidad_completa, hace_legal, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, correos_adicionales, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono, clave_sii, previred_rut, previred_clave, activo, fecha_termino_servicio",
         )
         // Registros internos de la oficina (contador, etc.): fuera de Empresas.
         .eq("es_oficina", false)
@@ -112,6 +112,15 @@ export default async function EmpresasPage() {
       esRrhh:
         e.tipo_cliente !== "casa_particular" &&
         Boolean(e.hace_liquidaciones) &&
+        !e.hace_f29 &&
+        !e.hace_contabilidad_completa,
+      // "Solo legal": llevamos únicamente lo societario/legal, sin RRHH ni
+      // tributario, por lo que la ficha solo exige la identidad societaria
+      // (regla en v_onboarding_completitud). Deriva del flag hace_legal.
+      esLegal:
+        e.tipo_cliente !== "casa_particular" &&
+        Boolean(e.hace_legal) &&
+        !e.hace_liquidaciones &&
         !e.hace_f29 &&
         !e.hace_contabilidad_completa,
       pct: pctPorEmpresa.get(e.id)?.pct ?? null,
