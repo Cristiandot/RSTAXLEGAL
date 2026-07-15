@@ -8,7 +8,6 @@ import {
 import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
 import { DetalleRemuneraciones } from "./remuneraciones";
 import { GastosMenores } from "./gastos-menores";
-import { FranjaIndicadores } from "./indicadores";
 import { Empresa } from "./empresa";
 import { Contabilidad } from "./contabilidad";
 import { RecursosHumanos } from "./rrhh";
@@ -31,7 +30,15 @@ const TABS_VALIDOS: Tab[] = [
  * Solicitudes laborales. Sobre la marca RSTL, con la franja de indicadores
  * Previred. Cada pestaña carga datos por RPC de token.
  */
-export function PortalCliente({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
+export function PortalCliente({
+  token,
+  empresa,
+  embedded = false,
+}: {
+  token: string;
+  empresa: InfoEmpresa;
+  embedded?: boolean;
+}) {
   const [tab, setTab] = useState<Tab>("empresa");
   const claveTab = `rstl_portal_tab_${token}`;
 
@@ -78,17 +85,17 @@ export function PortalCliente({ token, empresa }: { token: string; empresa: Info
             Portal de la empresa
           </p>
         </div>
-        <Image
-          src="/logo-claro.png"
-          alt="Rodríguez Samith Tax & Legal"
-          width={200}
-          height={56}
-          priority
-          className="h-auto w-[130px] shrink-0 sm:w-[180px]"
-        />
+        {!embedded ? (
+          <Image
+            src="/logo-claro.png"
+            alt="Rodríguez Samith Tax & Legal"
+            width={200}
+            height={56}
+            priority
+            className="h-auto w-[130px] shrink-0 sm:w-[180px]"
+          />
+        ) : null}
       </div>
-
-      <FranjaIndicadores token={token} />
 
       {/* Pestañas — una sola línea (scroll horizontal si no cabe) */}
       <div className="flex flex-nowrap justify-center gap-0.5 overflow-x-auto border-b">
