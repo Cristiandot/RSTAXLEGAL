@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatMonto, formatFecha } from "@/lib/format";
 import { componerPeriodo } from "@/lib/periodos";
-import { descargarLibro, marcarEstado, eliminarLibro } from "./actions";
+import { descargarLibro, marcarEstado, marcarSinMovimiento, eliminarLibro } from "./actions";
 
 export type EmpresaOpcion = {
   id: string;
@@ -144,7 +144,10 @@ export function LibroClient({
   }, [filas, empresaId]);
 
   const cargados = useMemo(
-    () => Array.from({ length: 12 }, (_, i) => porPeriodo.has(componerPeriodo(anio, i + 1))).filter(Boolean).length,
+    () => Array.from({ length: 12 }, (_, i) => {
+      const r = porPeriodo.get(componerPeriodo(anio, i + 1));
+      return r && r.estado !== "sin_movimiento";
+    }).filter(Boolean).length,
     [porPeriodo, anio],
   );
 
@@ -152,8 +155,10 @@ export function LibroClient({
   // cuántos están marcados como subidos a la DT (estado subido_dt/declarado).
   const resumen = useMemo(() => {
     const esSubido = (estado: string) => estado === "subido_dt" || estado === "declarado";
+    const cuenta = (f: LibroRow) => f.estado !== "sin_movimiento"; // sin movimiento no es un libro a declarar
     const libPor = new Map<string, { total: number; subidos: number }>();
     for (const f of filas) {
+      if (!cuenta(f)) continue;
       const e = libPor.get(f.cliente_id) ?? { total: 0, subidos: 0 };
       e.total++;
       if (esSubido(f.estado)) e.subidos++;
@@ -173,7 +178,7 @@ export function LibroClient({
         if (ka !== kb) return ka - kb; // sin ningún libro cargado, primero
         return a.pct - b.pct || a.nombre.localeCompare(b.nombre);
       });
-    const total = filas.length;
+    const total = filas.filter(cuenta).length;
     const subidos = filas.filter((f) => esSubido(f.estado)).length;
     return {
       lista, total, subidos,
@@ -207,6 +212,23 @@ export function LibroClient({
       const r = await eliminarLibro(id);
       if (!r.ok) { toast.error(r.error ?? "No se pudo eliminar."); return; }
       toast.success("Período eliminado.");
+      router.refresh();
+    });
+  }
+
+  function sinMovimiento(periodo: string) {
+    startTransition(async () => {
+      const r = await marcarSinMovimiento(empresaId, periodo);
+      if (!r.ok) { toast.error(r.error ?? "No se pudo marcar."); return; }
+      toast.success("Marcado como sin movimiento.");
+      router.refresh();
+    });
+  }
+
+  function quitarSinMovimiento(id: string) {
+    startTransition(async () => {
+      const r = await eliminarLibro(id);
+      if (!r.ok) { toast.error(r.error ?? "No se pudo quitar."); return; }
       router.refresh();
     });
   }
@@ -326,23 +348,28 @@ export function LibroClient({
               const periodo = componerPeriodo(anio, i + 1);
               const row = porPeriodo.get(periodo);
               const subido = row?.estado === "subido_dt" || row?.estado === "declarado";
+              const sinMov = row?.estado === "sin_movimiento";
               return (
-                <tr key={periodo} className="border-t">
+                <tr key={periodo} className={`border-t ${sinMov ? "text-muted-foreground" : ""}`}>
                   <td className="px-4 py-2.5">
                     <span className="font-medium">{mes}</span>{" "}
                     <span className="text-muted-foreground">{anio}</span>
-                    {row && (row.jornada_provisional || row.causal_provisional) ? (
+                    {sinMov ? (
+                      <Badge variant="outline" className="ml-2 border-slate-300 text-slate-500">Sin movimiento</Badge>
+                    ) : row && (row.jornada_provisional || row.causal_provisional) ? (
                       <Badge variant="outline" className="ml-2 border-amber-300 text-amber-700 dark:text-amber-400">
                         Provisional
                       </Badge>
                     ) : null}
                   </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">{row?.n_trabajadores ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">{sinMov ? "—" : (row?.n_trabajadores ?? "—")}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">
-                    {row?.total_liquido != null ? formatMonto(row.total_liquido) : "—"}
+                    {!sinMov && row?.total_liquido != null ? formatMonto(row.total_liquido) : "—"}
                   </td>
                   <td className="px-4 py-2.5">
-                    {row ? (
+                    {sinMov ? (
+                      <div className="text-center text-xs italic text-muted-foreground">No aplica</div>
+                    ) : row ? (
                       <div className="flex items-center justify-center gap-2">
                         <Checkbox
                           checked={subido}
@@ -360,7 +387,11 @@ export function LibroClient({
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1.5">
-                      {row ? (
+                      {sinMov && row ? (
+                        <Button size="sm" variant="ghost" onClick={() => quitarSinMovimiento(row.id)} disabled={pending}>
+                          Quitar
+                        </Button>
+                      ) : row ? (
                         <>
                           <Button size="sm" variant="outline" onClick={() => descargar(row.id)} disabled={pending}>
                             <Download className="size-3.5" /> Descargar
@@ -371,7 +402,13 @@ export function LibroClient({
                           </Button>
                         </>
                       ) : (
-                        <span className="text-xs text-muted-foreground">Pendiente de carga</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Pendiente de carga</span>
+                          <Button size="sm" variant="ghost" onClick={() => sinMovimiento(periodo)} disabled={pending}
+                            className="text-xs text-muted-foreground">
+                            Sin movimiento
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </td>

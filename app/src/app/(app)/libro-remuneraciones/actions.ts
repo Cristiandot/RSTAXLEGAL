@@ -118,6 +118,28 @@ export async function marcarEstado(
   return { ok: true };
 }
 
+/** Marca un período como "sin movimiento" (la empresa no tuvo remuneraciones ese mes). */
+export async function marcarSinMovimiento(
+  clienteId: string,
+  periodo: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!clienteId || !/^\d{4}-\d{2}$/.test(periodo)) return { ok: false, error: "Datos inválidos." };
+  const supabase = await createClient();
+  const subidoPor = await usuarioActualId(supabase);
+  const { error } = await supabase.from("libro_remuneraciones").upsert(
+    {
+      cliente_id: clienteId, periodo, estado: "sin_movimiento", archivo_path: "",
+      n_trabajadores: 0, total_liquido: 0, jornada_provisional: false, causal_provisional: false,
+      observaciones: "Sin remuneraciones en el período", subido_por: subidoPor,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "cliente_id,periodo" },
+  );
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/libro-remuneraciones");
+  return { ok: true };
+}
+
 /** Elimina el período: borra el archivo del bucket y la fila. */
 export async function eliminarLibro(id: string): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
