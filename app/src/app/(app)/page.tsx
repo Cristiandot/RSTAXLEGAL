@@ -34,13 +34,17 @@ function mesActualCL(): string {
   return p.slice(0, 7); // 'YYYY-MM'
 }
 
+/** Tamaño de página del historial de requerimientos resueltos. */
+const HISTORIAL_POR_PAGINA = 40;
+
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string }>;
+  searchParams: Promise<{ mes?: string; pagina?: string }>;
 }) {
   const sp = await searchParams;
   const mesSel = /^\d{4}-\d{2}$/.test(sp.mes ?? "") ? sp.mes! : mesActualCL();
+  const pagina = Math.max(1, Number.parseInt(sp.pagina ?? "1", 10) || 1);
   const usuario = await getUsuarioActual();
   const primerNombre = usuario.nombre.split(" ")[0];
   const supabase = await createClient();
@@ -53,10 +57,13 @@ export default async function HomePage({
       .order("created_at", { ascending: true }),
     supabase
       .from("v_gestiones_oficina")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("pendiente", false)
       .order("updated_at", { ascending: false })
-      .limit(40),
+      .range(
+        (pagina - 1) * HISTORIAL_POR_PAGINA,
+        pagina * HISTORIAL_POR_PAGINA - 1,
+      ),
     supabase
       .from("usuarios")
       .select("id, nombre")
@@ -103,6 +110,9 @@ export default async function HomePage({
       <InicioClient
         pendientes={(pendientesRes.data ?? []) as GestionRow[]}
         historial={(historialRes.data ?? []) as GestionRow[]}
+        historialTotal={historialRes.count ?? 0}
+        historialPagina={pagina}
+        historialAbierto={sp.pagina !== undefined}
         usuarios={(usuariosRes.data ?? []) as UsuarioOpcion[]}
         clientes={
           (clientesRes.data ?? []) as {

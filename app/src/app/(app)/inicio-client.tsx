@@ -145,6 +145,9 @@ function fechaLocal(iso: string): string {
 export function InicioClient({
   pendientes,
   historial,
+  historialTotal,
+  historialPagina,
+  historialAbierto,
   usuarios,
   clientes,
   cumplimiento,
@@ -155,6 +158,9 @@ export function InicioClient({
 }: {
   pendientes: GestionRow[];
   historial: GestionRow[];
+  historialTotal: number;
+  historialPagina: number;
+  historialAbierto: boolean;
   usuarios: UsuarioOpcion[];
   clientes: { id: string; razon_social: string; grupo_id: string | null }[];
   cumplimiento: {
@@ -185,7 +191,8 @@ export function InicioClient({
   const [buscar, setBuscar] = useState("");
   const [tipoF, setTipoF] = useState("");
   const [respF, setRespF] = useState("");
-  const [verHistorial, setVerHistorial] = useState(false);
+  // Si se llegó navegando páginas del historial (?pagina=N), se mantiene abierto.
+  const [verHistorial, setVerHistorial] = useState(historialAbierto);
   const [verCumplimiento, setVerCumplimiento] = useState(false);
   const [verEmpresas, setVerEmpresas] = useState(false);
   const [casillaCopiada, setCasillaCopiada] = useState(false);
@@ -798,7 +805,7 @@ export function InicioClient({
               <History className="size-4" />
               {verHistorial
                 ? "Ocultar historial"
-                : `Historial reciente (${historial.length})`}
+                : `Historial (${historialTotal})`}
             </Button>
             {verHistorial ? (
               <div className="card-soft mt-3 rounded-xl bg-card">
@@ -831,6 +838,12 @@ export function InicioClient({
                     )}
                   </TableBody>
                 </Table>
+                <PaginacionHistorial
+                  pagina={historialPagina}
+                  total={historialTotal}
+                  porPagina={40}
+                  onIr={(n) => router.push(`/?pagina=${n}&mes=${mesEmpresas}`)}
+                />
               </div>
             ) : null}
           </div>
@@ -1171,6 +1184,82 @@ export function InicioClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/**
+ * Pestañas de navegación del historial de requerimientos (40 por página).
+ * Muestra primera, última y una ventana alrededor de la página actual.
+ */
+function PaginacionHistorial({
+  pagina,
+  total,
+  porPagina,
+  onIr,
+}: {
+  pagina: number;
+  total: number;
+  porPagina: number;
+  onIr: (n: number) => void;
+}) {
+  const totalPaginas = Math.max(1, Math.ceil(total / porPagina));
+  if (totalPaginas <= 1) return null;
+
+  const numeros: (number | "…")[] = [];
+  for (let n = 1; n <= totalPaginas; n++) {
+    if (n === 1 || n === totalPaginas || Math.abs(n - pagina) <= 2) {
+      numeros.push(n);
+    } else if (numeros[numeros.length - 1] !== "…") {
+      numeros.push("…");
+    }
+  }
+
+  const desde = (pagina - 1) * porPagina + 1;
+  const hasta = Math.min(pagina * porPagina, total);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2">
+      <span className="text-xs text-muted-foreground">
+        Mostrando {desde}–{hasta} de {total} requerimientos
+      </span>
+      <div className="flex items-center gap-1">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          disabled={pagina <= 1}
+          onClick={() => onIr(pagina - 1)}
+        >
+          ← Anterior
+        </Button>
+        {numeros.map((n, i) =>
+          n === "…" ? (
+            <span key={`e${i}`} className="px-1 text-xs text-muted-foreground">
+              …
+            </span>
+          ) : (
+            <Button
+              key={n}
+              variant={n === pagina ? "default" : "outline"}
+              size="sm"
+              className="h-7 min-w-7 px-2 text-xs"
+              onClick={() => n !== pagina && onIr(n)}
+            >
+              {n}
+            </Button>
+          ),
+        )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          disabled={pagina >= totalPaginas}
+          onClick={() => onIr(pagina + 1)}
+        >
+          Siguiente →
+        </Button>
+      </div>
     </div>
   );
 }
