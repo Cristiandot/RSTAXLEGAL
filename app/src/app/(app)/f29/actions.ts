@@ -20,6 +20,7 @@ export type GuardarF29Input = {
   folio: string | null;
   pagoPor: string | null;
   fechaPagoOficina: string | null;
+  fechaPagoF29: string | null;
   numeroOperacion: string | null;
   correoCliente: string | null;
   postergacionMonto: string | null;
@@ -54,6 +55,7 @@ export async function guardarF29(
       folio_f29: input.folio,
       pago_por: input.pagoPor,
       fecha_pago_oficina: input.fechaPagoOficina,
+      fecha_pago_f29: input.fechaPagoF29,
       numero_operacion: input.numeroOperacion,
       postergacion_monto: input.postergacionMonto,
       comentario_correo: input.comentarioCorreo,
