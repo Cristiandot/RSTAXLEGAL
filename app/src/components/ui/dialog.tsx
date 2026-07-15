@@ -11,6 +11,24 @@ function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
 }
 
+/**
+ * Handler de `onOpenChange` que impide cerrar el diálogo al hacer clic afuera o
+ * con Escape: solo se cierra con la X (reason 'close-press') o de forma
+ * programática. Se usa en modales con formularios largos (F29, Liquidaciones)
+ * para no perder lo escrito por un clic accidental.
+ */
+function soloCerrarConX(
+  onClose: () => void,
+): DialogPrimitive.Root.Props["onOpenChange"] {
+  return (open, eventDetails) => {
+    if (!open && eventDetails.reason !== "close-press") {
+      eventDetails.cancel()
+      return
+    }
+    if (!open) onClose()
+  }
+}
+
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
 }
@@ -157,4 +175,5 @@ export {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
+  soloCerrarConX,
 }

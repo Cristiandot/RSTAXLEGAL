@@ -44,6 +44,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  soloCerrarConX,
 } from "@/components/ui/dialog";
 
 const ESTADOS = [
@@ -680,9 +681,7 @@ export function F29Client({
 
       <Dialog
         open={editando !== null}
-        onOpenChange={(o) => {
-          if (!o) setEditando(null);
-        }}
+        onOpenChange={soloCerrarConX(() => setEditando(null))}
       >
         {editando ? (
           <DialogContent className="sm:max-w-lg">
