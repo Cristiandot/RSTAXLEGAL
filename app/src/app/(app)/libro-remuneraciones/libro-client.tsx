@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Download, Trash2, BookText, Search, ChevronsUpDown, Check } from "lucide-react";
+import { Download, Trash2, BookText, Search, ChevronsUpDown, Check, ListChecks } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -127,6 +127,15 @@ export function LibroClient({
   const [pending, startTransition] = useTransition();
   const [empresaId, setEmpresaId] = useState(empresas[0]?.id ?? "");
   const [anio, setAnio] = useState("2026");
+  const pendientesRef = useRef<HTMLElement | null>(null);
+  const grillaRef = useRef<HTMLElement | null>(null);
+
+  const irAGrilla = (id: string) => {
+    setEmpresaId(id);
+    requestAnimationFrame(() => grillaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+  const irAPendientes = () =>
+    pendientesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const porPeriodo = useMemo(() => {
     const m = new Map<string, LibroRow>();
@@ -211,7 +220,7 @@ export function LibroClient({
         </div>
       ) : null}
 
-      <section className="flex flex-col gap-3 rounded-lg border p-4">
+      <section ref={pendientesRef} className="flex scroll-mt-4 flex-col gap-3 rounded-lg border p-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Completitud de carga a la DT</h2>
           <span className="text-xs text-muted-foreground">
@@ -238,7 +247,7 @@ export function LibroClient({
               <li key={e.id}>
                 <button
                   type="button"
-                  onClick={() => setEmpresaId(e.id)}
+                  onClick={() => irAGrilla(e.id)}
                   className={`flex w-full items-center gap-3 rounded px-1.5 py-2 text-left text-sm hover:bg-accent/60 ${e.id === empresaId ? "bg-accent/40" : ""}`}
                 >
                   <span className="flex-1 truncate">{e.nombre}</span>
@@ -259,6 +268,7 @@ export function LibroClient({
         )}
       </section>
 
+      <section ref={grillaRef} className="flex scroll-mt-4 flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-1 min-w-[260px] flex-col gap-1 text-sm">
           <span className="font-medium text-muted-foreground">Empresa</span>
@@ -274,9 +284,14 @@ export function LibroClient({
             {ANIOS.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
         </label>
-        <div className="ml-auto rounded-md bg-muted px-3 py-2 text-sm">
-          <span className="font-semibold tabular-nums">{cargados}</span>
-          <span className="text-muted-foreground"> / 12 meses cargados</span>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={irAPendientes}>
+            <ListChecks className="size-3.5" /> Ver empresas pendientes
+          </Button>
+          <div className="rounded-md bg-muted px-3 py-2 text-sm">
+            <span className="font-semibold tabular-nums">{cargados}</span>
+            <span className="text-muted-foreground"> / 12 meses cargados</span>
+          </div>
         </div>
       </div>
 
@@ -351,6 +366,7 @@ export function LibroClient({
           </tbody>
         </table>
       </div>
+      </section>
 
       <p className="text-xs text-muted-foreground">
         Los LRE los carga el equipo desde la carpeta compartida: se corrigen al formato DT (fechas dd/mm/aaaa, columnas obligatorias, causal de término)
