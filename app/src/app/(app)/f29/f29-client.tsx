@@ -17,18 +17,20 @@ import {
   type UsuarioOpcion,
 } from "@/lib/ciclos";
 import {
-  actualizarPagoF29,
   enviarCorreoF29,
   enviarCorreoF29Pagado,
   guardarF29,
-  marcarPasoF29,
 } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -56,109 +58,69 @@ const ESTADOS = [
   "Pagado",
 ];
 
-/** Paso único del F29 marcable con checkbox inline: F29 enviado (cierra el ciclo). */
-const PASOS_F29: {
-  columna: "fecha_f29_presentado" | "fecha_pago_f29";
-  label: string;
-}[] = [
-  { columna: "fecha_f29_presentado", label: "F29" },
-  { columna: "fecha_pago_f29", label: "Pagado" },
-];
-
-/** Input de monto que guarda al salir del campo o con Enter. */
-function MontoInline({
-  valor,
-  disabled,
-  onGuardar,
-}: {
-  valor: number | string | null;
-  disabled: boolean;
-  onGuardar: (monto: string) => void;
-}) {
-  const [texto, setTexto] = useState(valor === null ? "" : String(valor));
-  const original = valor === null ? "" : String(valor);
-  return (
-    <Input
-      type="number"
-      inputMode="numeric"
-      placeholder="—"
-      className="h-8 w-28 bg-card text-right tabular-nums"
-      value={texto}
-      disabled={disabled}
-      onChange={(e) => setTexto(e.target.value)}
-      onBlur={() => {
-        if (texto !== original) onGuardar(texto);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-      }}
-    />
-  );
-}
-
 /**
- * Celda "Paga": selector RS/cliente. Usa estado local para que, al elegir
- * "Paga RS", aparezca de inmediato la casilla de fecha de pago a la oficina
- * (sin esperar al refresh del servidor).
+ * Celda de monto TOTAL: muestra el total (solo lectura, se edita en el modal) y,
+ * al hacer clic, abre un popover con el desglose del F29 (solo los conceptos con
+ * monto distinto de cero).
  */
-function PagaCell({
-  pagoPor,
-  fechaPagoOficina,
-  fechaPagoF29,
-  disabled,
-  onGuardar,
-}: {
-  pagoPor: string | null;
-  fechaPagoOficina: string | null;
-  fechaPagoF29: string | null;
-  disabled: boolean;
-  onGuardar: (patch: {
-    pagoPor?: string | null;
-    fechaPagoOficina?: string | null;
-    fechaPagoF29?: string | null;
-  }) => void;
-}) {
-  const [pago, setPago] = useState(pagoPor ?? "");
+function MontoDetalle({ fila }: { fila: F29Row }) {
+  const total = fila.monto_a_pagar;
+  if (total === null || total === undefined || String(total) === "") {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  const conceptos: [string, number | string | null][] = [
+    ["IVA", fila.monto_iva],
+    ["Impuesto Único", fila.imp_unico],
+    ["Retenciones", fila.monto_retenciones],
+    ["PPM", fila.ppm],
+    ["Otros", fila.monto_otros],
+  ];
+  const detalle = conceptos.filter(
+    ([, v]) =>
+      v !== null && v !== undefined && String(v) !== "" && Number(v) !== 0,
+  );
   return (
-    <div className="flex flex-col gap-1">
-      <select
-        aria-label="Quién paga el F29"
-        className="h-8 rounded-md border border-input bg-card px-2 text-xs shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        value={pago}
-        disabled={disabled}
-        onChange={(e) => {
-          const v = e.target.value;
-          setPago(v);
-          onGuardar({ pagoPor: v || null });
-        }}
+    <Popover>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="rounded px-1 font-medium tabular-nums underline decoration-dotted decoration-muted-foreground/60 underline-offset-4 hover:bg-muted"
+          />
+        }
       >
-        <option value="">—</option>
-        <option value="rs">Paga RS</option>
-        <option value="cliente">Paga cliente</option>
-      </select>
-      {pago === "rs" ? (
-        <Input
-          type="date"
-          className="h-7 w-36 bg-card text-xs"
-          defaultValue={fechaPagoOficina ?? ""}
-          disabled={disabled}
-          onChange={(e) => onGuardar({ fechaPagoOficina: e.target.value || null })}
-          aria-label="Fecha en que el cliente pagó a la oficina"
-          title="Fecha en que el cliente pagó a la oficina (para acreditar el pago)"
-        />
-      ) : null}
-      {pago === "cliente" ? (
-        <Input
-          type="date"
-          className="h-7 w-36 bg-card text-xs"
-          defaultValue={fechaPagoF29 ?? ""}
-          disabled={disabled}
-          onChange={(e) => onGuardar({ fechaPagoF29: e.target.value || null })}
-          aria-label="Fecha en que el cliente pagó el F29"
-          title="Fecha de pago del F29 por el cliente — al ingresarla, el estado pasa a Pagado"
-        />
-      ) : null}
-    </div>
+        {formatMonto(total)}
+      </PopoverTrigger>
+      <PopoverContent side="left" align="start">
+        <div className="mb-1.5 text-xs font-semibold text-muted-foreground">
+          Detalle del F29
+        </div>
+        {detalle.length === 0 ? (
+          <div className="text-xs text-muted-foreground">
+            Sin desglose cargado. Ábrelo en el cliente para detallarlo.
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <tbody>
+              {detalle.map(([nombre, v]) => (
+                <tr key={nombre}>
+                  <td className="py-0.5 text-muted-foreground">{nombre}</td>
+                  <td className="py-0.5 text-right tabular-nums">
+                    {formatMonto(v!)}
+                  </td>
+                </tr>
+              ))}
+              <tr className="border-t border-border">
+                <td className="pt-1 font-medium">TOTAL</td>
+                <td className="pt-1 text-right font-semibold tabular-nums">
+                  {formatMonto(total)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -210,7 +172,6 @@ export function F29Client({
   // N° de operación del pago (cuando paga la oficina), editable desde el modal.
   const [numOp, setNumOp] = useState("");
   const [guardando, startGuardar] = useTransition();
-  const [marcando, startMarcar] = useTransition();
   const [enviando, startEnviar] = useTransition();
   const [enviandoPago, startEnviarPago] = useTransition();
 
@@ -226,33 +187,6 @@ export function F29Client({
     });
     setPostergar(c.postergacion_monto == null ? "" : String(c.postergacion_monto));
     setEditando(c);
-  }
-
-  function togglePaso(cicloId: string, columna: string, hecho: boolean) {
-    startMarcar(async () => {
-      const res = await marcarPasoF29(cicloId, columna, hecho);
-      if (res.ok) router.refresh();
-      else toast.error(res.error ?? "Error al actualizar");
-    });
-  }
-
-  function guardarPago(
-    cicloId: string,
-    patch: {
-      pagoPor?: string | null;
-      monto?: string | null;
-      ppm?: string | null;
-      fechaPagoOficina?: string | null;
-      fechaPagoF29?: string | null;
-    },
-  ) {
-    startMarcar(async () => {
-      const res = await actualizarPagoF29(cicloId, patch);
-      if (res.ok) {
-        toast.success("Guardado");
-        router.refresh();
-      } else toast.error(res.error ?? "Error al guardar");
-    });
   }
 
   const [orden, setOrden] = useState<Orden>(null);
@@ -274,16 +208,11 @@ export function F29Client({
     const valor = (c: F29Row): unknown => {
       switch (orden.col) {
         case "cliente": return c.razon_social;
-        case "concil": return c.conciliacion_ok ? 0 : 1; // OK primero en asc
         case "estado": return c.estado;
         case "responsable": return c.responsable;
         case "plazo": return c.plazo_f29;
         case "dias": return c.dias_restantes_f29;
-        case "armado": return c.fecha_f29_armado;
-        case "presentado": return c.fecha_f29_presentado;
         case "monto": return c.monto_a_pagar !== null ? Number(c.monto_a_pagar) : null;
-        case "ppm": return c.ppm !== null ? Number(c.ppm) : null;
-        case "folio": return c.folio_f29;
         default: return null;
       }
     };
@@ -531,24 +460,18 @@ export function F29Client({
             <TableRow className="hover:bg-transparent">
               <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[220px]">Cliente</ThSort>
               <TableHead>RUT</TableHead>
-              <ThSort col="concil" orden={orden} setOrden={setOrden}>Conciliación</ThSort>
               <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
               <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
               <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>
               <ThSort col="dias" orden={orden} setOrden={setOrden} className="text-center">Días</ThSort>
-              <ThSort col="presentado" orden={orden} setOrden={setOrden} className="text-center">F29</ThSort>
-              <TableHead className="text-center">Pagado</TableHead>
-              <TableHead>Paga</TableHead>
               <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Monto</ThSort>
-              <ThSort col="ppm" orden={orden} setOrden={setOrden} className="text-right">PPM</ThSort>
-              <ThSort col="folio" orden={orden} setOrden={setOrden}>Folio</ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={13}
+                  colSpan={7}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -583,23 +506,6 @@ export function F29Client({
                     </div>
                   </TableCell>
                   <TableCell>
-                    {c.conciliacion_ok ? (
-                      <Badge
-                        variant="outline"
-                        className="border-emerald-200 bg-emerald-50 text-emerald-700"
-                      >
-                        OK
-                      </Badge>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        className="border-amber-200 bg-amber-50 text-amber-700"
-                      >
-                        Pendiente
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
                     <Badge variant="outline" className={claseEstado(c.estado)}>
                       {c.estado}
                     </Badge>
@@ -611,52 +517,12 @@ export function F29Client({
                   >
                     {c.dias_restantes_f29 ?? "—"}
                   </TableCell>
-                  {PASOS_F29.map((p) => (
-                    <TableCell
-                      key={p.columna}
-                      className="text-center"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Checkbox
-                        checked={c[p.columna] !== null}
-                        disabled={marcando}
-                        onCheckedChange={(v) => togglePaso(c.ciclo_id, p.columna, v === true)}
-                        aria-label={p.label}
-                        title={
-                          c[p.columna]
-                            ? `${p.label}: ${formatFecha(c[p.columna])}`
-                            : `Marcar ${p.label} (estampa la fecha de hoy)`
-                        }
-                      />
-                    </TableCell>
-                  ))}
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <PagaCell
-                      key={`paga-${c.ciclo_id}-${c.pago_por ?? ""}`}
-                      pagoPor={c.pago_por}
-                      fechaPagoOficina={c.fecha_pago_oficina}
-                      fechaPagoF29={c.fecha_pago_f29}
-                      disabled={marcando}
-                      onGuardar={(patch) => guardarPago(c.ciclo_id, patch)}
-                    />
+                  <TableCell
+                    className="text-right"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MontoDetalle fila={c} />
                   </TableCell>
-                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <MontoInline
-                      key={`${c.ciclo_id}-${c.monto_a_pagar ?? ""}`}
-                      valor={c.monto_a_pagar}
-                      disabled={marcando}
-                      onGuardar={(m) => guardarPago(c.ciclo_id, { monto: m })}
-                    />
-                  </TableCell>
-                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <MontoInline
-                      key={`ppm-${c.ciclo_id}-${c.ppm ?? ""}`}
-                      valor={c.ppm}
-                      disabled={marcando}
-                      onGuardar={(m) => guardarPago(c.ciclo_id, { ppm: m })}
-                    />
-                  </TableCell>
-                  <TableCell>{c.folio_f29 ?? "—"}</TableCell>
                 </TableRow>
               ))
             )}
