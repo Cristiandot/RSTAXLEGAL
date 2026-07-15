@@ -9,6 +9,7 @@ import { etiquetaPeriodo } from "./periodos";
 import {
   cajaNotaContador,
   cajaPostergacionIva,
+  fechaLimitePostergacion,
   filasDesgloseF29,
 } from "./f29-correo";
 
@@ -255,7 +256,7 @@ export function construirCorreoComunicacion({
       // Opción de postergar el IVA: caja con explicación completa (misma
       // redacción que el aviso del módulo F29), no solo el monto.
       if (emp.f29_postergacion_monto !== null && Number(emp.f29_postergacion_monto) > 0) {
-        cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;">${cajaPostergacionIva(emp.f29_postergacion_monto, montoF29)}</td></tr>`;
+        cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;">${cajaPostergacionIva(emp.f29_postergacion_monto, montoF29, fechaLimitePostergacion(emp.periodo))}</td></tr>`;
       }
       if ((emp.f29_comentario ?? "").trim()) {
         cuerpoTabla += `<tr><td colspan="2" style="padding:8px 0 2px;">${cajaNotaContador(emp.f29_comentario!)}</td></tr>`;

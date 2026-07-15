@@ -26,6 +26,20 @@ export function fechaLarga(iso: string): string {
   return `${DIAS_SEMANA[dow]} ${formatFecha(iso)}`;
 }
 
+/**
+ * Fecha límite para postergar el IVA: siempre 2 meses después del vencimiento
+ * del F29 (día 20 del mes siguiente al período), es decir el día 20 del mes que
+ * cae 3 meses después del período. Ej.: período 2026-06 → vence 20-07-2026 →
+ * postergación hasta 20-09-2026.
+ */
+export function fechaLimitePostergacion(periodo: string): string {
+  const [y, m] = periodo.split("-").map(Number);
+  const total = m - 1 + 3; // mes 0-indexado del período + 3 meses
+  const year = y + Math.floor(total / 12);
+  const month = (total % 12) + 1;
+  return `${year}-${String(month).padStart(2, "0")}-20`;
+}
+
 /** Monto con signo por delante: -2581 → "-$2.581" (formatMonto da "$-2.581"). */
 function montoConSigno(v: number | string): string {
   const n = Number(v);
@@ -87,6 +101,7 @@ export function filasDesgloseF29(d: DesgloseF29): {
 export function cajaPostergacionIva(
   montoPostergable: number | string,
   montoTotal: number | string | null,
+  fechaLimite?: string | null,
 ): string {
   const postergable = Number(montoPostergable);
   const total = montoTotal !== null ? Number(montoTotal) : null;
@@ -96,7 +111,12 @@ export function cajaPostergacionIva(
     pagaAhora !== null
       ? ` De acogerse, este mes pagaría solo <strong>${formatMonto(pagaAhora)}</strong> (los demás impuestos del formulario —PPM, impuesto único y retenciones— no son postergables y se pagan dentro del plazo normal).`
       : "";
-  return `<div style="border:1px solid #8fb8e8;background:#eaf2fb;border-radius:6px;padding:10px 12px;font-size:12px;color:#0c447c;line-height:1.55;"><strong style="color:#0b2545;">Opción de postergar el pago del IVA.</strong> Su empresa puede postergar el pago del IVA de este período por <strong>${formatMonto(postergable)}</strong>, hasta 2 meses después del vencimiento original, sin multas ni intereses dentro de ese nuevo plazo.${detallePago} Si desea usar esta opción, respóndanos este correo <strong>antes del vencimiento</strong> para presentar su F29 con la postergación.</div>`;
+  // La postergación es siempre de 2 meses: si viene la fecha, se indica el nuevo
+  // plazo concreto (día 20); si no, se deja la redacción genérica.
+  const nuevoPlazo = fechaLimite
+    ? `hasta el <strong>${fechaLarga(fechaLimite)}</strong> (2 meses después del vencimiento)`
+    : "hasta 2 meses después del vencimiento original";
+  return `<div style="border:1px solid #8fb8e8;background:#eaf2fb;border-radius:6px;padding:10px 12px;font-size:12px;color:#0c447c;line-height:1.55;"><strong style="color:#0b2545;">Opción de postergar el pago del IVA.</strong> Su empresa puede postergar el pago del IVA de este período por <strong>${formatMonto(postergable)}</strong>, ${nuevoPlazo}, sin multas ni intereses dentro de ese nuevo plazo.${detallePago} Si desea usar esta opción, respóndanos este correo <strong>antes del vencimiento</strong> para presentar su F29 con la postergación.</div>`;
 }
 
 /** Nota personalizada del contador (comentario del módulo F29). */
@@ -148,7 +168,7 @@ export function construirCorreoAvisoF29(d: DatosAvisoF29): {
     !esMontoCero &&
     d.postergacionMonto !== null &&
     Number(d.postergacionMonto) > 0
-      ? `<div style="margin:0 0 16px;">${cajaPostergacionIva(d.postergacionMonto, d.montoTotal)}</div>`
+      ? `<div style="margin:0 0 16px;">${cajaPostergacionIva(d.postergacionMonto, d.montoTotal, fechaLimitePostergacion(d.periodo))}</div>`
       : "";
 
   const notaContador = (d.comentarioContador ?? "").trim()
