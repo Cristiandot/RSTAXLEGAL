@@ -1,6 +1,7 @@
 import {
   Wallet,
   BookOpenCheck,
+  BookText,
   FileText,
   FilePlus2,
   FileSignature,
@@ -188,6 +189,15 @@ export const MODULOS: SeccionModulos[] = [
           "Solicitudes de término del portal y calculadora de indemnizaciones con indicadores Previred.",
         href: "/finiquitos",
         icon: Calculator,
+        estado: "activo",
+      },
+      {
+        key: "libro-remuneraciones",
+        label: "Libro de Remuneraciones",
+        descripcion:
+          "El LRE de cada empresa por mes, corregido al formato de la Dirección del Trabajo y listo para cargar en Mi DT, con descarga y estado de declaración.",
+        href: "/libro-remuneraciones",
+        icon: BookText,
         estado: "activo",
       },
       {
