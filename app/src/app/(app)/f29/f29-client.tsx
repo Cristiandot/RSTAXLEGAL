@@ -535,7 +535,7 @@ export function F29Client({
         onOpenChange={soloCerrarConX(() => setEditando(null))}
       >
         {editando ? (
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-3 sm:max-w-lg md:max-w-3xl">
             <DialogHeader>
               <DialogTitle className="font-heading">
                 {editando.razon_social}
@@ -567,8 +567,10 @@ export function F29Client({
             <form
               id="form-f29"
               onSubmit={onSubmit}
-              className="grid grid-cols-2 gap-3"
+              className="grid min-h-0 flex-1 items-start gap-4 overflow-y-auto px-1 md:grid-cols-2"
             >
+              {/* Columna izquierda — detalle y montos del F29 */}
+              <div className="flex flex-col gap-3">
               <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="responsable">Responsable</Label>
                 <select
@@ -586,8 +588,8 @@ export function F29Client({
                 </select>
               </div>
 
-              <div className="col-span-2 grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-3">
-                <div className="col-span-2 text-xs font-semibold text-muted-foreground sm:col-span-3">
+              <div className="grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/20 p-3">
+                <div className="col-span-2 text-xs font-semibold text-muted-foreground">
                   Detalle del F29 — escribe cada concepto; el TOTAL se calcula
                   solo. Solo los conceptos con monto salen en el detalle al
                   cliente.
@@ -705,7 +707,10 @@ export function F29Client({
                   defaultValue={editando.folio_f29 ?? ""}
                 />
               </div>
+              </div>
 
+              {/* Columna derecha — envío, transferencia, pago y notas */}
+              <div className="flex flex-col gap-3">
               {/* Paso 1 — cerrar el detalle: envía el aviso al cliente. */}
               <div className="col-span-2 flex flex-col gap-1.5 rounded-lg border border-sky-200 bg-sky-50/50 p-3">
                 <Label htmlFor="correo_cliente" className="text-sky-900">
@@ -834,6 +839,7 @@ export function F29Client({
                   rows={2}
                   defaultValue={editando.observaciones ?? ""}
                 />
+              </div>
               </div>
             </form>
 
