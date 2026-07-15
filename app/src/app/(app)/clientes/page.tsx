@@ -21,7 +21,7 @@ export default async function ClientesPage() {
       supabase
         .from("clientes")
         .select(
-          "id, grupo_id, razon_social, rut_empresa, hace_f29, hace_liquidaciones",
+          "id, grupo_id, razon_social, rut_empresa, hace_f29, hace_liquidaciones, activo",
         ),
       supabase.from("trabajadores").select("cliente_id, activo"),
       supabase.from("v_onboarding_empresas").select("*"),
@@ -77,7 +77,21 @@ export default async function ClientesPage() {
     empresasPorGrupo.set(v.grupo_id, arr);
   }
 
-  const clientes: ClienteResumenRow[] = (gruposRes.data ?? []).map((g) => {
+  // Grupos dados de baja: tienen empresas cargadas pero NINGUNA activa. Se
+  // ocultan del listado. Los grupos sin empresas aún se conservan (recién
+  // creados / en onboarding).
+  const gruposConCliente = new Set<string>();
+  const gruposActivos = new Set<string>();
+  for (const v of vinculosRes.data ?? []) {
+    if (!v.grupo_id) continue;
+    gruposConCliente.add(v.grupo_id);
+    if (v.activo !== false) gruposActivos.add(v.grupo_id);
+  }
+  const gruposVisibles = (gruposRes.data ?? []).filter(
+    (g) => !gruposConCliente.has(g.id) || gruposActivos.has(g.id),
+  );
+
+  const clientes: ClienteResumenRow[] = gruposVisibles.map((g) => {
     const emps = empresasPorGrupo.get(g.id) ?? [];
     const stats = emps
       .map((e) => pctPorEmpresa.get(e.id))
