@@ -97,7 +97,10 @@ export function ClientesClient({
         `${c.codigo ?? ""} ${c.nombre} ${c.correo ?? ""}`.toLowerCase();
       return t.includes(q);
     });
-    if (!orden) return out; // por código (orden del servidor)
+    // Orden por defecto: código correlativo (C.1, C.2, … C.10), no alfabético
+    // de texto. El servidor entrega .order("codigo") como texto plano, que
+    // pondría C.10 antes de C.2; el comparador (numeric:true) lo corrige.
+    if (!orden) return [...out].sort((a, b) => comparar(a.codigo, b.codigo, "asc"));
     const val = (c: ClienteResumenRow): unknown => {
       switch (orden.col) {
         case "codigo":
