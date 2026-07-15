@@ -192,7 +192,7 @@ export async function enviarCorreoF29(
     return {
       ok: false,
       error:
-        "Falta el monto TOTAL a pagar del F29: escríbelo en el formulario y reintenta (sin monto, el aviso saldría con «—»). Si el F29 quedó sin pago, escribe 0: el aviso sale como informativo.",
+        "Falta el detalle del F29: llena los conceptos (IVA, PPM, etc.) y el TOTAL se calcula solo. Si el F29 quedó sin pago, escribe 0 en algún concepto (p. ej. IVA 0): el aviso sale como informativo.",
     };
   }
   // F29 declarado en $0: el aviso sale como informativo (sin botón de pago,

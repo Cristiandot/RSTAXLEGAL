@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Search, CheckCircle2, AlertTriangle, Send } from "lucide-react";
-import { formatFecha } from "@/lib/format";
+import { formatFecha, formatMonto } from "@/lib/format";
 import { SelectorPeriodo } from "@/components/selector-periodo";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
@@ -203,8 +203,17 @@ export function F29Client({
   const [presentadoChk, setPresentadoChk] = useState(false);
   // Correo del cliente (ficha) editable desde el modal.
   const [correoCli, setCorreoCli] = useState("");
-  // Monto TOTAL controlado: permite el botón "Sin pago ($0)" del modal.
-  const [montoTotal, setMontoTotal] = useState("");
+  // Detalle del F29 controlado: el TOTAL a pagar se calcula sumando estos
+  // conceptos (la contadora solo llena el detalle). Se guardan como strings.
+  const [dg, setDg] = useState({
+    iva: "",
+    impUnico: "",
+    ret: "",
+    ppm: "",
+    otros: "",
+  });
+  // Opción de postergar el IVA — va en el paso 1 para ofrecerla en el aviso.
+  const [postergar, setPostergar] = useState("");
   // N° de operación del pago (cuando paga la oficina), editable desde el modal.
   const [numOp, setNumOp] = useState("");
   // Quién paga, en vivo: al elegir "Paga RS" aparecen de inmediato la fecha de
@@ -220,7 +229,14 @@ export function F29Client({
     setCorreoCli(c.correo_empresa ?? "");
     setNumOp(c.numero_operacion ?? "");
     setPagoPorSel(c.pago_por ?? "");
-    setMontoTotal(c.monto_a_pagar === null ? "" : String(c.monto_a_pagar));
+    setDg({
+      iva: c.monto_iva == null ? "" : String(c.monto_iva),
+      impUnico: c.imp_unico == null ? "" : String(c.imp_unico),
+      ret: c.monto_retenciones == null ? "" : String(c.monto_retenciones),
+      ppm: c.ppm == null ? "" : String(c.ppm),
+      otros: c.monto_otros == null ? "" : String(c.monto_otros),
+    });
+    setPostergar(c.postergacion_monto == null ? "" : String(c.postergacion_monto));
     setEditando(c);
   }
 
@@ -422,6 +438,23 @@ export function F29Client({
   const respDefault = editando
     ? (usuarios.find((u) => u.nombre === editando.responsable)?.id ?? "")
     : "";
+
+  // TOTAL a pagar = suma del detalle. Blancos = 0. La suma puede dar negativa
+  // (remanente a favor); en ese caso no hay monto a pagar, así que el total se
+  // limita a 0 (queda como F29 sin pago / informativo).
+  const num = (s: string) => {
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const sumaDesglose =
+    num(dg.iva) + num(dg.impUnico) + num(dg.ret) + num(dg.ppm) + num(dg.otros);
+  const totalPagar = Math.max(0, sumaDesglose);
+  const detalleVacio =
+    dg.iva === "" &&
+    dg.impUnico === "" &&
+    dg.ret === "" &&
+    dg.ppm === "" &&
+    dg.otros === "";
 
   return (
     <div className="space-y-5">
@@ -723,37 +756,11 @@ export function F29Client({
                   </span>
                 </Label>
               </div>
-              <div className="col-span-2 flex flex-col gap-1.5">
-                <Label htmlFor="monto">Monto TOTAL a pagar</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="monto"
-                    name="monto"
-                    type="number"
-                    inputMode="numeric"
-                    className="flex-1"
-                    value={montoTotal}
-                    onChange={(e) => setMontoTotal(e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setMontoTotal("0")}
-                    title="F29 declarado sin monto a pagar: deja el monto en $0"
-                  >
-                    Sin pago ($0)
-                  </Button>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  Si el F29 quedó sin monto a pagar, usa «Sin pago ($0)»: el
-                  aviso y la Comunicación mensual salen como informativo, sin
-                  botón de pago ni plazo.
-                </span>
-              </div>
               <div className="col-span-2 grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-3">
                 <div className="col-span-2 text-xs font-semibold text-muted-foreground sm:col-span-3">
-                  Desglose del F29 — solo los conceptos con monto salen en el
-                  detalle al cliente (Comunicación mensual)
+                  Detalle del F29 — escribe cada concepto; el TOTAL se calcula
+                  solo. Solo los conceptos con monto salen en el detalle al
+                  cliente.
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="monto_iva">IVA</Label>
@@ -763,7 +770,8 @@ export function F29Client({
                     type="number"
                     inputMode="numeric"
                     placeholder="—"
-                    defaultValue={editando.monto_iva ?? ""}
+                    value={dg.iva}
+                    onChange={(e) => setDg({ ...dg, iva: e.target.value })}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -774,7 +782,8 @@ export function F29Client({
                     type="number"
                     inputMode="numeric"
                     placeholder="—"
-                    defaultValue={editando.imp_unico ?? ""}
+                    value={dg.impUnico}
+                    onChange={(e) => setDg({ ...dg, impUnico: e.target.value })}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -785,7 +794,8 @@ export function F29Client({
                     type="number"
                     inputMode="numeric"
                     placeholder="—"
-                    defaultValue={editando.monto_retenciones ?? ""}
+                    value={dg.ret}
+                    onChange={(e) => setDg({ ...dg, ret: e.target.value })}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -796,7 +806,8 @@ export function F29Client({
                     type="number"
                     inputMode="numeric"
                     placeholder="—"
-                    defaultValue={editando.ppm ?? ""}
+                    value={dg.ppm}
+                    onChange={(e) => setDg({ ...dg, ppm: e.target.value })}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -807,9 +818,53 @@ export function F29Client({
                     type="number"
                     inputMode="numeric"
                     placeholder="—"
-                    defaultValue={editando.monto_otros ?? ""}
+                    value={dg.otros}
+                    onChange={(e) => setDg({ ...dg, otros: e.target.value })}
                   />
                 </div>
+              </div>
+
+              {/* TOTAL a pagar: suma automática del detalle (no editable). */}
+              <div className="col-span-2 flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">Monto TOTAL a pagar</span>
+                  <span className="text-xs text-muted-foreground">
+                    {detalleVacio
+                      ? "Se calcula al llenar el detalle de arriba."
+                      : sumaDesglose < 0
+                        ? `El detalle suma ${formatMonto(sumaDesglose)} (remanente a favor): sin monto a pagar este período.`
+                        : "Suma automática del detalle."}
+                  </span>
+                </div>
+                <span className="text-2xl font-semibold tabular-nums">
+                  {detalleVacio ? "—" : formatMonto(totalPagar)}
+                </span>
+                <input
+                  type="hidden"
+                  name="monto"
+                  value={detalleVacio ? "" : String(totalPagar)}
+                />
+              </div>
+
+              {/* Opción de postergar el IVA — se ofrece en el aviso del paso 1. */}
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="postergacion_monto">
+                  Opción de postergar el IVA ($)
+                </Label>
+                <Input
+                  id="postergacion_monto"
+                  name="postergacion_monto"
+                  type="number"
+                  inputMode="numeric"
+                  placeholder="—"
+                  className="w-48"
+                  value={postergar}
+                  onChange={(e) => setPostergar(e.target.value)}
+                />
+                <span className="text-xs text-muted-foreground">
+                  Si el cliente puede postergar el IVA, escribe el monto: el aviso
+                  del paso 1 le ofrece la opción y explica cuánto pagaría ahora.
+                </span>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="pago_por">¿Quién paga el F29?</Label>
@@ -948,35 +1003,20 @@ export function F29Client({
                         : "El comprobante «pagado por RS» aplica solo cuando el cliente transfiere a RS. La fecha de pago igual se puede registrar y guardar aquí."}
                 </span>
               </div>
-              <div className="col-span-2 grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/20 p-3">
-                <div className="col-span-2 text-xs font-semibold text-muted-foreground">
-                  Para el correo de Comunicación mensual
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="postergacion_monto">Opción de postergar ($)</Label>
-                  <Input
-                    id="postergacion_monto"
-                    name="postergacion_monto"
-                    type="number"
-                    inputMode="numeric"
-                    placeholder="—"
-                    defaultValue={editando.postergacion_monto ?? ""}
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    Si el cliente puede postergar el IVA, escribe el monto: sale
-                    en el detalle del correo.
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="comentario_correo">Comentario personalizado</Label>
-                  <Textarea
-                    id="comentario_correo"
-                    name="comentario_correo"
-                    rows={2}
-                    placeholder="Nota del contador para el cliente…"
-                    defaultValue={editando.comentario_correo ?? ""}
-                  />
-                </div>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="comentario_correo">
+                  Comentario personalizado para el cliente
+                </Label>
+                <Textarea
+                  id="comentario_correo"
+                  name="comentario_correo"
+                  rows={2}
+                  placeholder="Nota del contador para el cliente…"
+                  defaultValue={editando.comentario_correo ?? ""}
+                />
+                <span className="text-xs text-muted-foreground">
+                  Sale en el aviso del F29 (paso 1) y en la Comunicación mensual.
+                </span>
               </div>
               <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="observaciones">Observaciones</Label>
