@@ -27,6 +27,8 @@ export type ResumenLre = {
   causalProvisional: number;
   faltaRegionComuna: number;
   fechasCorregidas: number;
+  /** Trabajadores cuyo líquido venía negativo y se llevó a 0 (la DT no acepta montos negativos). */
+  negativosACero: number;
 };
 
 const CODES: Record<string, string> = {
@@ -41,6 +43,7 @@ export function corregirLreDt(input: Buffer): { output: Buffer; resumen: Resumen
   const base: ResumenLre = {
     ok: false, nTrabajadores: 0, totalLiquido: 0, cols: 0,
     jornadaProvisional: 0, causalProvisional: 0, faltaRegionComuna: 0, fechasCorregidas: 0,
+    negativosACero: 0,
   };
 
   const text = input.toString("latin1");
@@ -62,7 +65,7 @@ export function corregirLreDt(input: Buffer): { output: Buffer; resumen: Resumen
   }
 
   const out: string[] = [lines[0]];
-  let n = 0, liq = 0, jorP = 0, cauP = 0, faltaRC = 0, fechas = 0;
+  let n = 0, liq = 0, jorP = 0, cauP = 0, faltaRC = 0, fechas = 0, neg = 0;
 
   for (let i = 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
@@ -82,6 +85,10 @@ export function corregirLreDt(input: Buffer): { output: Buffer; resumen: Resumen
     if (!vacio(c[I.ter]) && vacio(c[I.cau])) { c[I.cau] = "6"; cauP++; }
     if (I.reg >= 0 && I.com >= 0 && (vacio(c[I.reg]) || vacio(c[I.com]))) faltaRC++;
 
+    if (I.liq >= 0 && (Number(c[I.liq]) || 0) < 0) neg++;
+    // La DT no acepta montos negativos: todo monto negativo se lleva a 0.
+    for (let j = 0; j < c.length; j++) if (/^-\d/.test(c[j])) c[j] = "0";
+
     n++;
     if (I.liq >= 0) liq += Number(c[I.liq]) || 0;
     out.push(c.join(";"));
@@ -92,6 +99,7 @@ export function corregirLreDt(input: Buffer): { output: Buffer; resumen: Resumen
     resumen: {
       ok: true, nTrabajadores: n, totalLiquido: liq, cols: nCols,
       jornadaProvisional: jorP, causalProvisional: cauP, faltaRegionComuna: faltaRC, fechasCorregidas: fechas,
+      negativosACero: neg,
     },
   };
 }
