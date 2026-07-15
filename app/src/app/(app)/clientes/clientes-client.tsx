@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Search, ChevronRight, Save } from "lucide-react";
@@ -44,6 +44,19 @@ import {
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+// Tinte de la columna Cliente según la letra del código (temas Office, más
+// claro 80%): A turquesa, B ciruela, C verde oscuro; D y otros sin destacar.
+const TINTE_CLIENTE: Record<string, string> = {
+  A: "#DBEEF4",
+  B: "#E8DCEA",
+  C: "#DCE7D5",
+};
+function tinteCliente(codigo: string | null): CSSProperties | undefined {
+  const letra = codigo?.trim().charAt(0).toUpperCase();
+  const bg = letra ? TINTE_CLIENTE[letra] : undefined;
+  return bg ? { backgroundColor: bg, color: "#1a1a1a" } : undefined;
+}
 
 type Tab = "clientes" | "campos";
 
@@ -277,12 +290,20 @@ export function ClientesClient({
                         {c.codigo ?? "—"}
                       </TableCell>
                       <TableCell className="font-medium">
-                        <span
-                          className="block max-w-[220px] truncate"
-                          title={c.nombre}
-                        >
-                          {c.nombre}
-                        </span>
+                        {(() => {
+                          const tinte = tinteCliente(c.codigo);
+                          return (
+                            <span
+                              className={`block max-w-[220px] truncate ${
+                                tinte ? "rounded px-2 py-0.5" : ""
+                              }`}
+                              style={tinte}
+                              title={c.nombre}
+                            >
+                              {c.nombre}
+                            </span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <TextoCopiable
