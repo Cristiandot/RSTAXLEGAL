@@ -65,12 +65,6 @@ const PASOS_F29: {
   { columna: "fecha_pago_f29", label: "Pagado" },
 ];
 
-/** Fecha de hoy en zona local del usuario (YYYY-MM-DD), para estampar hitos. */
-function hoyLocal() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
 /** Input de monto que guarda al salir del campo o con Enter. */
 function MontoInline({
   valor,
@@ -200,8 +194,6 @@ export function F29Client({
   const [concilF, setConcilF] = useState("");
   const [respF, setRespF] = useState("");
   const [editando, setEditando] = useState<F29Row | null>(null);
-  // Hito único F29 como checklist: tildar estampa la fecha de hoy al guardar.
-  const [presentadoChk, setPresentadoChk] = useState(false);
   // Correo del cliente (ficha) editable desde el modal.
   const [correoCli, setCorreoCli] = useState("");
   // Detalle del F29 controlado: el TOTAL a pagar se calcula sumando estos
@@ -217,19 +209,14 @@ export function F29Client({
   const [postergar, setPostergar] = useState("");
   // N° de operación del pago (cuando paga la oficina), editable desde el modal.
   const [numOp, setNumOp] = useState("");
-  // Quién paga, en vivo: al elegir "Paga RS" aparecen de inmediato la fecha de
-  // transferencia a la oficina y el bloque para marcar pagado + avisar.
-  const [pagoPorSel, setPagoPorSel] = useState("");
   const [guardando, startGuardar] = useTransition();
   const [marcando, startMarcar] = useTransition();
   const [enviando, startEnviar] = useTransition();
   const [enviandoPago, startEnviarPago] = useTransition();
 
   function abrirModal(c: F29Row) {
-    setPresentadoChk(c.fecha_f29_presentado !== null);
     setCorreoCli(c.correo_empresa ?? "");
     setNumOp(c.numero_operacion ?? "");
-    setPagoPorSel(c.pago_por ?? "");
     setDg({
       iva: c.monto_iva == null ? "" : String(c.monto_iva),
       impUnico: c.imp_unico == null ? "" : String(c.imp_unico),
@@ -344,22 +331,20 @@ export function F29Client({
       const v = fd.get(k);
       return v === null || v === "" ? null : String(v);
     };
-    // El hito conserva su fecha original si ya estaba marcado; si se tilda
-    // recién ahora, se estampa hoy; si se destilda, queda en blanco.
-    const hoy = hoyLocal();
     return {
       cicloId: ciclo.ciclo_id,
       clienteId: ciclo.cliente_id,
       responsableId: get("responsable"),
-      // fecha_f29_armado ya no se gestiona en la UI: se conserva tal cual.
+      // fecha_f29_armado / fecha_f29_presentado ya no se gestionan a mano en la
+      // UI: la presentación la estampa el envío del aviso (paso 1). Se conservan.
       fechaArmado: ciclo.fecha_f29_armado,
-      fechaPresentado: presentadoChk
-        ? (ciclo.fecha_f29_presentado ?? hoy)
-        : null,
+      fechaPresentado: ciclo.fecha_f29_presentado,
       monto: get("monto"),
       ppm: get("ppm"),
       folio: get("folio"),
-      pagoPor: get("pago_por"),
+      // pago_por quedó fuera de la UI (se ofrecen ambas formas en el aviso); se
+      // conserva el valor histórico para no perder datos.
+      pagoPor: ciclo.pago_por,
       fechaPagoOficina: get("fecha_pago_oficina"),
       fechaPagoF29: get("fecha_pago_f29"),
       numeroOperacion: numOp.trim() || null,
@@ -735,26 +720,6 @@ export function F29Client({
                 </select>
               </div>
 
-              <div className="col-span-2 flex items-start gap-2.5 rounded-lg border border-input bg-card p-3">
-                <Checkbox
-                  id="chk_presentado"
-                  checked={presentadoChk}
-                  onCheckedChange={(v) => setPresentadoChk(v === true)}
-                />
-                <Label
-                  htmlFor="chk_presentado"
-                  className="flex cursor-pointer flex-col items-start gap-0.5"
-                >
-                  <span className="font-medium">F29</span>
-                  <span className="text-xs font-normal text-muted-foreground">
-                    {presentadoChk
-                      ? editando.fecha_f29_presentado
-                        ? formatFecha(editando.fecha_f29_presentado)
-                        : "Se estampa hoy al guardar"
-                      : "Pendiente"}
-                  </span>
-                </Label>
-              </div>
               <div className="col-span-2 grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-3">
                 <div className="col-span-2 text-xs font-semibold text-muted-foreground sm:col-span-3">
                   Detalle del F29 — escribe cada concepto; el TOTAL se calcula
@@ -865,29 +830,12 @@ export function F29Client({
                   del paso 1 le ofrece la opción y explica cuánto pagaría ahora.
                 </span>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="pago_por">¿Quién paga el F29?</Label>
-                <select
-                  id="pago_por"
-                  name="pago_por"
-                  className={selectCls}
-                  value={pagoPorSel}
-                  onChange={(e) => setPagoPorSel(e.target.value)}
-                >
-                  <option value="">Sin definir</option>
-                  <option value="rs">Transfiere a RS (paga la oficina)</option>
-                  <option value="cliente">Paga el cliente (directo al SII)</option>
-                </select>
-                <span className="text-xs text-muted-foreground">
-                  Define el aviso: «cliente» incluye botón para pagar en el SII;
-                  «RS» incluye los datos de transferencia a la oficina.
-                </span>
-              </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="folio">Folio F29</Label>
                 <Input
                   id="folio"
                   name="folio"
+                  className="w-48"
                   defaultValue={editando.folio_f29 ?? ""}
                 />
               </div>
@@ -980,10 +928,7 @@ export function F29Client({
                     type="button"
                     onClick={enviarAvisoPago}
                     disabled={
-                      enviandoPago ||
-                      pagoPorSel !== "rs" ||
-                      !numOp.trim() ||
-                      !correoCli.trim()
+                      enviandoPago || !numOp.trim() || !correoCli.trim()
                     }
                   >
                     <Send className="size-4" />
@@ -997,9 +942,7 @@ export function F29Client({
                     ? "Guardando, marcando pagado y enviando el comprobante…"
                     : editando.fecha_correo_pago_enviado
                       ? `Pagado y avisado el ${formatFecha(editando.fecha_correo_pago_enviado.slice(0, 10))}. El F29 quedó en «Pagado».`
-                      : pagoPorSel === "rs"
-                        ? "Registra la fecha de pago (el F29 pasa a «Pagado») y envía al cliente el comprobante con monto, fecha y N° de operación."
-                        : "El comprobante «pagado por RS» aplica solo cuando el cliente transfiere a RS. La fecha de pago igual se puede registrar y guardar aquí."}
+                      : "Úsalo cuando el cliente transfirió a RS y ya pagamos: registra la fecha de pago (el F29 pasa a «Pagado») y envía el comprobante con monto, fecha y N° de operación."}
                 </span>
               </div>
               <div className="col-span-2 flex flex-col gap-1.5">

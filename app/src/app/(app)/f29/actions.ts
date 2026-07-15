@@ -5,9 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getUsuarioActual } from "@/lib/auth";
 import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
 import { correosCopiaCliente } from "@/lib/correos-cliente";
-import { etiquetaPeriodo } from "@/lib/periodos";
-import { formatMonto } from "@/lib/format";
-import { construirCorreoAvisoF29, fechaLarga } from "@/lib/f29-correo";
+import {
+  construirCorreoAvisoF29,
+  construirCorreoF29Pagado,
+} from "@/lib/f29-correo";
 
 export type GuardarF29Input = {
   cicloId: string;
@@ -215,12 +216,11 @@ export async function enviarCorreoF29(
       .eq("id", row.cliente_id);
   }
 
-  const esPagaRs = row.pago_por === "rs";
-
-  // Recepción de fondos = 2 días hábiles antes del vencimiento (solo si paga RS
-  // y hay monto que pagar).
+  // Recepción de fondos = 2 días hábiles antes del vencimiento. El aviso ofrece
+  // siempre las dos formas de pago (SII o transferir a RS), así que la fecha se
+  // calcula siempre que haya monto que pagar.
   let recepcion: string | null = null;
-  if (esPagaRs && !esMontoCero && row.plazo_f29) {
+  if (!esMontoCero && row.plazo_f29) {
     const { data: rec } = await supabase.rpc("rs_restar_dias_habiles", {
       d: row.plazo_f29,
       n: 2,
@@ -242,7 +242,6 @@ export async function enviarCorreoF29(
     postergacionMonto: row.postergacion_monto,
     comentarioContador: row.comentario_correo,
     plazoF29: row.plazo_f29,
-    pagaRs: esPagaRs,
     fechaRecepcionFondos: recepcion,
   });
 
@@ -274,11 +273,11 @@ export async function enviarCorreoF29(
 }
 
 /**
- * Para los F29 que paga la oficina (pago_por='rs'): registra el N° de operación,
- * marca la fecha de pago del F29 (si no estaba) y envía al cliente el aviso de que
- * su F29 quedó pagado, con el comprobante (período, monto pagado, fecha y N° de
- * operación). Sale a nombre del usuario conectado y deja registrada la fecha de
- * envío para el botón Enviar/Reenviar.
+ * Comprobante de F29 pagado por la oficina: se usa cuando el cliente transfirió
+ * los fondos a RS y nosotros pagamos el F29. Registra el N° de operación, marca
+ * la fecha de pago del F29 (si no estaba) y envía al cliente el comprobante
+ * (período, monto pagado, fecha y N° de operación). Sale a nombre del usuario
+ * conectado y deja registrada la fecha de envío para el botón Enviar/Reenviar.
  */
 export async function enviarCorreoF29Pagado(
   cicloId: string,
@@ -295,18 +294,12 @@ export async function enviarCorreoF29Pagado(
   const { data: row, error: errRow } = await supabase
     .from("ciclo_f29")
     .select(
-      "cliente_id, periodo, monto_a_pagar, pago_por, fecha_pago_f29, clientes(razon_social, correo_empresa)",
+      "cliente_id, periodo, monto_a_pagar, fecha_pago_f29, clientes(razon_social, correo_empresa)",
     )
     .eq("id", cicloId)
     .single();
   if (errRow || !row) {
     return { ok: false, error: errRow?.message ?? "Ciclo F29 no encontrado." };
-  }
-  if (row.pago_por !== "rs") {
-    return {
-      ok: false,
-      error: 'El aviso de pago es solo para F29 que paga la oficina ("Paga RS").',
-    };
   }
   // Mismo resguardo que el aviso de F29: el comprobante no puede salir sin monto.
   if (row.monto_a_pagar === null || row.monto_a_pagar === undefined || String(row.monto_a_pagar) === "") {
@@ -339,30 +332,20 @@ export async function enviarCorreoF29Pagado(
   const hoy = new Date().toISOString().slice(0, 10);
   const fechaPago = (row.fecha_pago_f29 as string | null) ?? hoy;
 
-  const etiqueta = etiquetaPeriodo(row.periodo);
-  const cuerpo = `
-    <div style="border:1px solid #1d9e75;background:#e6f6ef;border-radius:8px;padding:14px 16px;margin:0 0 18px;">
-      <p style="margin:0;font-weight:bold;color:#0f6e56;font-size:15px;">Su F29 quedó pagado</p>
-      <p style="margin:6px 0 0;color:#0f6e56;font-size:13px;line-height:1.55;">El pago fue gestionado por RS Tax &amp; Legal dentro de plazo. No requiere ninguna acción de su parte.</p>
-    </div>
-    <p style="margin:0 0 12px;">Estimados,</p>
-    <p style="margin:0 0 16px;">Les confirmamos que hemos pagado, a través de nuestra oficina, el Formulario 29 de <strong>${cli?.razon_social ?? ""}</strong> correspondiente al período <strong>${etiqueta}</strong>. A continuación, el comprobante:</p>
-    <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;">
-      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Empresa</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${cli?.razon_social ?? ""}</td></tr>
-      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Período</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${etiqueta}</td></tr>
-      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Monto total pagado</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;font-weight:bold;">${formatMonto(row.monto_a_pagar)}</td></tr>
-      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Fecha de pago</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${fechaLarga(fechaPago)}</td></tr>
-      <tr><td style="padding:9px 0;color:#445;">N° de operación</td><td style="padding:9px 0;text-align:right;font-weight:bold;">${numOp}</td></tr>
-    </table>
-    <p style="margin:0 0 16px;font-size:12px;color:#64748b;">Conserve este correo como respaldo del pago. El número de operación corresponde a la transacción con que se enteró el F29.</p>
-    <p style="margin:0 0 4px;">Quedamos atentos a cualquier consulta.</p>`;
+  const { asunto, titulo, cuerpo } = construirCorreoF29Pagado({
+    razonSocial: cli?.razon_social ?? "",
+    periodo: row.periodo,
+    montoPagado: row.monto_a_pagar,
+    fechaPago,
+    numeroOperacion: numOp,
+  });
 
   const usuario = await getUsuarioActual();
   const res = await enviarCorreo({
     para: destino,
     cc: await correosCopiaCliente([row.cliente_id], [destino]),
-    asunto: `F29 ${etiqueta} pagado — RS Tax & Legal`,
-    html: htmlCorreoDocumento({ titulo: `F29 período ${etiqueta} — Pagado`, cuerpo }),
+    asunto,
+    html: htmlCorreoDocumento({ titulo, cuerpo }),
     de: { nombre: usuario.nombre, correo: usuario.correo },
   });
   if (!res.ok) return { ok: false, error: res.error };

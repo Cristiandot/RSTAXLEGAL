@@ -132,7 +132,6 @@ export type DatosAvisoF29 = {
   postergacionMonto: number | string | null;
   comentarioContador: string | null;
   plazoF29: string | null; // ya corrido al día hábil
-  pagaRs: boolean; // pago_por === 'rs'
   /** 2 días hábiles antes del vencimiento (la calcula la action vía RPC). */
   fechaRecepcionFondos: string | null;
 };
@@ -186,18 +185,26 @@ export function construirCorreoAvisoF29(d: DatosAvisoF29): {
     ? ""
     : `<p style="margin:0 0 16px;font-size:12px;color:#64748b;">El vencimiento legal del F29 es el día 20; si cae sábado, domingo o feriado, el plazo se traslada al siguiente día hábil.</p>`;
 
-  // Si el pago lo hace el cliente y hay monto, acceso directo al portal del SII.
-  const linkPagoSii =
-    !d.pagaRs && !esMontoCero
-      ? `<p style="margin:0 0 8px;">Puede revisar y pagar su F29 directamente en el portal del SII:</p>
-       <p style="margin:0 0 16px;"><a href="https://www4.sii.cl/propuestaf29ui/index.html#/default" style="display:inline-block;background:#0b2545;color:#ffffff;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 20px;border-radius:8px;">Pagar el F29 en el SII</a></p>`
-      : "";
+  // Se ofrecen SIEMPRE las dos formas de pago (cuando hay monto): el cliente
+  // elige y luego confirmamos con el comprobante. Ya no se decide por adelantado
+  // "quién paga".
+  const encabezadoPago = !esMontoCero
+    ? `<p style="margin:0 0 8px;font-weight:bold;color:#0b2545;font-size:14px;">¿Cómo pagar su F29?</p>
+       <p style="margin:0 0 12px;font-size:13px;color:#445;line-height:1.55;">Puede pagarlo de cualquiera de estas dos formas:</p>`
+    : "";
 
+  // Opción 1 — pago directo en el portal del SII.
+  const linkPagoSii = !esMontoCero
+    ? `<p style="margin:0 0 6px;font-size:13px;color:#0b2545;"><strong>1) Usted mismo, en el portal del SII.</strong></p>
+       <p style="margin:0 0 16px;"><a href="https://www4.sii.cl/propuestaf29ui/index.html#/default" style="display:inline-block;background:#0b2545;color:#ffffff;text-decoration:none;font-weight:bold;font-size:14px;padding:11px 20px;border-radius:8px;">Pagar el F29 en el SII</a></p>`
+    : "";
+
+  // Opción 2 — transferir a RS para que la oficina pague por el cliente.
   const cajaFondos =
-    d.pagaRs && !esMontoCero && d.fechaRecepcionFondos
+    !esMontoCero && d.fechaRecepcionFondos
       ? `<div style="border:1px solid #ef9f27;background:#faeeda;border-radius:8px;padding:14px 16px;margin:0 0 16px;">
-           <p style="margin:0 0 6px;font-weight:bold;color:#854f0b;font-size:14px;">Importante — si el pago lo gestionamos nosotros</p>
-           <p style="margin:0 0 12px;color:#633806;font-size:13px;line-height:1.55;">Para pagar su F29 a través de RS Tax &amp; Legal, debemos recibir los fondos a más tardar <strong>2 días hábiles antes</strong> del vencimiento, es decir el <strong>${fechaLarga(d.fechaRecepcionFondos)}</strong>. Pasada esa fecha no podemos garantizar el pago dentro de plazo y el F29 podría quedar afecto a multas e intereses de cargo del contribuyente.</p>
+           <p style="margin:0 0 6px;font-weight:bold;color:#854f0b;font-size:14px;">2) Que lo paguemos nosotros por usted.</p>
+           <p style="margin:0 0 12px;color:#633806;font-size:13px;line-height:1.55;">Si prefiere que RS Tax &amp; Legal pague su F29, transfiéranos los fondos a más tardar <strong>2 días hábiles antes</strong> del vencimiento, es decir el <strong>${fechaLarga(d.fechaRecepcionFondos)}</strong>, y envíenos el comprobante. Pasada esa fecha no podemos garantizar el pago dentro de plazo y el F29 podría quedar afecto a multas e intereses de cargo del contribuyente.</p>
            <p style="margin:0 0 6px;font-weight:bold;color:#854f0b;font-size:13px;">Datos para la transferencia:</p>
            <div style="background:#ffffff;border:1px solid #f0d9a8;border-radius:6px;padding:10px 12px;font-size:13px;color:#3a2a10;line-height:1.7;">
              <div><span style="color:#7a5a18;">Titular:</span> Rodríguez Samith Servicios Legales y Contables II Limitada</div>
@@ -231,6 +238,7 @@ export function construirCorreoAvisoF29(d: DatosAvisoF29): {
     ${cajaPostergacion}
     ${notaContador}
     ${notaVencimiento}
+    ${encabezadoPago}
     ${linkPagoSii}
     ${cajaFondos}
     <p style="margin:0 0 4px;">Quedamos atentos a cualquier consulta.</p>`;
@@ -242,6 +250,48 @@ export function construirCorreoAvisoF29(d: DatosAvisoF29): {
     titulo: esMontoCero
       ? `F29 período ${etiqueta} — Sin monto a pagar`
       : `F29 período ${etiqueta}`,
+    cuerpo,
+  };
+}
+
+export type DatosF29Pagado = {
+  razonSocial: string;
+  periodo: string; // "2026-06"
+  montoPagado: number | string;
+  fechaPago: string; // YYYY-MM-DD
+  numeroOperacion: string;
+};
+
+/**
+ * Comprobante de F29 pagado por la oficina: se envía cuando el cliente transfirió
+ * los fondos a RS y nosotros pagamos el F29. Función pura (la usa la server action
+ * y las vistas previas).
+ */
+export function construirCorreoF29Pagado(d: DatosF29Pagado): {
+  asunto: string;
+  titulo: string;
+  cuerpo: string;
+} {
+  const etiqueta = etiquetaPeriodo(d.periodo);
+  const cuerpo = `
+    <div style="border:1px solid #1d9e75;background:#e6f6ef;border-radius:8px;padding:14px 16px;margin:0 0 18px;">
+      <p style="margin:0;font-weight:bold;color:#0f6e56;font-size:15px;">Su F29 quedó pagado</p>
+      <p style="margin:6px 0 0;color:#0f6e56;font-size:13px;line-height:1.55;">El pago fue gestionado por RS Tax &amp; Legal dentro de plazo. No requiere ninguna acción de su parte.</p>
+    </div>
+    <p style="margin:0 0 12px;">Estimados,</p>
+    <p style="margin:0 0 16px;">Les confirmamos que hemos pagado, a través de nuestra oficina, el Formulario 29 de <strong>${d.razonSocial}</strong> correspondiente al período <strong>${etiqueta}</strong>. A continuación, el comprobante:</p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;">
+      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Empresa</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${d.razonSocial}</td></tr>
+      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Período</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${etiqueta}</td></tr>
+      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Monto total pagado</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;font-weight:bold;">${formatMonto(d.montoPagado)}</td></tr>
+      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Fecha de pago</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${fechaLarga(d.fechaPago)}</td></tr>
+      <tr><td style="padding:9px 0;color:#445;">N° de operación</td><td style="padding:9px 0;text-align:right;font-weight:bold;">${d.numeroOperacion}</td></tr>
+    </table>
+    <p style="margin:0 0 16px;font-size:12px;color:#64748b;">Conserve este correo como respaldo del pago. El número de operación corresponde a la transacción con que se enteró el F29.</p>
+    <p style="margin:0 0 4px;">Quedamos atentos a cualquier consulta.</p>`;
+  return {
+    asunto: `F29 ${etiqueta} pagado — RS Tax & Legal`,
+    titulo: `F29 período ${etiqueta} — Pagado`,
     cuerpo,
   };
 }
