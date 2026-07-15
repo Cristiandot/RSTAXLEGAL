@@ -151,27 +151,36 @@ export function LibroClient({
   // Completitud de carga a la DT: de los libros cargados de cada empresa,
   // cuántos están marcados como subidos a la DT (estado subido_dt/declarado).
   const resumen = useMemo(() => {
-    const porEmp = new Map<string, { total: number; subidos: number }>();
+    const esSubido = (estado: string) => estado === "subido_dt" || estado === "declarado";
+    const libPor = new Map<string, { total: number; subidos: number }>();
     for (const f of filas) {
-      const e = porEmp.get(f.cliente_id) ?? { total: 0, subidos: 0 };
+      const e = libPor.get(f.cliente_id) ?? { total: 0, subidos: 0 };
       e.total++;
-      if (f.estado === "subido_dt" || f.estado === "declarado") e.subidos++;
-      porEmp.set(f.cliente_id, e);
+      if (esSubido(f.estado)) e.subidos++;
+      libPor.set(f.cliente_id, e);
     }
-    const nombreDe = (id: string) => empresas.find((e) => e.id === id)?.razon_social ?? "— (empresa sin ficha)";
-    const lista = Array.from(porEmp.entries())
-      .map(([id, v]) => ({
-        id, nombre: nombreDe(id), total: v.total, subidos: v.subidos,
-        pct: v.total ? Math.round((v.subidos / v.total) * 100) : 0,
-      }))
-      .sort((a, b) => a.pct - b.pct || a.nombre.localeCompare(b.nombre));
-    const total = lista.reduce((s, e) => s + e.total, 0);
-    const subidos = lista.reduce((s, e) => s + e.subidos, 0);
+    // Todas las empresas con Previred (llegan filtradas del server), con su avance.
+    const lista = empresas
+      .map((emp) => {
+        const v = libPor.get(emp.id) ?? { total: 0, subidos: 0 };
+        return {
+          id: emp.id, nombre: emp.razon_social, total: v.total, subidos: v.subidos,
+          pct: v.total ? Math.round((v.subidos / v.total) * 100) : 0,
+        };
+      })
+      .sort((a, b) => {
+        const ka = a.total === 0 ? 0 : 1, kb = b.total === 0 ? 0 : 1;
+        if (ka !== kb) return ka - kb; // sin ningún libro cargado, primero
+        return a.pct - b.pct || a.nombre.localeCompare(b.nombre);
+      });
+    const total = filas.length;
+    const subidos = filas.filter((f) => esSubido(f.estado)).length;
     return {
       lista, total, subidos,
       pct: total ? Math.round((subidos / total) * 100) : 0,
-      completas: lista.filter((e) => e.pct === 100).length,
-      conLibros: lista.length,
+      completas: lista.filter((e) => e.total > 0 && e.pct === 100).length,
+      sinCargar: lista.filter((e) => e.total === 0).length,
+      totalEmpresas: empresas.length,
     };
   }, [filas, empresas]);
 
@@ -224,7 +233,7 @@ export function LibroClient({
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Completitud de carga a la DT</h2>
           <span className="text-xs text-muted-foreground">
-            {resumen.completas}/{resumen.conLibros} empresas al día
+            {resumen.completas}/{resumen.totalEmpresas} empresas al día · {resumen.sinCargar} sin cargar
           </span>
         </div>
         <div className="flex flex-col gap-1">
@@ -242,7 +251,7 @@ export function LibroClient({
           </div>
         </div>
         {resumen.lista.length ? (
-          <ul className="flex flex-col">
+          <ul className="flex max-h-96 flex-col overflow-y-auto">
             {resumen.lista.map((e) => (
               <li key={e.id}>
                 <button
@@ -251,20 +260,26 @@ export function LibroClient({
                   className={`flex w-full items-center gap-3 rounded px-1.5 py-2 text-left text-sm hover:bg-accent/60 ${e.id === empresaId ? "bg-accent/40" : ""}`}
                 >
                   <span className="flex-1 truncate">{e.nombre}</span>
-                  <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-muted sm:w-32">
-                    <div
-                      className={`h-full rounded-full ${e.pct === 100 ? "bg-emerald-500" : "bg-teal-500"}`}
-                      style={{ width: `${e.pct}%` }}
-                    />
-                  </div>
-                  <span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{e.subidos}/{e.total}</span>
-                  <span className="w-10 shrink-0 text-right text-xs font-medium tabular-nums">{e.pct}%</span>
+                  {e.total === 0 ? (
+                    <span className="shrink-0 text-xs italic text-muted-foreground">Sin cargar</span>
+                  ) : (
+                    <>
+                      <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-muted sm:w-32">
+                        <div
+                          className={`h-full rounded-full ${e.pct === 100 ? "bg-emerald-500" : "bg-teal-500"}`}
+                          style={{ width: `${e.pct}%` }}
+                        />
+                      </div>
+                      <span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{e.subidos}/{e.total}</span>
+                      <span className="w-10 shrink-0 text-right text-xs font-medium tabular-nums">{e.pct}%</span>
+                    </>
+                  )}
                 </button>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">Aún no hay libros cargados en el sistema.</p>
+          <p className="text-sm text-muted-foreground">No hay empresas con Previred cargadas.</p>
         )}
       </section>
 
