@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Download, Trash2, BookText, Search, ChevronsUpDown, Check, ListChecks } from "lucide-react";
+import { Download, Trash2, BookText, Search, ChevronsUpDown, Check, ListChecks, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -136,6 +136,13 @@ export function LibroClient({
   };
   const irAPendientes = () =>
     pendientesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  const empresaSel = empresas.find((e) => e.id === empresaId) ?? null;
+  const copiarRut = (rut: string) => {
+    navigator.clipboard?.writeText(rut)
+      .then(() => toast.success(`RUT ${rut} copiado`))
+      .catch(() => toast.error("No se pudo copiar el RUT."));
+  };
 
   const porPeriodo = useMemo(() => {
     const m = new Map<string, LibroRow>();
@@ -310,6 +317,16 @@ export function LibroClient({
         <label className="flex flex-1 min-w-[260px] flex-col gap-1 text-sm">
           <span className="font-medium text-muted-foreground">Empresa</span>
           <BuscadorEmpresa empresas={empresas} valor={empresaId} onChange={setEmpresaId} />
+          {empresaSel?.rut_empresa ? (
+            <button
+              type="button"
+              onClick={() => copiarRut(empresaSel.rut_empresa!)}
+              title="Copiar RUT"
+              className="flex items-center gap-1 self-start text-xs tabular-nums text-muted-foreground hover:text-foreground"
+            >
+              <Copy className="size-3" /> {empresaSel.rut_empresa}
+            </button>
+          ) : null}
         </label>
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium text-muted-foreground">Año</span>
