@@ -139,6 +139,33 @@ export function LibroClient({
     [porPeriodo, anio],
   );
 
+  // Completitud de carga a la DT: de los libros cargados de cada empresa,
+  // cuántos están marcados como subidos a la DT (estado subido_dt/declarado).
+  const resumen = useMemo(() => {
+    const porEmp = new Map<string, { total: number; subidos: number }>();
+    for (const f of filas) {
+      const e = porEmp.get(f.cliente_id) ?? { total: 0, subidos: 0 };
+      e.total++;
+      if (f.estado === "subido_dt" || f.estado === "declarado") e.subidos++;
+      porEmp.set(f.cliente_id, e);
+    }
+    const nombreDe = (id: string) => empresas.find((e) => e.id === id)?.razon_social ?? "— (empresa sin ficha)";
+    const lista = Array.from(porEmp.entries())
+      .map(([id, v]) => ({
+        id, nombre: nombreDe(id), total: v.total, subidos: v.subidos,
+        pct: v.total ? Math.round((v.subidos / v.total) * 100) : 0,
+      }))
+      .sort((a, b) => a.pct - b.pct || a.nombre.localeCompare(b.nombre));
+    const total = lista.reduce((s, e) => s + e.total, 0);
+    const subidos = lista.reduce((s, e) => s + e.subidos, 0);
+    return {
+      lista, total, subidos,
+      pct: total ? Math.round((subidos / total) * 100) : 0,
+      completas: lista.filter((e) => e.pct === 100).length,
+      conLibros: lista.length,
+    };
+  }, [filas, empresas]);
+
   function descargar(id: string) {
     startTransition(async () => {
       const r = await descargarLibro(id);
@@ -183,6 +210,54 @@ export function LibroClient({
           Error cargando datos: {errorCarga}
         </div>
       ) : null}
+
+      <section className="flex flex-col gap-3 rounded-lg border p-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Completitud de carga a la DT</h2>
+          <span className="text-xs text-muted-foreground">
+            {resumen.completas}/{resumen.conLibros} empresas al día
+          </span>
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              {resumen.subidos} de {resumen.total} libros subidos a la DT
+            </span>
+            <span className="font-semibold tabular-nums">{resumen.pct}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full transition-all ${resumen.pct === 100 ? "bg-emerald-500" : "bg-teal-500"}`}
+              style={{ width: `${resumen.pct}%` }}
+            />
+          </div>
+        </div>
+        {resumen.lista.length ? (
+          <ul className="flex flex-col">
+            {resumen.lista.map((e) => (
+              <li key={e.id}>
+                <button
+                  type="button"
+                  onClick={() => setEmpresaId(e.id)}
+                  className={`flex w-full items-center gap-3 rounded px-1.5 py-2 text-left text-sm hover:bg-accent/60 ${e.id === empresaId ? "bg-accent/40" : ""}`}
+                >
+                  <span className="flex-1 truncate">{e.nombre}</span>
+                  <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-muted sm:w-32">
+                    <div
+                      className={`h-full rounded-full ${e.pct === 100 ? "bg-emerald-500" : "bg-teal-500"}`}
+                      style={{ width: `${e.pct}%` }}
+                    />
+                  </div>
+                  <span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{e.subidos}/{e.total}</span>
+                  <span className="w-10 shrink-0 text-right text-xs font-medium tabular-nums">{e.pct}%</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">Aún no hay libros cargados en el sistema.</p>
+        )}
+      </section>
 
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-1 min-w-[260px] flex-col gap-1 text-sm">
