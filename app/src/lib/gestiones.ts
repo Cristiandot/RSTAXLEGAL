@@ -43,6 +43,7 @@ export const CANAL_LABEL: Record<string, string> = {
   correo: "Mail",
   wati: "Wati",
   telefono: "Teléfono",
+  agente: "Agente IA",
   otro: "Otro",
 };
 

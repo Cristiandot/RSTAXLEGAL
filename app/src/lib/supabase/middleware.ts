@@ -39,6 +39,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/solicitud") || // formulario público de clientes (tokenizado)
     pathname.startsWith("/bienvenida") || // onboarding inicial de clientes nuevos (tokenizado)
     pathname.startsWith("/datos-transferencia") || // datos bancarios de RS (copiar para pagar F29)
+    pathname.startsWith("/api/agent/") || // API del agente: exige Bearer AGENT_API_TOKEN (lib/agente)
     pathname === "/api/version"; // diagnóstico de deploy (solo SHA)
 
   if (!user && !esRutaPublica) {
