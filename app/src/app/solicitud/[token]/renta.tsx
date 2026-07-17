@@ -1,17 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Landmark, AlertTriangle, Info } from "lucide-react";
+import { Loader2, Landmark, Info } from "lucide-react";
 import { cargarRenta, type Renta } from "./reportes-actions";
 
-const NOMBRE_MES: Record<string, string> = {
-  "01":"enero","02":"febrero","03":"marzo","04":"abril","05":"mayo","06":"junio",
-  "07":"julio","08":"agosto","09":"septiembre","10":"octubre","11":"noviembre","12":"diciembre",
-};
 function clp(n: number): string {
   return (n < 0 ? "-$" : "$") + new Intl.NumberFormat("es-CL").format(Math.abs(Math.round(n)));
 }
-function mesDe(p: string) { const m = p.match(/-(\d{2})$/); return m ? NOMBRE_MES[m[1]] : p; }
 
 export function RentaProyectada({ token, anio = 2026 }: { token: string; anio?: number }) {
   const [d, setD] = useState<Renta | null>(null);
@@ -41,20 +36,6 @@ export function RentaProyectada({ token, anio = 2026 }: { token: string; anio?: 
 
   return (
     <div className="space-y-4">
-      {/* Alerta de F29 sin declarar */}
-      {d.f29_pendientes.length > 0 ? (
-        <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4">
-          <p className="flex items-center gap-2 font-medium text-red-800">
-            <AlertTriangle className="size-4 shrink-0" aria-hidden="true" />
-            {d.f29_pendientes.length} F29 sin declarar en {anio}
-          </p>
-          <p className="mt-1 text-sm text-red-700">
-            Períodos pendientes: {d.f29_pendientes.map(mesDe).join(", ")}. Regularizar
-            evita intereses, multas y pérdida del crédito de PPM contra la renta.
-          </p>
-        </div>
-      ) : null}
-
       {/* Renta proyectada */}
       <div className={card}>
         <div className="mb-3 flex items-center justify-between gap-2">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Search, CheckCircle2, AlertTriangle, Send } from "lucide-react";
@@ -20,6 +20,8 @@ import {
   enviarCorreoF29,
   enviarCorreoF29Pagado,
   guardarF29,
+  getObservadaF29,
+  marcarObservadaF29,
 } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +59,52 @@ const ESTADOS = [
   "Fondos en RS",
   "Pagado",
 ];
+
+/**
+ * Marca "Observada" del F29: único estado manual del semáforo del portal (el
+ * resto se deriva del ciclo). Se levanta o se quita a mano; pinta el mes en rojo
+ * en la vista del cliente. Autónomo: lee su estado al abrir y guarda al togglear.
+ */
+function ObservadaToggle({ clienteId, periodo }: { clienteId: string; periodo: string }) {
+  const [obs, setObs] = useState<boolean | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    let vivo = true;
+    void getObservadaF29(clienteId, periodo).then((v) => {
+      if (vivo) setObs(v);
+    });
+    return () => { vivo = false; };
+  }, [clienteId, periodo]);
+
+  async function toggle(v: boolean) {
+    setGuardando(true);
+    const r = await marcarObservadaF29(clienteId, periodo, v);
+    setGuardando(false);
+    if (r.ok) {
+      setObs(v);
+      toast.success(v ? "F29 marcado como observado por el SII" : "Observación quitada");
+    } else {
+      toast.error(r.error ?? "No se pudo guardar la observación.");
+    }
+  }
+
+  return (
+    <label className="flex items-center gap-2 text-sm">
+      <input
+        type="checkbox"
+        checked={obs ?? false}
+        disabled={obs === null || guardando}
+        onChange={(e) => toggle(e.target.checked)}
+        className="size-4 accent-red-600"
+      />
+      <span>
+        Observado por el SII{" "}
+        <span className="text-xs text-muted-foreground">(pinta el mes en rojo en el portal del cliente)</span>
+      </span>
+    </label>
+  );
+}
 
 /**
  * Celda de monto TOTAL: muestra el total (solo lectura, se edita en el modal) y,
@@ -297,6 +345,10 @@ export function F29Client({
       montoRetenciones: get("monto_retenciones"),
       montoOtros: get("monto_otros"),
       observaciones: get("observaciones"),
+      multa: get("multa"),
+      condonacion: get("condonacion"),
+      convenioFolio: get("convenio_folio"),
+      convenioMonto: get("convenio_monto"),
     };
   }
 
@@ -720,6 +772,68 @@ export function F29Client({
                   hasta 2 meses sin multas ni intereses, y explica cuánto pagaría
                   ahora. Se toma el IVA del detalle: no hay que escribir montos.
                 </span>
+              </div>
+              {/* Recargos por atraso y convenio de pago. Alimentan el detalle
+                  F29 que ve el cliente (la postergación de IVA es el check de
+                  arriba: lo postergable = IVA del desglose). */}
+              <div
+                key={`rec-${editando.ciclo_id}`}
+                className="col-span-2 grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/20 p-3"
+              >
+                <div className="col-span-2 text-xs font-semibold text-muted-foreground">
+                  Recargos y convenio — llena solo lo que aplique (se muestran al
+                  cliente cuando tienen monto).
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="multa">Multa e interés ($)</Label>
+                  <Input
+                    id="multa"
+                    name="multa"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="—"
+                    defaultValue={editando.multa == null ? "" : String(editando.multa)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="condonacion">Condonación ($)</Label>
+                  <Input
+                    id="condonacion"
+                    name="condonacion"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="—"
+                    defaultValue={editando.condonacion == null ? "" : String(editando.condonacion)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="convenio_monto">Monto en convenio ($)</Label>
+                  <Input
+                    id="convenio_monto"
+                    name="convenio_monto"
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="—"
+                    defaultValue={editando.convenio_monto == null ? "" : String(editando.convenio_monto)}
+                  />
+                </div>
+                <div className="col-span-2 flex flex-col gap-1.5">
+                  <Label htmlFor="convenio_folio">Convenio de pago N° (Tesorería)</Label>
+                  <Input
+                    id="convenio_folio"
+                    name="convenio_folio"
+                    placeholder="—"
+                    defaultValue={editando.convenio_folio ?? ""}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Si la deuda de este período quedó en un convenio de pago,
+                    escribe su N°: el cliente verá que este F29 está en convenio.
+                  </span>
+                </div>
+              </div>
+
+              <div className="col-span-2 mt-1 rounded-lg border border-red-200 bg-red-50/50 p-3">
+                <ObservadaToggle clienteId={editando.cliente_id} periodo={editando.periodo} />
               </div>
               </div>
 

@@ -9,6 +9,8 @@ import { GastosMenores } from "./gastos-menores";
 import { DatosEmpresa } from "./datos-empresa";
 import { EstadoResultado } from "./estado-resultado";
 import { Reportes } from "./reportes";
+import { ClasificarGastos } from "./clasificar";
+import { AlertasFinancieras } from "./alertas";
 import { RentaProyectada } from "./renta";
 import { Contabilidad } from "./contabilidad";
 import { RecursosHumanos } from "./rrhh";
@@ -33,6 +35,7 @@ export function PortalCliente({
   embedded?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("financiera");
+  const [anioFin, setAnioFin] = useState(2026);
   const claveTab = `rstl_portal_tab_${token}`;
 
   // Recordar la pestaña al refrescar (se lee tras montar para no romper la
@@ -54,7 +57,7 @@ export function PortalCliente({
   }
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: "financiera", label: "Financiera", icon: <PieChart className="size-4" /> },
+    { key: "financiera", label: "Financiero", icon: <PieChart className="size-4" /> },
     { key: "rrhh", label: "Recursos humanos", icon: <Users className="size-4" /> },
     { key: "remuneraciones", label: "Remuneraciones", icon: <Table2 className="size-4" /> },
   ];
@@ -98,9 +101,27 @@ export function PortalCliente({
 
       {tab === "financiera" ? (
         <div className="space-y-6">
-          <EstadoResultado token={token} />
-          <RentaProyectada token={token} />
-          <Reportes token={token} />
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm text-muted-foreground">Información del año</span>
+            <div className="inline-flex rounded-md bg-muted p-0.5">
+              {[2025, 2026].map((a) => (
+                <button
+                  key={a}
+                  onClick={() => setAnioFin(a)}
+                  className={`rounded px-3 py-1 text-sm font-medium transition ${
+                    anioFin === a ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+                  }`}
+                >
+                  {a}
+                </button>
+              ))}
+            </div>
+          </div>
+          <AlertasFinancieras token={token} anio={anioFin} />
+          <EstadoResultado token={token} anio={anioFin} />
+          <RentaProyectada token={token} anio={anioFin} />
+          <ClasificarGastos token={token} />
+          <Reportes token={token} anio={anioFin} />
           <Contabilidad token={token} />
           <GastosMenores token={token} empresa={empresa} />
         </div>

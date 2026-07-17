@@ -10,6 +10,28 @@ import {
   construirCorreoF29Pagado,
 } from "@/lib/f29-correo";
 
+/** Marca "Observada" del F29 (único estado manual del semáforo del portal). */
+export async function getObservadaF29(clienteId: string, periodo: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc("f29_observada_get", { p_cliente: clienteId, p_periodo: periodo });
+  return data === true;
+}
+
+export async function marcarObservadaF29(
+  clienteId: string,
+  periodo: string,
+  observada: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("f29_observada_set", {
+    p_cliente: clienteId,
+    p_periodo: periodo,
+    p_valor: observada,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export type GuardarF29Input = {
   cicloId: string;
   clienteId: string;
@@ -32,6 +54,11 @@ export type GuardarF29Input = {
   montoRetenciones: string | null;
   montoOtros: string | null;
   observaciones: string | null;
+  // Recargos por atraso y convenio de pago (la postergación de IVA es postergarIva).
+  multa: string | null;
+  condonacion: string | null;
+  convenioFolio: string | null;
+  convenioMonto: string | null;
 };
 
 /**
@@ -54,6 +81,15 @@ export async function guardarF29(
   const hoy = new Date().toISOString().slice(0, 10);
   const fechaPresentado = folio ? (input.fechaPresentado ?? hoy) : null;
 
+  // Tampoco se marca PAGADO un F29 sin folio: no se paga lo no declarado
+  // (decisión Cristian, 17-07-2026).
+  if (input.fechaPagoF29 && input.fechaPagoF29.trim() !== "" && !folio) {
+    return {
+      ok: false,
+      error: "No puedes marcar el F29 como pagado sin el folio del SII. Ingresa el folio primero.",
+    };
+  }
+
   const { error } = await supabase
     .from("ciclo_f29")
     .update({
@@ -74,6 +110,11 @@ export async function guardarF29(
       monto_retenciones: input.montoRetenciones,
       monto_otros: input.montoOtros,
       observaciones: input.observaciones,
+      // Recargos y convenio (la postergación de IVA la escribe postergar_iva de arriba).
+      multa: input.multa,
+      condonacion: input.condonacion,
+      convenio_folio: input.convenioFolio,
+      convenio_monto: input.convenioMonto,
     })
     .eq("id", input.cicloId);
 
@@ -224,12 +265,20 @@ export async function enviarCorreoF29Pagado(
   const { data: row, error: errRow } = await supabase
     .from("ciclo_f29")
     .select(
-      "cliente_id, periodo, monto_a_pagar, fecha_pago_f29, clientes(razon_social, correo_empresa)",
+      "cliente_id, periodo, monto_a_pagar, fecha_pago_f29, folio_f29, clientes(razon_social, correo_empresa)",
     )
     .eq("id", cicloId)
     .single();
   if (errRow || !row) {
     return { ok: false, error: errRow?.message ?? "Ciclo F29 no encontrado." };
+  }
+  // El folio es obligatorio para pagar: no se paga un F29 que no está declarado.
+  if (!row.folio_f29 || String(row.folio_f29).trim() === "") {
+    return {
+      ok: false,
+      error:
+        "No puedes marcar el F29 como pagado sin el folio del SII. Ingresa el folio primero: el F29 debe estar declarado para darlo por pagado.",
+    };
   }
   // Mismo resguardo que el aviso de F29: el comprobante no puede salir sin monto.
   if (row.monto_a_pagar === null || row.monto_a_pagar === undefined || String(row.monto_a_pagar) === "") {

@@ -29,8 +29,7 @@ function fmtPeriodo(v: string | null | undefined): string {
   return m ? `${NOMBRE_MES[m[2]] ?? m[2]} ${m[1]}` : v;
 }
 
-export function EstadoResultado({ token }: { token: string }) {
-  const [anio, setAnio] = useState(2026);
+export function EstadoResultado({ token, anio }: { token: string; anio: number }) {
   const [meses, setMeses] = useState<MesResultado[] | null>(null);
   const [corte, setCorte] = useState<CorteInfo | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -53,27 +52,15 @@ export function EstadoResultado({ token }: { token: string }) {
   const totRes = total("resultado");
   const margen = totIng ? Math.round((totRes / totIng) * 100) : 0;
   const faltaRemun = (meses ?? []).some((m) => !m.remun_cargada);
+  const hayHonorarios = (meses ?? []).some((m) => (Number(m.honorarios) || 0) > 0);
 
   return (
     <div className="card-soft rounded-xl bg-card p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <span className="font-heading text-lg font-semibold tracking-tight">
           <ReceiptText className="mr-1.5 inline size-5 align-middle text-[var(--brand-teal)]" aria-hidden="true" />
-          Estado de resultado
+          Estado de resultado {anio}
         </span>
-        <div className="inline-flex rounded-md bg-muted p-0.5">
-          {[2025, 2026].map((a) => (
-            <button
-              key={a}
-              onClick={() => setAnio(a)}
-              className={`rounded px-3 py-1 text-sm font-medium transition ${
-                anio === a ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
-              }`}
-            >
-              {a}
-            </button>
-          ))}
-        </div>
       </div>
 
       {corte ? (
@@ -110,13 +97,15 @@ export function EstadoResultado({ token }: { token: string }) {
           </div>
 
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[560px] text-right text-sm tabular-nums">
+            <table className="w-full min-w-[640px] text-right text-sm tabular-nums">
               <thead>
                 <tr className="border-b text-xs text-muted-foreground">
                   <th className="py-2 text-left font-medium">Mes</th>
                   <th className="py-2 font-medium">Ingresos</th>
                   <th className="py-2 font-medium">Serv. prof.</th>
                   <th className="py-2 font-medium">Insumos</th>
+                  <th className="py-2 font-medium">Otros</th>
+                  {hayHonorarios ? <th className="py-2 font-medium">Honorarios</th> : null}
                   <th className="py-2 font-medium">Remuner.</th>
                   <th className="py-2 font-medium">Resultado</th>
                   <th className="py-2 font-medium">Margen</th>
@@ -133,6 +122,10 @@ export function EstadoResultado({ token }: { token: string }) {
                       <td className="py-1.5">{clp(m.ingresos)}</td>
                       <td className="py-1.5 text-muted-foreground">{clp(m.servicios)}</td>
                       <td className="py-1.5 text-muted-foreground">{clp(m.insumos)}</td>
+                      <td className="py-1.5 text-muted-foreground">{clp(m.otros)}</td>
+                      {hayHonorarios ? (
+                        <td className="py-1.5 text-muted-foreground">{clp(m.honorarios)}</td>
+                      ) : null}
                       <td className="py-1.5 text-muted-foreground">
                         {m.remun_cargada ? clp(m.remuneraciones) : "—"}
                       </td>
@@ -152,8 +145,8 @@ export function EstadoResultado({ token }: { token: string }) {
               con información al {fmtFecha(corte?.generado)} (ventas y compras hasta{" "}
               {fmtPeriodo(corte?.compras_hasta)}, remuneraciones hasta{" "}
               {fmtPeriodo(corte?.remun_hasta)}). Giro exento: el IVA de las compras
-              se considera costo. No incluye depreciación, gastos financieros ni
-              provisiones.
+              se considera costo. No incluye depreciación, gastos financieros
+              {hayHonorarios ? "" : ", honorarios de terceros"} ni provisiones.
               {faltaRemun ? " Los meses con remuneraciones sin cargar muestran “—” y su resultado aún no las descuenta." : ""}
             </p>
           </div>

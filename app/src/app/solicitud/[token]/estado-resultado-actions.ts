@@ -5,8 +5,10 @@ import { createClient } from "@/lib/supabase/server";
 export type MesResultado = {
   periodo: string;
   ingresos: number;
-  insumos: number;
   servicios: number;
+  insumos: number;
+  otros: number;
+  honorarios: number;
   compras_total: number;
   remuneraciones: number;
   resultado: number;
@@ -17,6 +19,7 @@ export type CorteInfo = {
   generado: string | null;
   ventas_hasta: string | null;
   compras_hasta: string | null;
+  honorarios_hasta: string | null;
   remun_hasta: string | null;
 };
 

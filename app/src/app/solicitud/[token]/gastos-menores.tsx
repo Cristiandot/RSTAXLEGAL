@@ -22,9 +22,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-const selectCls =
-  "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
 export function GastosMenores({
   token,
   empresa,
@@ -53,7 +50,6 @@ export function GastosMenores({
   }, [anio, recargar]);
 
   // formulario
-  const [tipo, setTipo] = useState("compra");
   const [fecha, setFecha] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [monto, setMonto] = useState("");
@@ -63,7 +59,7 @@ export function GastosMenores({
   function agregar() {
     startAccion(async () => {
       const fd = new FormData();
-      fd.set("tipo", tipo);
+      fd.set("tipo", "compra");
       fd.set("fecha", fecha);
       fd.set("descripcion", descripcion);
       fd.set("monto", monto);
@@ -96,41 +92,24 @@ export function GastosMenores({
     });
   }
 
-  const totalCompras = gastos
-    .filter((g) => g.tipo === "compra")
-    .reduce((a, g) => a + g.monto, 0);
-  const totalVentas = gastos
-    .filter((g) => g.tipo === "venta")
-    .reduce((a, g) => a + g.monto, 0);
+  const compras = gastos.filter((g) => g.tipo === "compra");
+  const totalCompras = compras.reduce((a, g) => a + g.monto, 0);
 
   return (
     <div className="space-y-4">
       <Card className="card-soft border-transparent">
         <CardHeader>
           <CardTitle className="text-base">
-            Gastos e ingresos menores · {empresa.razon_social}
+            Gastos menores · {empresa.razon_social}
           </CardTitle>
           <CardDescription>
-            Registra acá las compras y ventas con boleta que no pasan por las
-            facturas de la empresa — gastos menores, compras de bolsillo,
-            ventas informales con boleta. No se declaran mes a mes en el SII,
-            pero el equipo las usa en tu Operación Renta anual.
+            Registra acá las compras con boleta que no pasan por las facturas de
+            la empresa — gastos menores, compras de bolsillo. No se declaran mes a
+            mes en el SII, pero el equipo las usa en tu Operación Renta anual.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="gm-tipo">Tipo de movimiento</Label>
-              <select
-                id="gm-tipo"
-                className={selectCls}
-                value={tipo}
-                onChange={(e) => setTipo(e.target.value)}
-              >
-                <option value="compra">Compra / gasto (con boleta)</option>
-                <option value="venta">Venta / ingreso (con boleta)</option>
-              </select>
-            </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="gm-fecha">Fecha</Label>
               <Input
@@ -144,7 +123,7 @@ export function GastosMenores({
               <Label htmlFor="gm-desc">¿Qué fue?</Label>
               <Input
                 id="gm-desc"
-                placeholder="Ej.: materiales de aseo, bencina, venta mostrador…"
+                placeholder="Ej.: materiales de aseo, bencina, café oficina…"
                 value={descripcion}
                 onChange={(e) => setDescripcion(e.target.value)}
               />
@@ -209,8 +188,7 @@ export function GastosMenores({
             </div>
           </div>
           <CardDescription>
-            Gastos: <strong>{formatMonto(totalCompras)}</strong> · Ingresos:{" "}
-            <strong>{formatMonto(totalVentas)}</strong>
+            Gastos: <strong>{formatMonto(totalCompras)}</strong>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -218,27 +196,18 @@ export function GastosMenores({
             <p className="py-4 text-center text-sm text-muted-foreground">
               Cargando…
             </p>
-          ) : gastos.length === 0 ? (
+          ) : compras.length === 0 ? (
             <p className="py-4 text-center text-sm text-muted-foreground italic">
-              Aún no registras movimientos este año.
+              Aún no registras gastos este año.
             </p>
           ) : (
             <div className="max-h-72 space-y-1 overflow-y-auto">
-              {gastos.map((g) => (
+              {compras.map((g) => (
                 <div
                   key={g.id}
                   className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2.5 py-1.5 text-sm"
                 >
                   <div className="flex min-w-0 items-center gap-2">
-                    <span
-                      className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-semibold ${
-                        g.tipo === "compra"
-                          ? "border-amber-200 bg-amber-50 text-amber-700"
-                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      }`}
-                    >
-                      {g.tipo === "compra" ? "Gasto" : "Ingreso"}
-                    </span>
                     <span className="shrink-0 text-xs text-muted-foreground">
                       {formatFecha(g.fecha)}
                     </span>

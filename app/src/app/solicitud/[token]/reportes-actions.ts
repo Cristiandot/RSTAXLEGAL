@@ -4,19 +4,25 @@ import { createClient } from "@/lib/supabase/server";
 
 export type Proveedor = { rut?: string; nombre: string; monto: number; docs: number };
 export type RemMes = { periodo: string; costo: number; dotacion: number };
+export type BoletaMes = { periodo: string; n: number; monto: number; ticket: number };
 
 export type Reportes = {
   anio: number;
   estructura: {
     ingresos: number;
-    insumos: number;
     servicios: number;
+    insumos: number;
+    otros: number;
+    honorarios: number;
     remuneraciones: number;
   };
   iva_credito_no_recuperable: number;
   total_compras: number;
   top_proveedores: Proveedor[];
   servicios_profesionales: Proveedor[];
+  sin_clasificar: Proveedor[];
+  honorarios_recibidos: Proveedor[];
+  boletas_mensual: BoletaMes[];
   remuneraciones_mensual: RemMes[];
 };
 

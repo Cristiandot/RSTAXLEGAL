@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   TrendingUp, ShoppingCart, Coins, ReceiptText, Truck, Store,
@@ -10,17 +10,9 @@ import {
   type ContabilidadInfo, type MesDetalle,
 } from "./portal-actions";
 import { BarrasVentasCompras, BarrasHorizontales } from "./mini-charts";
-import { DocumentosSolicitar, type TipoDoc } from "./documentos";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-const DOCS_CONTAB: TipoDoc[] = [
-  { tipo: "Balance de 8 columnas", desc: "Sumas, saldos, inventario y resultado por cuenta." },
-  { tipo: "Libro Mayor", desc: "Movimientos y saldo de cada cuenta del período." },
-  { tipo: "Libro Diario", desc: "Asientos contables en orden cronológico." },
-  { tipo: "Estado de resultados", desc: "Ingresos, costos y gastos del período." },
-];
 
 const MESES = [
   "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic",
@@ -96,15 +88,6 @@ export function Contabilidad({ token }: { token: string }) {
     };
   }, [token, mesSel]);
 
-  const periodos = useMemo(() => {
-    const base = [{ value: `${anio}`, label: `Acumulado ${anio}` }];
-    const meses = (info?.meses ?? []).map((m) => ({
-      value: m.periodo,
-      label: `${mesCorto(m.periodo)} ${anio}`,
-    }));
-    return [...base, ...meses.reverse()];
-  }, [info, anio]);
-
   const totales = info?.totales;
   const esMes = mesSel !== "";
   const mesData = (info?.meses ?? []).find((m) => m.periodo === mesSel) ?? null;
@@ -158,15 +141,12 @@ export function Contabilidad({ token }: { token: string }) {
       {cargando ? (
         <p className="py-10 text-center text-sm text-muted-foreground">Cargando…</p>
       ) : !info?.habilitado ? (
-        <>
-          <Card className="card-soft border-transparent">
-            <CardContent className="pt-5 text-sm text-muted-foreground">
-              El detalle contable en línea aún no está habilitado para tu empresa. Igualmente
-              puedes solicitar tus documentos contables aquí abajo y el equipo te los preparará.
-            </CardContent>
-          </Card>
-          <DocumentosSolicitar token={token} area="contabilidad" titulo="Documentos contables" docs={DOCS_CONTAB} periodos={[{ value: `${anio}`, label: `Acumulado ${anio}` }]} />
-        </>
+        <Card className="card-soft border-transparent">
+          <CardContent className="pt-5 text-sm text-muted-foreground">
+            El detalle contable en línea aún no está habilitado para tu empresa. Si necesitas tus
+            documentos contables (balance, libro mayor, etc.), escríbenos y el equipo te los prepara.
+          </CardContent>
+        </Card>
       ) : (
         <>
           {/* Vista activa: año completo (general) o mes seleccionado */}
@@ -263,8 +243,6 @@ export function Contabilidad({ token }: { token: string }) {
               </CardContent>
             </Card>
           </div>
-
-          <DocumentosSolicitar token={token} area="contabilidad" titulo="Documentos contables" docs={DOCS_CONTAB} periodos={periodos} />
         </>
       )}
     </div>

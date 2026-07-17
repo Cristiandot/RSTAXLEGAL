@@ -107,6 +107,12 @@ export type F29Row = {
   monto_otros: number | string | null;
   observaciones: string | null;
   grupo_codigo: string | null; // código del grupo (A.1, B.2, C.10…) para el orden por prioridad
+  // Recargos por atraso y convenio de pago (captura interna; alimenta el detalle
+  // F29 del cliente). La postergación de IVA es el booleano postergar_iva de arriba.
+  multa: number | string | null; // interés y multa por presentación/pago fuera de plazo
+  condonacion: number | string | null; // condonación de recargos otorgada
+  convenio_folio: string | null; // N° de convenio de pago (Tesorería) que cubre el período
+  convenio_monto: number | string | null; // monto de este F29 incluido en el convenio
 };
 
 /** Fila de `v_comunicacion_mensual` (resumen mensual de pagos por empresa). */
@@ -203,7 +209,7 @@ export function claseEstado(estado: string): string {
     case "Conciliado":
     case "Enviado":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "Cerrado":
+    case "Declarado":
     case "Guardado y enviado":
       return "border-sky-200 bg-sky-50 text-sky-700";
     case "Declarado":
