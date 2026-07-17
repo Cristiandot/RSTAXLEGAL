@@ -10,6 +10,7 @@ import { SelectorPeriodo } from "@/components/selector-periodo";
 import { ClaveCell } from "@/components/credencial-celdas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
@@ -107,6 +108,7 @@ type Liquidacion = {
   dias_trabajados: number | null;
   dias_vacaciones: number | null;
   dias_licencia: number | null;
+  observaciones: string | null;
   detalle: Record<string, unknown> | null;
 };
 type Novedad = {
@@ -555,6 +557,7 @@ function LiquidacionDialog({
     String(novedades.find((n) => n.tipo === "dias_pagados")?.cantidad ?? ""),
   );
   const [kameLiquido, setKameLiquido] = useState(String(liquidacion?.kame_liquido ?? ""));
+  const [obs, setObs] = useState(liquidacion?.observaciones ?? "");
   const [resultado, setResultado] = useState<Record<string, unknown> | null>(
     (liquidacion?.detalle as Record<string, unknown> | null) ?? null,
   );
@@ -573,6 +576,7 @@ function LiquidacionDialog({
         kameLiquido: kameLiquido === "" ? null : Number(kameLiquido),
         horasNormales: modalidad === "hora" ? Number(horasNormales) || 0 : 0,
         diasPagados: modalidad === "dia" ? Number(diasPagados) || 0 : 0,
+        observaciones: obs.trim() || null,
       });
       if (res.ok) {
         setResultado((res.detalle as Record<string, unknown>) ?? null);
@@ -617,6 +621,18 @@ function LiquidacionDialog({
               </div>
             </div>
             <p className="text-xs text-muted-foreground">Días pagados = 30 − licencia (la cubre el subsidio). Las vacaciones se pagan, no descuentan.</p>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="obs">Nota al pie (opcional)</Label>
+              <Textarea
+                id="obs"
+                rows={2}
+                value={obs}
+                onChange={(e) => setObs(e.target.value)}
+                placeholder="Ej.: Días 5 y 6: vacaciones. Días 3 y 4: ausencias sin licencia médica."
+              />
+              <p className="text-xs text-muted-foreground">Se imprime en un recuadro al pie del PDF de la liquidación.</p>
+            </div>
 
             {modalidad === "hora" ? (
               <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-2">

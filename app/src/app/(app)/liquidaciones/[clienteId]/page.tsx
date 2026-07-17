@@ -33,7 +33,7 @@ export default async function ClienteLiquidacionPage({
       .order("orden"),
     supabase
       .from("liquidacion")
-      .select("trabajador_id, liquido, total_haberes, total_descuentos, estado, kame_liquido, kame_cuadra, calculado_at, dias_trabajados, dias_vacaciones, dias_licencia, detalle")
+      .select("trabajador_id, liquido, total_haberes, total_descuentos, estado, kame_liquido, kame_cuadra, calculado_at, dias_trabajados, dias_vacaciones, dias_licencia, observaciones, detalle")
       .eq("cliente_id", clienteId)
       .eq("periodo", periodo),
     supabase.from("indicadores_previred").select("periodo").eq("periodo", periodo).maybeSingle(),

@@ -32,6 +32,8 @@ export type DatosLiquidacionPdf = {
   alerta?: string;
   /** Etiqueta de la línea de sueldo (modalidad día/hora): ej. "SUELDO BASE 77 HORAS × $3,175.56". */
   sueldoLinea?: string;
+  /** Nota libre que se imprime en un recuadro al pie (ej.: detalle de días de vacaciones/ausencias). */
+  nota?: string | null;
 };
 
 const NEG = rgb(0, 0, 0);
@@ -141,6 +143,38 @@ function dibujar(page: PDFPage, font: PDFFont, bold: PDFFont, d: DatosLiquidacio
   // Monto en palabras
   const son = "SON: " + montoEnPalabras(r.liquido).toUpperCase();
   text(son, L, y, 9, bold); y -= 20;
+
+  // Nota / observaciones (recuadro al pie) — texto libre con ajuste de línea.
+  if (d.nota && d.nota.trim()) {
+    const size = 8.5;
+    const lineH = 11;
+    const maxW = Rval - L - 16; // ancho interior del recuadro
+    const wrap = (txt: string): string[] => {
+      const out: string[] = [];
+      for (const par of txt.replace(/\r/g, "").split("\n")) {
+        if (par.trim() === "") { out.push(""); continue; }
+        let ln = "";
+        for (const w of par.split(/\s+/)) {
+          const t = ln ? ln + " " + w : w;
+          if (font.widthOfTextAtSize(t, size) > maxW && ln) { out.push(ln); ln = w; }
+          else ln = t;
+        }
+        out.push(ln);
+      }
+      return out;
+    };
+    const lineas = wrap(d.nota.trim());
+    const boxH = 12 + lineH * (lineas.length + 1); // +1 por la etiqueta "NOTA:"
+    const top = y + 6;
+    page.drawRectangle({
+      x: L, y: top - boxH, width: Rval - L, height: boxH,
+      borderColor: NEG, borderWidth: 0.7, color: rgb(0.96, 0.96, 0.96),
+    });
+    let yy = top - 12;
+    text("NOTA:", L + 8, yy, size, bold); yy -= lineH;
+    for (const ln of lineas) { text(ln, L + 8, yy, size); yy -= lineH; }
+    y = top - boxH - 14;
+  }
 
   // Leyenda
   text("RECIBI CONFORME EL ALCANCE LIQUIDO DE LA PRESENTE LIQUIDACION, NO TENIENDO CARGO O COBRO ALGUNO", L, y, 8); y -= 11;

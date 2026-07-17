@@ -197,7 +197,7 @@ export async function calcularYGuardarLiquidacion(
   clienteId: string,
   trabajadorId: string,
   periodo: string,
-  opts: { diasTrabajados?: number; diasDescanso?: number; diasVacaciones?: number; diasLicencia?: number; kameLiquido?: number | null },
+  opts: { diasTrabajados?: number; diasDescanso?: number; diasVacaciones?: number; diasLicencia?: number; kameLiquido?: number | null; observaciones?: string | null },
 ): Promise<Resp & { liquido?: number; detalle?: ReturnType<typeof calcularLiquidacion> }> {
   const supabase = await createClient();
   const usuario = await getUsuarioActual().catch(() => null);
@@ -262,6 +262,7 @@ export async function calcularYGuardarLiquidacion(
     dias_trabajados: opts.diasTrabajados ?? 30,
     dias_vacaciones: opts.diasVacaciones ?? 0,
     dias_licencia: opts.diasLicencia ?? 0,
+    observaciones: opts.observaciones ?? null,
     total_imponible: r.totalImponible,
     total_no_imponible: r.totalNoImponible,
     total_haberes: r.totalHaberes,
@@ -314,6 +315,8 @@ export async function guardarLiquidacionDetalle(
     horasNormales?: number;
     /** Modalidad por día: días a pago del mes. */
     diasPagados?: number;
+    /** Nota libre para el pie del PDF (detalle de días de vacaciones/ausencias, etc.). */
+    observaciones?: string | null;
   },
 ): Promise<Resp & { liquido?: number; detalle?: ReturnType<typeof calcularLiquidacion> }> {
   const supabase = await createClient();
@@ -359,6 +362,7 @@ export async function guardarLiquidacionDetalle(
     diasVacaciones: p.diasVacaciones,
     diasLicencia: p.diasLicencia,
     kameLiquido: p.kameLiquido,
+    observaciones: p.observaciones,
   });
 }
 
@@ -389,7 +393,7 @@ export async function descargarLiquidaciones(
   const [cliRes, indRes, liqRes, concRes, cpRes] = await Promise.all([
     supabase.from("clientes").select("razon_social, rut_empresa, domicilio").eq("id", clienteId).maybeSingle(),
     supabase.from("indicadores_previred").select(COLS_IND).eq("periodo", periodo).maybeSingle(),
-    supabase.from("liquidacion").select("trabajador_id, dias_trabajados, dias_vacaciones, dias_licencia").eq("cliente_id", clienteId).eq("periodo", periodo),
+    supabase.from("liquidacion").select("trabajador_id, dias_trabajados, dias_vacaciones, dias_licencia, observaciones").eq("cliente_id", clienteId).eq("periodo", periodo),
     supabase.from("concepto_remuneracion").select("id, naturaleza, proporcional, tributable, nombre").eq("cliente_id", clienteId),
     supabase.from("concepto_periodo").select("concepto_id, considerado").eq("cliente_id", clienteId).eq("periodo", periodo),
   ]);
@@ -400,7 +404,12 @@ export async function descargarLiquidaciones(
   const diasMap = new Map(
     (liqRes.data ?? []).map((l) => [
       l.trabajador_id,
-      { trab: (l.dias_trabajados as number) ?? 30, vac: (l.dias_vacaciones as number) ?? 0, lic: (l.dias_licencia as number) ?? 0 },
+      {
+        trab: (l.dias_trabajados as number) ?? 30,
+        vac: (l.dias_vacaciones as number) ?? 0,
+        lic: (l.dias_licencia as number) ?? 0,
+        nota: (l.observaciones as string | null) ?? null,
+      },
     ]),
   );
   const ids = trabajadorId ? [trabajadorId] : (liqRes.data ?? []).map((l) => l.trabajador_id);
@@ -423,7 +432,7 @@ export async function descargarLiquidaciones(
     .sort((a, b) => String(a.apellidos).localeCompare(String(b.apellidos)))
     .map((t) => {
       const novs = (novRes.data ?? []).filter((n) => n.trabajador_id === t.id) as NovedadRow[];
-      const dias = diasMap.get(t.id) ?? { trab: 30, vac: 0, lic: 0 };
+      const dias = diasMap.get(t.id) ?? { trab: 30, vac: 0, lic: 0, nota: null };
       const entrada = armarEntrada({
         ind: indRes.data as IndicadoresRow,
         cliente: cliRes.data as ClienteRow,
@@ -475,6 +484,7 @@ export async function descargarLiquidaciones(
         sueldoBase: entrada.sueldoBase,
         r: calcularLiquidacion(entrada),
         sueldoLinea,
+        nota: dias.nota ?? undefined,
         alerta:
           entrada.diasTrabajados === 0
             ? modalidad === "hora"
