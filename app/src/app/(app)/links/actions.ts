@@ -58,13 +58,14 @@ export async function activarPortalGrupo(
   });
   if (e1) return { ok: false, error: e1.message };
 
-  // Token interno del grupo (link sin PIN) si aún no tiene.
-  if (!g.form_token) {
-    await supabase
-      .from("grupos_cliente")
-      .update({ form_token: randomBytes(16).toString("hex") })
-      .eq("id", grupoId);
-  }
+  // Guarda el PIN visible para la oficina + token interno del grupo si falta.
+  await supabase
+    .from("grupos_cliente")
+    .update({
+      portal_pin_visible: pin,
+      ...(g.form_token ? {} : { form_token: randomBytes(16).toString("hex") }),
+    })
+    .eq("id", grupoId);
 
   // Token por empresa (infraestructura del portal): genera el faltante.
   const { data: emps } = await supabase
@@ -105,6 +106,7 @@ export async function regenerarPinGrupo(
     p_pin: pin,
   });
   if (error) return { ok: false, error: error.message };
+  await supabase.from("grupos_cliente").update({ portal_pin_visible: pin }).eq("id", grupoId);
   revalidatePath("/links");
   return { ok: true, pin };
 }
