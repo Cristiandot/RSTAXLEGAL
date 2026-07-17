@@ -45,12 +45,17 @@ export async function guardarF29(
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
 
+  // Presentado/declarado ante el SII se ata al pago: si aún no había fecha de
+  // presentación pero se guarda una fecha de pago del F29, esa fecha queda
+  // también como presentación (criterio Cristian 17-07-2026).
+  const fechaPresentado = input.fechaPresentado ?? input.fechaPagoF29;
+
   const { error } = await supabase
     .from("ciclo_f29")
     .update({
       responsable_id: input.responsableId,
       fecha_f29_armado: input.fechaArmado,
-      fecha_f29_presentado: input.fechaPresentado,
+      fecha_f29_presentado: fechaPresentado,
       monto_a_pagar: input.monto,
       ppm: input.ppm,
       folio_f29: input.folio,
@@ -103,7 +108,7 @@ export async function enviarCorreoF29(
   const { data: row, error: errRow } = await supabase
     .from("v_checklist_f29")
     .select(
-      "cliente_id, razon_social, periodo, monto_a_pagar, ppm, pago_por, plazo_f29, correo_empresa, monto_iva, imp_unico, monto_retenciones, monto_otros, postergacion_monto, comentario_correo, fecha_f29_presentado",
+      "cliente_id, razon_social, periodo, monto_a_pagar, ppm, pago_por, plazo_f29, correo_empresa, monto_iva, imp_unico, monto_retenciones, monto_otros, postergacion_monto, comentario_correo",
     )
     .eq("ciclo_id", cicloId)
     .single();
@@ -178,16 +183,14 @@ export async function enviarCorreoF29(
   });
   if (!res.ok) return { ok: false, error: res.error };
 
-  // Enviar el aviso deja el F29 como «Guardado y enviado»: se estampa la fecha
-  // de envío y, si aún no estaba, la de presentación (la contadora ya presentó
-  // el F29 ante el SII antes de mandar el aviso). El estado lo recalcula la vista.
-  const ahora = new Date().toISOString();
+  // Enviar el aviso deja el F29 como «Guardado y enviado»: solo se estampa la
+  // fecha de envío. NO se marca como presentado/declarado ante el SII —eso se
+  // estampa recién cuando el F29 queda pagado (criterio Cristian 17-07-2026)—.
+  // El estado lo recalcula la vista.
   await supabase
     .from("ciclo_f29")
     .update({
-      fecha_correo_f29_enviado: ahora,
-      fecha_f29_presentado:
-        (row.fecha_f29_presentado as string | null) ?? ahora.slice(0, 10),
+      fecha_correo_f29_enviado: new Date().toISOString(),
     })
     .eq("id", cicloId);
 
@@ -217,7 +220,7 @@ export async function enviarCorreoF29Pagado(
   const { data: row, error: errRow } = await supabase
     .from("ciclo_f29")
     .select(
-      "cliente_id, periodo, monto_a_pagar, fecha_pago_f29, clientes(razon_social, correo_empresa)",
+      "cliente_id, periodo, monto_a_pagar, fecha_pago_f29, fecha_f29_presentado, clientes(razon_social, correo_empresa)",
     )
     .eq("id", cicloId)
     .single();
@@ -273,11 +276,16 @@ export async function enviarCorreoF29Pagado(
   });
   if (!res.ok) return { ok: false, error: res.error };
 
+  // El F29 queda pagado: recién acá se marca como presentado/declarado ante el
+  // SII (criterio Cristian 17-07-2026). Si ya traía fecha de presentación, se
+  // conserva; si no, se estampa la del pago.
   await supabase
     .from("ciclo_f29")
     .update({
       numero_operacion: numOp,
       fecha_pago_f29: fechaPago,
+      fecha_f29_presentado:
+        (row.fecha_f29_presentado as string | null) ?? fechaPago,
       fecha_correo_pago_enviado: new Date().toISOString(),
     })
     .eq("id", cicloId);

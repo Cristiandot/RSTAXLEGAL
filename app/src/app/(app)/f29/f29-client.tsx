@@ -204,9 +204,19 @@ export function F29Client({
       if (respF && c.responsable !== respF) return false;
       return true;
     });
-    if (!orden) return out;
+    // Orden por defecto = prioridad por código de grupo (A.1, B.2, C.10…),
+    // natural gracias a la collation numérica, con la razón social como
+    // desempate. Los clientes sin grupo quedan al final.
+    if (!orden) {
+      return [...out].sort(
+        (a, b) =>
+          comparar(a.grupo_codigo, b.grupo_codigo, "asc") ||
+          comparar(a.razon_social, b.razon_social, "asc"),
+      );
+    }
     const valor = (c: F29Row): unknown => {
       switch (orden.col) {
+        case "grupo": return c.grupo_codigo;
         case "cliente": return c.razon_social;
         case "estado": return c.estado;
         case "responsable": return c.responsable;
@@ -265,7 +275,8 @@ export function F29Client({
       clienteId: ciclo.cliente_id,
       responsableId: get("responsable"),
       // fecha_f29_armado / fecha_f29_presentado ya no se gestionan a mano en la
-      // UI: la presentación la estampa el envío del aviso (paso 1). Se conservan.
+      // UI: la presentación/declaración se estampa al pagar el F29 (paso 3),
+      // nunca al enviar el aviso. Se conserva el valor histórico.
       fechaArmado: ciclo.fecha_f29_armado,
       fechaPresentado: ciclo.fecha_f29_presentado,
       monto: get("monto"),
@@ -741,7 +752,7 @@ export function F29Client({
                     ? "Guardando y enviando aviso…"
                     : editando.fecha_correo_f29_enviado
                       ? `Guardado y enviado el ${formatFecha(editando.fecha_correo_f29_enviado.slice(0, 10))}.`
-                      : "Guarda el formulario, marca el F29 como presentado y envía al cliente el aviso (desglose, monto y plazo). El F29 pasa a «Guardado y enviado» y el correo se guarda en su ficha."}
+                      : "Guarda el formulario y envía al cliente el aviso (desglose, monto y plazo). El F29 pasa a «Guardado y enviado» —no se marca como declarado ante el SII, eso ocurre al pagar— y el correo se guarda en su ficha."}
                 </span>
               </div>
 

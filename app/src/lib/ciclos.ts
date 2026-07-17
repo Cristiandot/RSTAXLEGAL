@@ -105,6 +105,7 @@ export type F29Row = {
   monto_retenciones: number | string | null;
   monto_otros: number | string | null;
   observaciones: string | null;
+  grupo_codigo: string | null; // código del grupo (A.1, B.2, C.10…) para el orden por prioridad
 };
 
 /** Fila de `v_comunicacion_mensual` (resumen mensual de pagos por empresa). */
