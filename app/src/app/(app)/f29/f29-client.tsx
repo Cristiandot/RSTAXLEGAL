@@ -469,7 +469,7 @@ export function F29Client({
         <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[220px]">Cliente</ThSort>
+              <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[260px]">Cliente</ThSort>
               <TableHead>RUT</TableHead>
               <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
               <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
@@ -496,12 +496,19 @@ export function F29Client({
                   className="cursor-pointer"
                 >
                   <TableCell className="font-medium">
-                    <span
-                      className="block max-w-[220px] truncate"
-                      title={c.razon_social}
-                    >
-                      {c.razon_social}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {c.grupo_codigo && (
+                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-muted-foreground">
+                          {c.grupo_codigo}
+                        </span>
+                      )}
+                      <span
+                        className="min-w-0 truncate"
+                        title={c.razon_social}
+                      >
+                        {c.razon_social}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
