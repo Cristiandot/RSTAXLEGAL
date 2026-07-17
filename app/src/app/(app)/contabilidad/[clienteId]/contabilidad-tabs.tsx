@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-type TabKey = "general" | "rcv" | "balance" | "documentos";
+type TabKey = "general" | "rcv" | "balance" | "libro-mayor" | "documentos";
 
 const TABS: { key: TabKey; label: string; ruta: (id: string) => string }[] = [
   { key: "general", label: "General", ruta: (id) => `/contabilidad/${id}` },
@@ -11,6 +11,11 @@ const TABS: { key: TabKey; label: string; ruta: (id: string) => string }[] = [
     key: "balance",
     label: "Contabilidad y Balance",
     ruta: (id) => `/contabilidad/${id}/balance`,
+  },
+  {
+    key: "libro-mayor",
+    label: "Libro Mayor",
+    ruta: (id) => `/contabilidad/${id}/libro-mayor`,
   },
   {
     key: "documentos",

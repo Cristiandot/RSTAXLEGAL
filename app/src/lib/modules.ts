@@ -28,6 +28,7 @@ import {
   Scale,
   Send,
   Inbox,
+  Library,
   type LucideIcon,
 } from "lucide-react";
 
@@ -237,6 +238,15 @@ export const MODULOS: SeccionModulos[] = [
   {
     seccion: "Gestiones — Contabilidad",
     modulos: [
+      {
+        key: "libro-mayor",
+        label: "Libro Mayor",
+        descripcion:
+          "Libro Mayor anual importado desde KAME por empresa: detalle de movimientos, resumen por cuenta y cuadratura. Estado por cliente (cargado / sin información).",
+        href: "/contabilidad/libro-mayor",
+        icon: Library,
+        estado: "activo",
+      },
       {
         key: "documentos",
         label: "Solicitudes de documentos",
