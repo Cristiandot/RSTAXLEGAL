@@ -28,6 +28,8 @@ export type FilaLibroMayor = {
   totalDebe: number;
   totalHaber: number;
   actualizado: string | null;
+  preguntasTotal: number;
+  preguntasPendientes: number;
 };
 
 const selectCls =
@@ -100,6 +102,8 @@ export function LibroMayorGrid({
       if (estadoF === "sin_info" && f.cargado) return false;
       if (estadoF === "descuadre" && !(f.cargado && f.cuadra === false))
         return false;
+      if (estadoF === "revision" && !(f.cargado && f.preguntasPendientes > 0))
+        return false;
       return true;
     });
   }, [filas, buscar, estadoF, servicioF]);
@@ -118,6 +122,10 @@ export function LibroMayorGrid({
       label: "Con descuadre",
       valor: universo.filter((f) => f.cargado && f.cuadra === false).length,
       tono: "alerta",
+    },
+    {
+      label: "Revisión pendiente",
+      valor: universo.filter((f) => f.cargado && f.preguntasPendientes > 0).length,
     },
   ];
 
@@ -148,7 +156,7 @@ export function LibroMayorGrid({
         </select>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {resumen.map((r) => (
           <ResumenCard key={r.label} label={r.label} valor={r.valor} tono={r.tono} />
         ))}
@@ -184,6 +192,7 @@ export function LibroMayorGrid({
           <option value="cargado">Cargadas</option>
           <option value="sin_info">Sin información</option>
           <option value="descuadre">Con descuadre</option>
+          <option value="revision">Revisión pendiente</option>
         </select>
         <span className="ml-auto text-sm text-muted-foreground">
           {filtradas.length} de {universo.length} empresas
@@ -203,6 +212,7 @@ export function LibroMayorGrid({
               <TableHead className="w-[300px]">Cliente</TableHead>
               <TableHead>RUT</TableHead>
               <TableHead>Estado {anio}</TableHead>
+              <TableHead>Revisión</TableHead>
               <TableHead className="text-right">Cuentas</TableHead>
               <TableHead className="text-right">Movimientos</TableHead>
               <TableHead className="text-right">Total Debe</TableHead>
@@ -212,7 +222,7 @@ export function LibroMayorGrid({
           <TableBody>
             {filtradas.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
                   Sin resultados para estos filtros.
                 </TableCell>
               </TableRow>
@@ -238,6 +248,25 @@ export function LibroMayorGrid({
                   <TableCell>{f.rutEmpresa ?? "—"}</TableCell>
                   <TableCell>
                     <EstadoCelda f={f} />
+                  </TableCell>
+                  <TableCell>
+                    {!f.cargado || f.preguntasTotal === 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : f.preguntasPendientes > 0 ? (
+                      <Badge
+                        variant="outline"
+                        className="border-amber-200 bg-amber-50 text-amber-700"
+                      >
+                        {f.preguntasPendientes} pendiente{f.preguntasPendientes > 1 ? "s" : ""}
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-200 bg-emerald-50 text-emerald-700"
+                      >
+                        ✓ Revisada
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {f.cargado ? f.nCuentas : "—"}

@@ -137,6 +137,89 @@ function parseLibroMayor(buf) {
 
 const fmt = (n) => Math.round(n).toLocaleString("es-CL");
 
+/**
+ * Genera las preguntas de revisión para el contador según los hallazgos del
+ * propio libro. Todas las de tipo desplegable incluyen SIEMPRE "No aplica".
+ */
+function generarPreguntas(L) {
+  const P = [];
+  const push = (clave, pregunta, detalle, opciones) =>
+    P.push({ clave, pregunta, detalle: detalle || null, opciones: [...opciones, "No aplica"], orden: P.length });
+
+  // 1. Descuadre global
+  if (!L.cuadra) {
+    push(
+      "descuadre",
+      "El libro no cuadra. ¿Cuál es la causa y cómo se corrige?",
+      `Debe $${fmt(L.totalDebe)} ≠ Haber $${fmt(L.totalHaber)} (diferencia $${fmt(Math.abs(L.totalDebe - L.totalHaber))}).`,
+      ["Reexportar desde KAME (export incompleto)", "Falta centralizar comprobantes", "Error de digitación a corregir en KAME"],
+    );
+  }
+
+  // 2. Gastos sin asignar con saldo relevante
+  const sinAsignar = L.cuentas.filter((c) => /sin asignar/i.test(c.nombre) && Math.abs(c.saldo) > 0);
+  for (const c of sinAsignar) {
+    const gastoTotal = L.cuentas.filter((x) => x.codigo.startsWith("4")).reduce((s, x) => s + Math.abs(x.saldo), 0);
+    const pct = gastoTotal > 0 ? Math.round((Math.abs(c.saldo) / gastoTotal) * 100) : 0;
+    push(
+      `sin_asignar_${c.codigo}`,
+      `"${c.nombre}" acumula $${fmt(c.saldo)}${pct ? ` (${pct}% del gasto)` : ""}. ¿Se reclasifica?`,
+      "Sin reclasificar no se puede depurar la renta líquida (gasto aceptado vs. rechazado vs. activo).",
+      ["Reclasificar en KAME antes del cierre", "Dejar como gasto general (montos menores)"],
+    );
+  }
+
+  // 3. Sin cuentas de caja/banco → contabilidad solo tributaria
+  const hayBanco = L.cuentas.some((c) => c.codigo.startsWith("1") && /banco|caja/i.test(c.nombre));
+  if (!hayBanco && L.cuentas.length > 0) {
+    push(
+      "sin_banco",
+      "No hay cuentas de Caja/Banco: ¿la contabilidad de esta empresa es solo tributaria (RCV)?",
+      "Sin cartola, Deudores y Proveedores quedan inflados (no se registran cobros ni pagos).",
+      ["Sí, solo tributaria — está OK así", "Falta centralizar la cartola bancaria"],
+    );
+  }
+
+  // 4. Deudores por venta ≈ ventas + IVA débito → cero cobros registrados
+  const deudores = L.cuentas.find((c) => /deudores por venta/i.test(c.nombre));
+  const ventas = L.cuentas.filter((c) => c.codigo.startsWith("3")).reduce((s, c) => s + c.saldo, 0);
+  const ivaDebito = L.cuentas.find((c) => /debito fiscal/i.test(c.nombre));
+  if (deudores && ivaDebito && Math.abs(deudores.saldo - (ventas + ivaDebito.saldo)) < 1000) {
+    push(
+      "deudores_sin_cobros",
+      `Deudores por venta ($${fmt(deudores.saldo)}) = facturación total del año: no hay cobros registrados. ¿El saldo real de clientes es distinto?`,
+      null,
+      ["Registrar cobros / ajustar contra banco", "Se asume todo cobrado (ajuste de cierre)"],
+    );
+  }
+
+  // 5. Retenciones con saldo al cierre (honorarios / 2da categoría)
+  const retenciones = L.cuentas.filter((c) => c.codigo.startsWith("2") && /(honorarios por pagar|2da categoria|segunda categoria|impuesto unico)/i.test(c.nombre) && Math.abs(c.saldo) > 0);
+  for (const c of retenciones) {
+    push(
+      `retencion_${c.codigo}`,
+      `"${c.nombre}" cierra con saldo $${fmt(c.saldo)}. ¿Declarado y pagado?`,
+      null,
+      ["Declarado y pagado (saldo solo contable)", "Pendiente de declarar/pagar"],
+    );
+  }
+
+  // 6. Saldos contra naturaleza (activo acreedor / pasivo deudor)
+  const contraNat = L.cuentas.filter((c) =>
+    (c.codigo.startsWith("1") && c.saldo < -1000 && c.haber > c.debe) ||
+    (c.codigo.startsWith("2") && c.debe > c.haber && Math.abs(c.debe - c.haber) > 1000));
+  for (const c of contraNat.slice(0, 5)) {
+    push(
+      `contra_naturaleza_${c.codigo}`,
+      `"${c.nombre}" (${c.codigo}) tiene saldo contra su naturaleza. ¿Es correcto?`,
+      `Debe $${fmt(c.debe)} / Haber $${fmt(c.haber)}.`,
+      ["Correcto (razón conocida)", "Revisar/corregir en KAME"],
+    );
+  }
+
+  return P;
+}
+
 async function main() {
   const env = cargarEnv();
   const supa = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
@@ -195,6 +278,19 @@ async function main() {
     for (let i = 0; i < movsRows.length; i += 500) {
       const { error: e3 } = await supa.from("libro_mayor_movimiento").insert(movsRows.slice(i, i + 500));
       if (e3) { console.log(`      ⚠ ERROR movimientos [${i}]: ${e3.message}`); break; }
+    }
+
+    // preguntas de revisión para el contador: se regeneran las NO respondidas;
+    // las ya respondidas se conservan (no se pisan al recargar el libro)
+    const preguntas = generarPreguntas(L);
+    await supa.from("libro_mayor_pregunta").delete().eq("libro_id", libroId).is("respuesta", null);
+    if (preguntas.length) {
+      const { error: eP } = await supa.from("libro_mayor_pregunta").upsert(
+        preguntas.map((p) => ({ ...p, libro_id: libroId })),
+        { onConflict: "libro_id,clave", ignoreDuplicates: true },
+      );
+      if (eP) console.log(`      ⚠ ERROR preguntas: ${eP.message}`);
+      else console.log(`      preguntas de revisión: ${preguntas.length}`);
     }
 
     // subir XLSX original (best-effort)

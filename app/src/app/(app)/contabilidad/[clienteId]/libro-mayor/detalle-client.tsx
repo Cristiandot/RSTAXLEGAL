@@ -2,10 +2,19 @@
 
 import { Fragment, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, ChevronDown, ChevronRight, Download } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  CircleHelp,
+  Download,
+} from "lucide-react";
 import { formatMonto } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { responderPreguntaLM } from "./actions";
 import {
   Table,
   TableBody,
@@ -38,6 +47,17 @@ export type MovimientoLM = {
   documento: string;
   vencimiento: string;
   unidadNegocio: string;
+};
+
+export type PreguntaLM = {
+  id: string;
+  clave: string;
+  pregunta: string;
+  detalle: string | null;
+  opciones: string[];
+  respuesta: string | null;
+  comentario: string | null;
+  respondidoAt: string | null;
 };
 
 export type CabeceraLM = {
@@ -78,6 +98,73 @@ function Card({ label, valor, tono }: { label: string; valor: string; tono?: "ok
   );
 }
 
+const selectCls =
+  "h-9 w-full max-w-sm rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/** Una pregunta de revisión: desplegable (siempre con "No aplica") + comentario. */
+function FilaPregunta({ p }: { p: PreguntaLM }) {
+  const router = useRouter();
+  const [respuesta, setRespuesta] = useState(p.respuesta ?? "");
+  const [comentario, setComentario] = useState(p.comentario ?? "");
+  const [guardando, start] = useTransition();
+  const sucio = respuesta !== (p.respuesta ?? "") || comentario !== (p.comentario ?? "");
+
+  function guardar() {
+    start(async () => {
+      const res = await responderPreguntaLM(p.id, respuesta, comentario);
+      if (res.ok) {
+        toast.success("Respuesta guardada");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al guardar");
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border-b border-border/60 py-3 last:border-b-0">
+      <div className="flex items-start gap-2">
+        {p.respuesta ? (
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+        ) : (
+          <CircleHelp className="mt-0.5 size-4 shrink-0 text-amber-500" />
+        )}
+        <div>
+          <p className="text-sm font-medium">{p.pregunta}</p>
+          {p.detalle ? (
+            <p className="text-xs text-muted-foreground">{p.detalle}</p>
+          ) : null}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 pl-6">
+        <select
+          aria-label="Respuesta"
+          className={selectCls}
+          value={respuesta}
+          onChange={(e) => setRespuesta(e.target.value)}
+        >
+          <option value="">— Pendiente —</option>
+          {p.opciones.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          placeholder="Comentario (opcional)…"
+          className="h-9 w-full max-w-md rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          value={comentario}
+          onChange={(e) => setComentario(e.target.value)}
+        />
+        {sucio ? (
+          <Button size="sm" onClick={guardar} disabled={guardando}>
+            {guardando ? "Guardando…" : "Guardar"}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function DetalleLibroMayor({
   clienteId,
   anio,
@@ -86,6 +173,7 @@ export function DetalleLibroMayor({
   libro,
   cuentas,
   movimientos,
+  preguntas = [],
 }: {
   clienteId: string;
   anio: number;
@@ -94,6 +182,7 @@ export function DetalleLibroMayor({
   libro: CabeceraLM | null;
   cuentas: CuentaLM[];
   movimientos: MovimientoLM[];
+  preguntas?: PreguntaLM[];
 }) {
   const [abierta, setAbierta] = useState<string | null>(null);
   const [bajando, start] = useTransition();
@@ -196,6 +285,30 @@ export function DetalleLibroMayor({
                   <span className="text-muted-foreground">{GRUPOS[g] ?? `Grupo ${g}`}</span>
                   <span className="font-semibold tabular-nums">{formatMonto(saldo)}</span>
                 </span>
+              ))}
+            </div>
+          ) : null}
+
+          {preguntas.length > 0 ? (
+            <div className="card-soft rounded-xl bg-card p-4">
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="text-sm font-semibold">Revisión del contador</h2>
+                {preguntas.every((p) => p.respuesta) ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
+                    <CheckCircle2 className="size-3.5" /> Revisión completa
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    {preguntas.filter((p) => !p.respuesta).length} de {preguntas.length} pendientes
+                  </span>
+                )}
+              </div>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Preguntas detectadas automáticamente al cargar este libro. Si
+                algo no corresponde a esta empresa, elige &quot;No aplica&quot;.
+              </p>
+              {preguntas.map((p) => (
+                <FilaPregunta key={p.id} p={p} />
               ))}
             </div>
           ) : null}

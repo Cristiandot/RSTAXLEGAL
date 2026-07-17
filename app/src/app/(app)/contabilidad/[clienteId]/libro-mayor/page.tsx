@@ -1,5 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { DetalleLibroMayor, type CuentaLM, type MovimientoLM } from "./detalle-client";
+import {
+  DetalleLibroMayor,
+  type CuentaLM,
+  type MovimientoLM,
+  type PreguntaLM,
+} from "./detalle-client";
 
 export const metadata = { title: "Libro Mayor — RS Tax & Legal" };
 
@@ -36,8 +41,9 @@ export default async function LibroMayorClientePage({
 
   let cuentas: CuentaLM[] = [];
   let movimientos: MovimientoLM[] = [];
+  let preguntas: PreguntaLM[] = [];
   if (libro) {
-    const [cuentasRes, movsRes] = await Promise.all([
+    const [cuentasRes, movsRes, pregRes] = await Promise.all([
       supabase
         .from("libro_mayor_cuenta")
         .select("codigo, nombre, debe, haber, saldo")
@@ -51,6 +57,11 @@ export default async function LibroMayorClientePage({
         .eq("libro_id", libro.id)
         .order("orden")
         .limit(20000),
+      supabase
+        .from("libro_mayor_pregunta")
+        .select("id, clave, pregunta, detalle, opciones, respuesta, comentario, respondido_at")
+        .eq("libro_id", libro.id)
+        .order("orden"),
     ]);
     const n = (v: unknown) => (v == null ? 0 : Number(v));
     cuentas = (cuentasRes.data ?? []).map((c) => ({
@@ -73,6 +84,16 @@ export default async function LibroMayorClientePage({
       documento: (m.documento as string) ?? "",
       vencimiento: (m.vencimiento as string) ?? "",
       unidadNegocio: (m.unidad_negocio as string) ?? "",
+    }));
+    preguntas = (pregRes.data ?? []).map((p) => ({
+      id: p.id as string,
+      clave: p.clave as string,
+      pregunta: p.pregunta as string,
+      detalle: (p.detalle as string) ?? null,
+      opciones: Array.isArray(p.opciones) ? (p.opciones as string[]) : [],
+      respuesta: (p.respuesta as string) ?? null,
+      comentario: (p.comentario as string) ?? null,
+      respondidoAt: (p.respondido_at as string) ?? null,
     }));
   }
 
@@ -101,6 +122,7 @@ export default async function LibroMayorClientePage({
         }
         cuentas={cuentas}
         movimientos={movimientos}
+        preguntas={preguntas}
       />
     </main>
   );
