@@ -31,6 +31,7 @@ import {
   Inbox,
   Library,
   DownloadCloud,
+  Briefcase,
   type LucideIcon,
 } from "lucide-react";
 
@@ -57,17 +58,33 @@ export type Modulo = {
 
 export type SeccionModulos = {
   seccion: string;
+  /** Ícono representativo del área (modo contraído / referencias). */
+  icon?: LucideIcon;
+  /** Color de área para la orientación visual (puntito y acento del activo). */
+  color?: string;
   modulos: Modulo[];
 };
 
 /**
- * Registro único de módulos de la plataforma. El sidebar y el home se
- * alimentan de acá. Para sumar un módulo nuevo: agregar una entrada y, cuando
- * esté construido, cambiar su `estado` a "activo" y crear su ruta.
+ * Registro único de módulos de la plataforma. El sidebar se alimenta de acá.
+ *
+ * Organización por dominio (Concepto A): cinco áreas que espejan cómo trabaja
+ * la firma. Para sumar un módulo nuevo: agregar una entrada en el área que
+ * corresponda y, cuando esté construido, cambiar su `estado` a "activo" y crear
+ * su ruta.
+ *
+ * Colores de área (orientación visual, sobre el fondo navy del sidebar):
+ *   Inicio             teal    #17a2b8
+ *   Remun. & Laboral   azul    #2f6db0
+ *   Tributario & Cont. verde   #1a7a52
+ *   Cartera            ámbar   #b7791f
+ *   Oficina            violeta #7a5a9e
  */
 export const MODULOS: SeccionModulos[] = [
   {
     seccion: "Inicio",
+    icon: Inbox,
+    color: "#17a2b8",
     modulos: [
       {
         key: "inicio",
@@ -81,7 +98,9 @@ export const MODULOS: SeccionModulos[] = [
     ],
   },
   {
-    seccion: "Ciclos mensuales",
+    seccion: "Remuneraciones & Laboral",
+    icon: Wallet,
+    color: "#2f6db0",
     modulos: [
       {
         key: "liquidaciones",
@@ -92,47 +111,12 @@ export const MODULOS: SeccionModulos[] = [
         estado: "activo",
       },
       {
-        key: "contabilidad",
-        label: "Contabilidad",
+        key: "libro-remuneraciones",
+        label: "Libro de Remuneraciones",
         descripcion:
-          "RCV del SII (compras, ventas, NC/ND) y documentos mensuales por empresa.",
-        href: "/contabilidad",
-        icon: BookOpenCheck,
-        estado: "activo",
-      },
-      {
-        key: "control-rcv",
-        label: "Control RCV",
-        descripcion:
-          "Tablero de descargas del RCV desde el SII: matriz empresa × período que marca ventas y compras descargadas, faltantes y alto volumen pendiente.",
-        href: "/control-rcv",
-        icon: DownloadCloud,
-        estado: "activo",
-      },
-      {
-        key: "f29",
-        label: "F29",
-        descripcion: "Armado y presentación mensual. Plazo día 20.",
-        href: "/f29",
-        icon: FileText,
-        estado: "activo",
-      },
-      {
-        key: "convenios",
-        label: "Convenios y multas",
-        descripcion:
-          "Convenios de pago (Tesorería) y multas por empresa, con sus cuotas: fechas de vencimiento, pagos y estado. Se ingresan una vez y se controlan acá.",
-        href: "/convenios",
-        icon: FileClock,
-        estado: "activo",
-      },
-      {
-        key: "comunicacion",
-        label: "Comunicación mensual",
-        descripcion:
-          "Resumen mensual de pagos por empresa: Previred por centro de costo, F29 y facturas RS pendientes, con envío al cliente.",
-        href: "/comunicacion",
-        icon: Send,
+          "El LRE de cada empresa por mes, corregido al formato de la Dirección del Trabajo y listo para cargar en Mi DT, con descarga y estado de declaración.",
+        href: "/libro-remuneraciones",
+        icon: BookText,
         estado: "activo",
       },
       {
@@ -144,11 +128,6 @@ export const MODULOS: SeccionModulos[] = [
         icon: TrendingUp,
         estado: "activo",
       },
-    ],
-  },
-  {
-    seccion: "Gestiones — Recursos humanos",
-    modulos: [
       {
         key: "contratos",
         label: "Contratos",
@@ -213,15 +192,6 @@ export const MODULOS: SeccionModulos[] = [
         estado: "activo",
       },
       {
-        key: "libro-remuneraciones",
-        label: "Libro de Remuneraciones",
-        descripcion:
-          "El LRE de cada empresa por mes, corregido al formato de la Dirección del Trabajo y listo para cargar en Mi DT, con descarga y estado de declaración.",
-        href: "/libro-remuneraciones",
-        icon: BookText,
-        estado: "activo",
-      },
-      {
         key: "casa-particular",
         label: "Casa Particular",
         descripcion:
@@ -230,11 +200,6 @@ export const MODULOS: SeccionModulos[] = [
         icon: Home,
         estado: "activo",
       },
-    ],
-  },
-  {
-    seccion: "Gestiones — Prevención (SST)",
-    modulos: [
       {
         key: "rihs",
         label: "RIHS",
@@ -256,8 +221,54 @@ export const MODULOS: SeccionModulos[] = [
     ],
   },
   {
-    seccion: "Gestiones — Contabilidad",
+    seccion: "Tributario & Contable",
+    icon: BookOpenCheck,
+    color: "#1a7a52",
     modulos: [
+      {
+        key: "contabilidad",
+        label: "Contabilidad",
+        descripcion:
+          "RCV del SII (compras, ventas, NC/ND) y documentos mensuales por empresa.",
+        href: "/contabilidad",
+        icon: BookOpenCheck,
+        estado: "activo",
+      },
+      {
+        key: "control-rcv",
+        label: "Control RCV",
+        descripcion:
+          "Tablero de descargas del RCV desde el SII: matriz empresa × período que marca ventas y compras descargadas, faltantes y alto volumen pendiente.",
+        href: "/control-rcv",
+        icon: DownloadCloud,
+        estado: "activo",
+      },
+      {
+        key: "f29",
+        label: "F29",
+        descripcion: "Armado y presentación mensual. Plazo día 20.",
+        href: "/f29",
+        icon: FileText,
+        estado: "activo",
+      },
+      {
+        key: "convenios",
+        label: "Convenios y multas",
+        descripcion:
+          "Convenios de pago (Tesorería) y multas por empresa, con sus cuotas: fechas de vencimiento, pagos y estado. Se ingresan una vez y se controlan acá.",
+        href: "/convenios",
+        icon: FileClock,
+        estado: "activo",
+      },
+      {
+        key: "comunicacion",
+        label: "Comunicación mensual",
+        descripcion:
+          "Resumen mensual de pagos por empresa: Previred por centro de costo, F29 y facturas RS pendientes, con envío al cliente.",
+        href: "/comunicacion",
+        icon: Send,
+        estado: "activo",
+      },
       {
         key: "libro-mayor",
         label: "Libro Mayor",
@@ -289,16 +300,9 @@ export const MODULOS: SeccionModulos[] = [
   },
   {
     seccion: "Cartera",
+    icon: Building2,
+    color: "#b7791f",
     modulos: [
-      {
-        key: "onboarding",
-        label: "Onboarding",
-        descripcion:
-          "Incorporación de clientes y empresas: alta con carpeta OneDrive automática y cola de validación de lo que cargan los clientes.",
-        href: "/onboarding",
-        icon: ClipboardCheck,
-        estado: "activo",
-      },
       {
         key: "clientes",
         label: "Clientes",
@@ -318,15 +322,6 @@ export const MODULOS: SeccionModulos[] = [
         estado: "activo",
       },
       {
-        key: "credenciales",
-        label: "Credenciales",
-        descripcion:
-          "Claves SII y Previred de cada empresa: ocultas con puntitos, ver o copiar con un click y edición en línea. Cada revelación queda auditada.",
-        href: "/credenciales",
-        icon: KeyRound,
-        estado: "activo",
-      },
-      {
         key: "nominas",
         label: "Empresas — Nómina",
         descripcion:
@@ -336,46 +331,23 @@ export const MODULOS: SeccionModulos[] = [
         estado: "activo",
       },
       {
-        key: "excel-compartidos",
-        label: "Excel compartidos",
+        key: "credenciales",
+        label: "Credenciales",
         descripcion:
-          "Novedades de remuneraciones del mes en vivo (cliente + equipo) y generación de archivos de liquidaciones y Previred.",
-        href: "/excel",
-        icon: Table2,
+          "Claves SII y Previred de cada empresa: ocultas con puntitos, ver o copiar con un click y edición en línea. Cada revelación queda auditada.",
+        href: "/credenciales",
+        icon: KeyRound,
         estado: "activo",
       },
-    ],
-  },
-  {
-    seccion: "Análisis",
-    modulos: [
       {
-        key: "reportes",
-        label: "Reportes",
-        descripcion: "Indicadores históricos y alertas regulatorias.",
-        href: "/reportes",
-        icon: BarChart3,
-        estado: "proximamente",
+        key: "onboarding",
+        label: "Onboarding",
+        descripcion:
+          "Incorporación de clientes y empresas: alta con carpeta OneDrive automática y cola de validación de lo que cargan los clientes.",
+        href: "/onboarding",
+        icon: ClipboardCheck,
+        estado: "activo",
       },
-    ],
-  },
-  {
-    seccion: "Administración",
-    modulos: [
-      {
-        key: "usuarios",
-        label: "Usuarios del equipo",
-        descripcion: "Miembros, roles y permisos. Solo administradores.",
-        href: "/usuarios",
-        icon: UserCog,
-        estado: "proximamente",
-        roles: ["admin"],
-      },
-    ],
-  },
-  {
-    seccion: "Portal clientes",
-    modulos: [
       {
         key: "links-clientes",
         label: "Links clientes",
@@ -389,6 +361,8 @@ export const MODULOS: SeccionModulos[] = [
   },
   {
     seccion: "Oficina",
+    icon: Briefcase,
+    color: "#7a5a9e",
     modulos: [
       {
         key: "facturacion",
@@ -408,14 +382,53 @@ export const MODULOS: SeccionModulos[] = [
         icon: Scale,
         estado: "activo",
       },
+      {
+        key: "excel-compartidos",
+        label: "Excel compartidos",
+        descripcion:
+          "Novedades de remuneraciones del mes en vivo (cliente + equipo) y generación de archivos de liquidaciones y Previred.",
+        href: "/excel",
+        icon: Table2,
+        estado: "activo",
+      },
+      {
+        key: "reportes",
+        label: "Reportes",
+        descripcion: "Indicadores históricos y alertas regulatorias.",
+        href: "/reportes",
+        icon: BarChart3,
+        estado: "proximamente",
+      },
+      {
+        key: "usuarios",
+        label: "Usuarios del equipo",
+        descripcion: "Miembros, roles y permisos. Solo administradores.",
+        href: "/usuarios",
+        icon: UserCog,
+        estado: "proximamente",
+        roles: ["admin"],
+      },
     ],
   },
+];
+
+/**
+ * Accesos rápidos fijos para todo el equipo. Son las `key` de los módulos de
+ * uso diario; el sidebar los muestra arriba en un bloque "Favoritos".
+ */
+export const FAVORITOS: string[] = [
+  "liquidaciones",
+  "f29",
+  "nominas",
+  "finiquitos",
 ];
 
 /** Devuelve las secciones con módulos visibles para un rol dado. */
 export function modulosVisibles(rol: Rol): SeccionModulos[] {
   return MODULOS.map((s) => ({
     seccion: s.seccion,
+    icon: s.icon,
+    color: s.color,
     modulos: s.modulos.filter((m) => !m.roles || m.roles.includes(rol)),
   })).filter((s) => s.modulos.length > 0);
 }
