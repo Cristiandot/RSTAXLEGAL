@@ -25,6 +25,7 @@ import {
   HardHat,
   KeyRound,
   ScrollText,
+  ReceiptText,
   Home,
   Scale,
   Send,
@@ -276,6 +277,15 @@ export const MODULOS: SeccionModulos[] = [
           "Libro Mayor anual importado desde KAME por empresa: detalle de movimientos, resumen por cuenta y cuadratura. Estado por cliente (cargado / sin información).",
         href: "/contabilidad/libro-mayor",
         icon: Library,
+        estado: "activo",
+      },
+      {
+        key: "honorarios",
+        label: "Honorarios",
+        descripcion:
+          "Boletas de honorarios recibidas por empresa, descargadas del SII: totales de brutos, retención y líquido por año, y estado por cliente (con información / sin información).",
+        href: "/contabilidad/honorarios",
+        icon: ReceiptText,
         estado: "activo",
       },
       {
