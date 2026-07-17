@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ChevronsUpDown, ChevronRight, LogOut, Star } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { modulosVisibles, FAVORITOS, type Rol, type Modulo } from "@/lib/modules";
+import { guardarFavoritos } from "@/lib/acciones-favoritos";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -16,6 +17,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -52,12 +54,18 @@ function ItemModulo({
   activo,
   enRuta,
   gestionesPendientes,
+  favorito,
+  onToggleFav,
 }: {
   m: Modulo;
   color?: string;
   activo: boolean;
   enRuta: boolean;
   gestionesPendientes: number;
+  /** Si está en la lista de favoritos del usuario. */
+  favorito?: boolean;
+  /** Si se pasa, muestra la estrella para marcar/desmarcar. */
+  onToggleFav?: (key: string) => void;
 }) {
   const conBadgeInicio = m.key === "inicio" && gestionesPendientes > 0;
 
@@ -82,6 +90,9 @@ function ItemModulo({
       </SidebarMenuItem>
     );
   }
+
+  // La estrella solo se ofrece en módulos navegables y nunca en Inicio.
+  const conEstrella = Boolean(onToggleFav) && m.key !== "inicio";
 
   return (
     <SidebarMenuItem>
@@ -110,6 +121,21 @@ function ItemModulo({
           </span>
         ) : null}
       </SidebarMenuButton>
+
+      {conEstrella ? (
+        <SidebarMenuAction
+          showOnHover={!favorito}
+          onClick={() => onToggleFav!(m.key)}
+          aria-label={favorito ? "Quitar de favoritos" : "Marcar como favorito"}
+          title={favorito ? "Quitar de favoritos" : "Marcar como favorito"}
+          className={cn(
+            "text-sidebar-foreground/50 hover:text-amber-400",
+            favorito && "text-amber-400 opacity-100"
+          )}
+        >
+          <Star className={cn("size-3.5", favorito && "fill-current")} />
+        </SidebarMenuAction>
+      ) : null}
     </SidebarMenuItem>
   );
 }
@@ -117,10 +143,13 @@ function ItemModulo({
 export function AppSidebar({
   usuario,
   gestionesPendientes = 0,
+  favoritos = null,
 }: {
   usuario: UsuarioSesion;
   /** Gestiones sin terminar (v_gestiones_oficina) — puntito rojo en Inicio. */
   gestionesPendientes?: number;
+  /** Keys de módulos favoritos del usuario. null = usar el set por defecto. */
+  favoritos?: string[] | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -150,10 +179,32 @@ export function AppSidebar({
       for (const m of s.modulos) map.set(m.key, { modulo: m, color: s.color });
     return map;
   }, [secciones]);
-  const favoritos = FAVORITOS.map((k) => porKey.get(k)).filter(
-    (x): x is { modulo: Modulo; color?: string } =>
-      Boolean(x) && x!.modulo.estado === "activo"
+
+  // Favoritos elegibles por el usuario. null en la prop = nunca los configuró,
+  // así que caemos al set por defecto. Se guardan optimistamente al togglear.
+  const [favKeys, setFavKeys] = React.useState<string[]>(
+    () => favoritos ?? FAVORITOS
   );
+  const favSet = React.useMemo(() => new Set(favKeys), [favKeys]);
+  const toggleFav = React.useCallback((key: string) => {
+    setFavKeys((prev) => {
+      const next = prev.includes(key)
+        ? prev.filter((k) => k !== key)
+        : [...prev, key];
+      guardarFavoritos(next)
+        .then((r) => {
+          if (!r.ok) setFavKeys(prev); // revierte si el guardado falla
+        })
+        .catch(() => setFavKeys(prev));
+      return next;
+    });
+  }, []);
+  const favItems = favKeys
+    .map((k) => porKey.get(k))
+    .filter(
+      (x): x is { modulo: Modulo; color?: string } =>
+        Boolean(x) && x!.modulo.estado === "activo"
+    );
 
   const inicioSeccion = secciones.find((s) => s.seccion === "Inicio");
   const expandido = state !== "collapsed";
@@ -210,14 +261,14 @@ export function AppSidebar({
         ) : null}
 
         {/* Favoritos — solo con el menú expandido */}
-        {expandido && favoritos.length > 0 ? (
+        {expandido && favItems.length > 0 ? (
           <SidebarGroup className="py-1">
             <SidebarGroupLabel className="gap-1.5">
-              <Star className="size-3.5" />
+              <Star className="size-3.5 fill-current text-amber-400" />
               Favoritos
             </SidebarGroupLabel>
             <SidebarMenu>
-              {favoritos.map(({ modulo, color }) => (
+              {favItems.map(({ modulo, color }) => (
                 <ItemModulo
                   key={`fav-${modulo.key}`}
                   m={modulo}
@@ -225,6 +276,8 @@ export function AppSidebar({
                   activo
                   enRuta={enRuta(modulo.href)}
                   gestionesPendientes={gestionesPendientes}
+                  favorito
+                  onToggleFav={toggleFav}
                 />
               ))}
             </SidebarMenu>
@@ -278,6 +331,8 @@ export function AppSidebar({
                       activo={m.estado === "activo"}
                       enRuta={enRuta(m.href)}
                       gestionesPendientes={gestionesPendientes}
+                      favorito={favSet.has(m.key)}
+                      onToggleFav={toggleFav}
                     />
                   ))}
                 </SidebarMenu>

@@ -22,7 +22,11 @@ export default async function AppLayout({
 
   return (
     <SidebarProvider>
-      <AppSidebar usuario={usuario} gestionesPendientes={count ?? 0} />
+      <AppSidebar
+        usuario={usuario}
+        gestionesPendientes={count ?? 0}
+        favoritos={usuario.favoritos}
+      />
       <SidebarInset className="bg-transparent">
         <header className="flex h-16 shrink-0 items-center gap-2 px-4 sm:px-6">
           <SidebarTrigger className="-ml-1 text-muted-foreground" />

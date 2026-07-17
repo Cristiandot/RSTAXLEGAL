@@ -6,6 +6,8 @@ export type UsuarioActual = {
   nombre: string;
   correo: string;
   rol: Rol;
+  /** Keys de módulos favoritos. null = nunca los configuró (fallback por defecto). */
+  favoritos: string[] | null;
 };
 
 /**
@@ -27,7 +29,7 @@ export async function getUsuarioActual(): Promise<UsuarioActual> {
   const correo = user.email.toLowerCase();
   const { data: usuario } = await supabase
     .from("usuarios")
-    .select("nombre, rol")
+    .select("nombre, rol, favoritos")
     .eq("correo", correo)
     .eq("activo", true)
     .maybeSingle();
@@ -41,5 +43,6 @@ export async function getUsuarioActual(): Promise<UsuarioActual> {
     nombre: usuario.nombre ?? correo,
     correo,
     rol: (usuario.rol as Rol) ?? "operador",
+    favoritos: (usuario.favoritos as string[] | null) ?? null,
   };
 }
