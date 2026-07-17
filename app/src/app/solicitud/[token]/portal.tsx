@@ -2,27 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import {
-  Building2, PieChart, Users, Receipt, Table2, ClipboardList, MapPin, MessageCircle,
-} from "lucide-react";
+import { PieChart, Users, Table2, MapPin, MessageCircle } from "lucide-react";
 import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
 import { DetalleRemuneraciones } from "./remuneraciones";
 import { GastosMenores } from "./gastos-menores";
-import { Empresa } from "./empresa";
+import { DatosEmpresa } from "./datos-empresa";
+import { EstadoResultado } from "./estado-resultado";
+import { Reportes } from "./reportes";
+import { RentaProyectada } from "./renta";
 import { Contabilidad } from "./contabilidad";
 import { RecursosHumanos } from "./rrhh";
 
-type Tab =
-  | "empresa"
-  | "contabilidad"
-  | "rrhh"
-  | "gastos"
-  | "remuneraciones"
-  | "solicitudes";
+type Tab = "financiera" | "rrhh" | "remuneraciones";
 
-const TABS_VALIDOS: Tab[] = [
-  "empresa", "contabilidad", "rrhh", "gastos", "remuneraciones", "solicitudes",
-];
+const TABS_VALIDOS: Tab[] = ["financiera", "rrhh", "remuneraciones"];
 
 /**
  * Portal del cliente — menú de pestañas: Empresa (inicio) · Contabilidad ·
@@ -39,7 +32,7 @@ export function PortalCliente({
   empresa: InfoEmpresa;
   embedded?: boolean;
 }) {
-  const [tab, setTab] = useState<Tab>("empresa");
+  const [tab, setTab] = useState<Tab>("financiera");
   const claveTab = `rstl_portal_tab_${token}`;
 
   // Recordar la pestaña al refrescar (se lee tras montar para no romper la
@@ -61,43 +54,30 @@ export function PortalCliente({
   }
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: "empresa", label: "Empresa", icon: <Building2 className="size-4" /> },
-    { key: "contabilidad", label: "Contabilidad", icon: <PieChart className="size-4" /> },
+    { key: "financiera", label: "Financiera", icon: <PieChart className="size-4" /> },
     { key: "rrhh", label: "Recursos humanos", icon: <Users className="size-4" /> },
-    { key: "remuneraciones", label: "Detalle remuneraciones", icon: <Table2 className="size-4" /> },
-    { key: "solicitudes", label: "Solicitudes laborales", icon: <ClipboardList className="size-4" /> },
-    { key: "gastos", label: "Ingreso gastos menores", icon: <Receipt className="size-4" /> },
+    { key: "remuneraciones", label: "Remuneraciones", icon: <Table2 className="size-4" /> },
   ];
 
   return (
     <div className="space-y-5">
-      {/* Encabezado: empresa a la izquierda, logo a la derecha */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            {empresa.razon_social}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {empresa.rut_empresa ? `RUT ${empresa.rut_empresa}` : null}
-            {empresa.rut_empresa && empresa.giro ? " · " : null}
-            {empresa.giro ? empresa.giro : null}
-            {(empresa.rut_empresa || empresa.giro) ? " · " : null}
-            Portal de la empresa
-          </p>
-        </div>
-        {!embedded ? (
+      {!embedded ? (
+        <div className="flex justify-end">
           <Image
             src="/logo-claro.png"
             alt="Rodríguez Samith Tax & Legal"
             width={200}
             height={56}
             priority
-            className="h-auto w-[130px] shrink-0 sm:w-[180px]"
+            className="h-auto w-[150px] sm:w-[180px]"
           />
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      {/* Pestañas — una sola línea (scroll horizontal si no cabe) */}
+      {/* Datos de la empresa: % de cumplimiento, faltantes en rojo y accesos */}
+      <DatosEmpresa token={token} />
+
+      {/* Vistas */}
       <div className="flex flex-nowrap justify-center gap-0.5 overflow-x-auto border-b">
         {TABS.map((t) => (
           <button
@@ -116,12 +96,24 @@ export function PortalCliente({
         ))}
       </div>
 
-      {tab === "empresa" ? <Empresa token={token} /> : null}
-      {tab === "contabilidad" ? <Contabilidad token={token} /> : null}
-      {tab === "rrhh" ? <RecursosHumanos token={token} /> : null}
-      {tab === "gastos" ? <GastosMenores token={token} empresa={empresa} /> : null}
-      {tab === "remuneraciones" ? <DetalleRemuneraciones token={token} empresa={empresa} /> : null}
-      {tab === "solicitudes" ? <SolicitudForm token={token} empresa={empresa} /> : null}
+      {tab === "financiera" ? (
+        <div className="space-y-6">
+          <EstadoResultado token={token} />
+          <RentaProyectada token={token} />
+          <Reportes token={token} />
+          <Contabilidad token={token} />
+          <GastosMenores token={token} empresa={empresa} />
+        </div>
+      ) : null}
+      {tab === "rrhh" ? (
+        <div className="space-y-6">
+          <RecursosHumanos token={token} />
+          <SolicitudForm token={token} empresa={empresa} />
+        </div>
+      ) : null}
+      {tab === "remuneraciones" ? (
+        <DetalleRemuneraciones token={token} empresa={empresa} />
+      ) : null}
 
       {/* Pie de página: contacto de la oficina */}
       <footer className="mt-8 space-y-4 border-t border-border pt-5">
