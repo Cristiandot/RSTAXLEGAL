@@ -29,6 +29,7 @@ import {
   Send,
   Inbox,
   Library,
+  DownloadCloud,
   type LucideIcon,
 } from "lucide-react";
 
@@ -96,6 +97,15 @@ export const MODULOS: SeccionModulos[] = [
           "RCV del SII (compras, ventas, NC/ND) y documentos mensuales por empresa.",
         href: "/contabilidad",
         icon: BookOpenCheck,
+        estado: "activo",
+      },
+      {
+        key: "control-rcv",
+        label: "Control RCV",
+        descripcion:
+          "Tablero de descargas del RCV desde el SII: matriz empresa × período que marca ventas y compras descargadas, faltantes y alto volumen pendiente.",
+        href: "/control-rcv",
+        icon: DownloadCloud,
         estado: "activo",
       },
       {
