@@ -97,7 +97,8 @@ export type F29Row = {
   numero_operacion: string | null; // N° de operación del pago (cuando paga RS)
   fecha_pago_f29: string | null; // fecha en que se pagó el F29 (cuando paga RS)
   fecha_correo_pago_enviado: string | null; // último envío del aviso de pago al cliente
-  postergacion_monto: number | string | null; // opción de postergar IVA — sale en la Comunicación mensual
+  postergacion_monto: number | string | null; // (dormido) monto histórico; la postergación hoy es booleana
+  postergar_iva: boolean; // el cliente puede postergar el pago del IVA (lo postergable = IVA del desglose)
   comentario_correo: string | null; // comentario personalizado del contador — sale en la Comunicación mensual
   // Desglose del F29 para el detalle al cliente (solo se muestran los con monto).
   monto_iva: number | string | null;
@@ -136,7 +137,7 @@ export type ComunicacionRow = {
   dnp_declarado: boolean; // el ciclo de Liquidaciones quedó con DNP (declaración sin pago)
   fecha_dnp_declarado: string | null; // fecha en que se declaró el DNP
   fecha_dnp_pagado: string | null; // fecha en que el cliente pagó la planilla DNP
-  f29_postergacion_monto: number | string | null; // opción de postergar IVA (del módulo F29)
+  f29_postergar_iva: boolean; // opción de postergar IVA habilitada (del módulo F29)
   f29_comentario: string | null; // comentario personalizado del contador (del módulo F29)
   correos_adicionales: string[] | null; // casillas extra del cliente — van en copia
   // Desglose del F29 (solo los conceptos con monto salen en el correo).

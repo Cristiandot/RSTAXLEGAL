@@ -24,7 +24,7 @@ export type GuardarF29Input = {
   fechaPagoF29: string | null;
   numeroOperacion: string | null;
   correoCliente: string | null;
-  postergacionMonto: string | null;
+  postergarIva: boolean;
   comentarioCorreo: string | null;
   // Desglose del F29 (IVA, Imp. Único, Retenciones, Otros — PPM va aparte).
   montoIva: string | null;
@@ -67,7 +67,7 @@ export async function guardarF29(
       fecha_pago_oficina: input.fechaPagoOficina,
       fecha_pago_f29: input.fechaPagoF29,
       numero_operacion: input.numeroOperacion,
-      postergacion_monto: input.postergacionMonto,
+      postergar_iva: input.postergarIva,
       comentario_correo: input.comentarioCorreo,
       monto_iva: input.montoIva,
       imp_unico: input.impUnico,
@@ -112,7 +112,7 @@ export async function enviarCorreoF29(
   const { data: row, error: errRow } = await supabase
     .from("v_checklist_f29")
     .select(
-      "cliente_id, razon_social, periodo, monto_a_pagar, ppm, pago_por, plazo_f29, correo_empresa, monto_iva, imp_unico, monto_retenciones, monto_otros, postergacion_monto, comentario_correo",
+      "cliente_id, razon_social, periodo, monto_a_pagar, ppm, pago_por, plazo_f29, correo_empresa, monto_iva, imp_unico, monto_retenciones, monto_otros, postergar_iva, comentario_correo",
     )
     .eq("ciclo_id", cicloId)
     .single();
@@ -171,7 +171,7 @@ export async function enviarCorreoF29(
       ppm: row.ppm,
       otros: row.monto_otros,
     },
-    postergacionMonto: row.postergacion_monto,
+    postergarIva: Boolean(row.postergar_iva),
     comentarioContador: row.comentario_correo,
     plazoF29: row.plazo_f29,
     fechaRecepcionFondos: recepcion,

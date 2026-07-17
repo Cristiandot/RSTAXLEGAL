@@ -39,7 +39,7 @@ const archivos: { archivo: string; titulo: string; cuerpo: string }[] = [];
 {
   const { titulo, cuerpo } = construirCorreoAvisoF29({
     ...lucumo,
-    postergacionMonto: null,
+    postergarIva: false,
     comentarioContador: null,
   });
   archivos.push({ archivo: "f29-1-detalle.html", titulo, cuerpo });
@@ -49,7 +49,7 @@ const archivos: { archivo: string; titulo: string; cuerpo: string }[] = [];
 {
   const { titulo, cuerpo } = construirCorreoAvisoF29({
     ...lucumo,
-    postergacionMonto: 1245031,
+    postergarIva: true,
     comentarioContador:
       "Este mes puede postergar el pago del IVA completo. Si le acomoda, respóndanos y presentamos el F29 con la postergación.",
   });

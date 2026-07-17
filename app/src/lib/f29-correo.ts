@@ -99,18 +99,16 @@ export function filasDesgloseF29(d: DesgloseF29): {
  * Devuelve solo el <div>; cada correo lo envuelve según su layout.
  */
 export function cajaPostergacionIva(
-  montoPostergable: number | string,
   desglose: DesgloseF29,
   fechaLimite?: string | null,
 ): string {
-  const postergable = Number(montoPostergable);
-  // "Pagaría solo" = los conceptos NO postergables del F29 (todo menos el IVA):
-  // Impuesto Único + Retenciones + PPM + Otros, sumados del desglose. NO se
-  // calcula como (total − postergable): eso era frágil al formato del monto
-  // postergado —un "845.117" se leía como 845,117 decimal y el pago salía mal—
-  // (criterio Cristian 17-07-2026).
+  // Lo postergable ES el IVA del período (se toma del desglose, ya no se digita
+  // un monto aparte — evita errores de tipeo como "845.117"). "Pagaría solo" =
+  // los conceptos NO postergables: Impuesto Único + Retenciones + PPM + Otros,
+  // sumados del desglose (criterio Cristian 17-07-2026).
   const num = (v: number | string | null | undefined) =>
     v === null || v === undefined || v === "" ? 0 : Number(v);
+  const postergable = num(desglose.iva);
   const pagaAhora = Math.max(
     0,
     num(desglose.impUnico) +
@@ -137,7 +135,7 @@ export type DatosAvisoF29 = {
   periodo: string; // "2026-06"
   montoTotal: number | string; // monto_a_pagar (0 = declarado sin pago)
   desglose: DesgloseF29;
-  postergacionMonto: number | string | null;
+  postergarIva: boolean; // el cliente puede postergar el pago del IVA
   comentarioContador: string | null;
   plazoF29: string | null; // ya corrido al día hábil
   /** 2 días hábiles antes del vencimiento (la calcula la action vía RPC). */
@@ -170,12 +168,11 @@ export function construirCorreoAvisoF29(d: DatosAvisoF29): {
     ? ""
     : `<tr><td style="padding:9px 0;color:#445;">Fecha límite de pago</td><td style="padding:9px 0;text-align:right;"><strong>${d.plazoF29 ? fechaLarga(d.plazoF29) : "—"}</strong></td></tr>`;
 
-  // Opción de postergar el IVA: sale con explicación completa (no solo el monto).
+  // Opción de postergar el IVA: sale solo si el contador la habilitó y hay IVA
+  // que postergar (lo postergable es el IVA del desglose).
   const cajaPostergacion =
-    !esMontoCero &&
-    d.postergacionMonto !== null &&
-    Number(d.postergacionMonto) > 0
-      ? `<div style="margin:0 0 16px;">${cajaPostergacionIva(d.postergacionMonto, d.desglose, fechaLimitePostergacion(d.periodo))}</div>`
+    !esMontoCero && d.postergarIva && Number(d.desglose.iva ?? 0) > 0
+      ? `<div style="margin:0 0 16px;">${cajaPostergacionIva(d.desglose, fechaLimitePostergacion(d.periodo))}</div>`
       : "";
 
   const notaContador = (d.comentarioContador ?? "").trim()

@@ -167,8 +167,8 @@ export function F29Client({
     ppm: "",
     otros: "",
   });
-  // Opción de postergar el IVA — va en el paso 1 para ofrecerla en el aviso.
-  const [postergar, setPostergar] = useState("");
+  // Opción de postergar el IVA — sí/no; lo postergable es el IVA del desglose.
+  const [postergar, setPostergar] = useState(false);
   // N° de operación del pago (cuando paga la oficina), editable desde el modal.
   const [numOp, setNumOp] = useState("");
   const [guardando, startGuardar] = useTransition();
@@ -185,7 +185,7 @@ export function F29Client({
       ppm: c.ppm == null ? "" : String(c.ppm),
       otros: c.monto_otros == null ? "" : String(c.monto_otros),
     });
-    setPostergar(c.postergacion_monto == null ? "" : String(c.postergacion_monto));
+    setPostergar(Boolean(c.postergar_iva));
     setEditando(c);
   }
 
@@ -290,7 +290,7 @@ export function F29Client({
       fechaPagoF29: get("fecha_pago_f29"),
       numeroOperacion: numOp.trim() || null,
       correoCliente: correoCli.trim() || null,
-      postergacionMonto: get("postergacion_monto"),
+      postergarIva: postergar,
       comentarioCorreo: get("comentario_correo"),
       montoIva: get("monto_iva"),
       impUnico: get("imp_unico"),
@@ -697,24 +697,28 @@ export function F29Client({
                 />
               </div>
 
-              {/* Opción de postergar el IVA — se ofrece en el aviso del paso 1. */}
+              {/* Opción de postergar el IVA — sí/no. Lo postergable es el IVA
+                  del desglose; no se digita ningún monto (evita errores). */}
               <div className="col-span-2 flex flex-col gap-1.5">
-                <Label htmlFor="postergacion_monto">
-                  Opción de postergar el IVA ($)
-                </Label>
-                <Input
-                  id="postergacion_monto"
-                  name="postergacion_monto"
-                  type="number"
-                  inputMode="numeric"
-                  placeholder="—"
-                  className="w-48"
-                  value={postergar}
-                  onChange={(e) => setPostergar(e.target.value)}
-                />
+                <label
+                  htmlFor="postergar_iva"
+                  className="flex items-center gap-2 text-sm font-medium"
+                >
+                  <input
+                    id="postergar_iva"
+                    type="checkbox"
+                    className="size-4 accent-sky-600"
+                    checked={postergar}
+                    onChange={(e) => setPostergar(e.target.checked)}
+                  />
+                  Ofrecer al cliente postergar el pago del IVA
+                </label>
                 <span className="text-xs text-muted-foreground">
-                  Si el cliente puede postergar el IVA, escribe el monto: el aviso
-                  del paso 1 le ofrece la opción y explica cuánto pagaría ahora.
+                  Al activarlo, el aviso del paso 1 ofrece postergar el IVA del
+                  período
+                  {dg.iva && Number(dg.iva) > 0 ? ` (${formatMonto(dg.iva)})` : ""}{" "}
+                  hasta 2 meses sin multas ni intereses, y explica cuánto pagaría
+                  ahora. Se toma el IVA del detalle: no hay que escribir montos.
                 </span>
               </div>
               </div>
