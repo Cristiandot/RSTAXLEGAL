@@ -11,6 +11,7 @@ import { EstadoResultado } from "./estado-resultado";
 import { Reportes } from "./reportes";
 import { ClasificarGastos } from "./clasificar";
 import { AlertasFinancieras } from "./alertas";
+import { ConveniosCliente } from "./convenios-cliente";
 import { RentaProyectada } from "./renta";
 import { Contabilidad } from "./contabilidad";
 import { RecursosHumanos } from "./rrhh";
@@ -118,6 +119,7 @@ export function PortalCliente({
             </div>
           </div>
           <AlertasFinancieras token={token} anio={anioFin} />
+          <ConveniosCliente token={token} />
           <EstadoResultado token={token} anio={anioFin} />
           <RentaProyectada token={token} anio={anioFin} />
           <ClasificarGastos token={token} />
