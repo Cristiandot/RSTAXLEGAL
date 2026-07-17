@@ -3,8 +3,23 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ClipboardCopy, ExternalLink, Link2, Plus, Search, Users } from "lucide-react";
-import { asignarGrupoCliente, crearGrupoCliente, generarLinkCliente } from "./actions";
+import {
+  ClipboardCopy,
+  ExternalLink,
+  KeyRound,
+  Lock,
+  Plus,
+  RefreshCw,
+  Search,
+  ShieldAlert,
+  Users,
+} from "lucide-react";
+import {
+  activarPortalGrupo,
+  asignarGrupoCliente,
+  crearGrupoCliente,
+  regenerarPinGrupo,
+} from "./actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +36,9 @@ export type GrupoCliente = {
   id: string;
   codigo: string; // ej. "A.4"
   nombre: string; // ej. "Red Barrera"
+  slug: string | null; // portal_slug (link del cliente)
+  token: string | null; // form_token del grupo (link interno sin PIN)
+  tienePin: boolean;
 };
 
 export type LinkClienteRow = {
@@ -35,23 +53,20 @@ export type LinkClienteRow = {
 const selectCls =
   "h-8 rounded-md border border-input bg-card px-2 text-xs shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-function urlPortal(token: string): string {
-  return `${window.location.origin}/solicitud/${token}`;
-}
+const origin = () => (typeof window !== "undefined" ? window.location.origin : "");
+const urlCliente = (slug: string) => `${origin()}/portal/${slug}`;
+const urlInterno = (token: string) => `${origin()}/portal/${token}`;
 
+/** Empresas del grupo: identificación + a qué cliente pertenecen (sin links). */
 function TablaEmpresas({
   filas,
   grupos,
   ocupado,
-  onCopiar,
-  onGenerar,
   onAsignar,
 }: {
   filas: LinkClienteRow[];
   grupos: GrupoCliente[];
   ocupado: boolean;
-  onCopiar: (token: string, razonSocial: string) => void;
-  onGenerar: (f: LinkClienteRow) => void;
   onAsignar: (clienteId: string, grupoId: string | null) => void;
 }) {
   return (
@@ -59,25 +74,23 @@ function TablaEmpresas({
       <Table stickyHeader>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="w-[300px]">Empresa</TableHead>
+            <TableHead className="w-[340px]">Empresa</TableHead>
             <TableHead>RUT</TableHead>
             <TableHead>Correo de envíos</TableHead>
             <TableHead>Cliente</TableHead>
-            <TableHead>Link</TableHead>
-            <TableHead className="text-right">Acciones</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {filas.map((f) => (
             <TableRow key={f.id}>
               <TableCell className="font-medium">
-                <span className="block max-w-[300px] truncate" title={f.razonSocial}>
+                <span className="block max-w-[340px] truncate" title={f.razonSocial}>
                   {f.razonSocial}
                 </span>
               </TableCell>
               <TableCell>{f.rut ?? "—"}</TableCell>
               <TableCell>
-                <span className="block max-w-[200px] truncate" title={f.correo ?? undefined}>
+                <span className="block max-w-[220px] truncate" title={f.correo ?? undefined}>
                   {f.correo ?? "—"}
                 </span>
               </TableCell>
@@ -97,48 +110,119 @@ function TablaEmpresas({
                   ))}
                 </select>
               </TableCell>
-              <TableCell>
-                {f.token ? (
-                  <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
-                    Activo
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="text-muted-foreground">
-                    Sin link
-                  </Badge>
-                )}
-              </TableCell>
-              <TableCell className="text-right">
-                {f.token ? (
-                  <div className="flex justify-end gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onCopiar(f.token as string, f.razonSocial)}
-                    >
-                      <ClipboardCopy className="size-3.5" />
-                      Copiar link
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Abrir portal"
-                      onClick={() => window.open(urlPortal(f.token as string), "_blank")}
-                    >
-                      <ExternalLink className="size-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <Button variant="outline" size="sm" disabled={ocupado} onClick={() => onGenerar(f)}>
-                    <Link2 className="size-3.5" />
-                    Generar link
-                  </Button>
-                )}
-              </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
+    </div>
+  );
+}
+
+/** Bloque de acceso al portal de un cliente: link del cliente + link interno + PIN. */
+function PortalCliente({
+  grupo,
+  pinRevelado,
+  ocupado,
+  onActivar,
+  onRegenerar,
+  onCopiar,
+  onCerrarPin,
+}: {
+  grupo: GrupoCliente;
+  pinRevelado: string | null;
+  ocupado: boolean;
+  onActivar: (g: GrupoCliente) => void;
+  onRegenerar: (g: GrupoCliente) => void;
+  onCopiar: (texto: string, etiqueta: string) => void;
+  onCerrarPin: () => void;
+}) {
+  if (!grupo.slug || !grupo.token) {
+    return (
+      <div className="flex items-center gap-3 rounded-lg border border-dashed border-border bg-muted/20 p-3">
+        <Lock className="size-4 text-muted-foreground" />
+        <span className="text-sm text-muted-foreground">Portal sin activar.</span>
+        <Button size="sm" className="ml-auto" disabled={ocupado} onClick={() => onActivar(grupo)}>
+          <KeyRound className="size-3.5" />
+          Activar portal
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+      {/* Link del cliente (con PIN) */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className="shrink-0 border-emerald-200 bg-emerald-50 text-emerald-700">
+          Link del cliente
+        </Badge>
+        <code className="min-w-0 flex-1 truncate rounded bg-card px-2 py-1 text-xs" title={urlCliente(grupo.slug)}>
+          {urlCliente(grupo.slug)}
+        </code>
+        <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">
+          requiere PIN
+        </Badge>
+        <Button variant="outline" size="sm" onClick={() => onCopiar(urlCliente(grupo.slug as string), "Link del cliente")}>
+          <ClipboardCopy className="size-3.5" />
+          Copiar
+        </Button>
+      </div>
+
+      {/* Link interno de la oficina (sin PIN) */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className="shrink-0 border-amber-200 bg-amber-50 text-amber-700">
+          Link interno
+        </Badge>
+        <code className="min-w-0 flex-1 truncate rounded bg-card px-2 py-1 text-xs" title={urlInterno(grupo.token)}>
+          {urlInterno(grupo.token)}
+        </code>
+        <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">
+          sin PIN · no compartir
+        </Badge>
+        <Button variant="outline" size="sm" onClick={() => onCopiar(urlInterno(grupo.token as string), "Link interno")}>
+          <ClipboardCopy className="size-3.5" />
+          Copiar
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Abrir portal (interno)"
+          onClick={() => window.open(urlInterno(grupo.token as string), "_blank")}
+        >
+          <ExternalLink className="size-4" />
+        </Button>
+      </div>
+
+      {/* PIN */}
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <KeyRound className="size-3.5 text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">
+          PIN {grupo.tienePin ? "definido" : "sin definir"}
+        </span>
+        <Button variant="outline" size="sm" className="ml-auto" disabled={ocupado} onClick={() => onRegenerar(grupo)}>
+          <RefreshCw className="size-3.5" />
+          Regenerar PIN
+        </Button>
+      </div>
+
+      {pinRevelado ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-2.5">
+          <ShieldAlert className="size-4 shrink-0 text-amber-700" />
+          <span className="text-xs text-amber-900">
+            PIN generado: <strong className="text-base tabular-nums tracking-widest">{pinRevelado}</strong> — cópialo y
+            pásaselo al cliente. No se vuelve a mostrar.
+          </span>
+          <div className="ml-auto flex gap-1.5">
+            <Button variant="outline" size="sm" onClick={() => onCopiar(pinRevelado, "PIN")}>
+              <ClipboardCopy className="size-3.5" />
+              Copiar PIN
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onCerrarPin}>
+              Listo
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -157,6 +241,8 @@ export function LinksClient({
   const [nuevoCodigo, setNuevoCodigo] = useState("");
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [ocupado, startAccion] = useTransition();
+  // PIN recién generado por grupo (se muestra una sola vez).
+  const [pines, setPines] = useState<Record<string, string>>({});
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
@@ -180,21 +266,32 @@ export function LinksClient({
     return map;
   }, [filtradas]);
 
-  const conLink = filas.filter((f) => f.token).length;
+  const activos = grupos.filter((g) => g.slug && g.token).length;
 
-  function copiar(token: string, razonSocial: string) {
-    navigator.clipboard.writeText(urlPortal(token));
-    toast.success(`Link de ${razonSocial} copiado — pégaselo al cliente`);
+  function copiar(texto: string, etiqueta: string) {
+    navigator.clipboard.writeText(texto);
+    toast.success(`${etiqueta} copiado`);
   }
 
-  function generar(f: LinkClienteRow) {
+  function activar(g: GrupoCliente) {
     startAccion(async () => {
-      const res = await generarLinkCliente(f.id);
-      if (res.ok && res.token) {
-        navigator.clipboard.writeText(urlPortal(res.token));
-        toast.success(`Link de ${f.razonSocial} generado y copiado`);
+      const res = await activarPortalGrupo(g.id);
+      if (res.ok && res.pin) {
+        setPines((p) => ({ ...p, [g.id]: res.pin as string }));
+        toast.success(`Portal de ${g.codigo} activado`);
         router.refresh();
-      } else toast.error(res.error ?? "No se pudo generar el link.");
+      } else toast.error(res.error ?? "No se pudo activar el portal.");
+    });
+  }
+
+  function regenerar(g: GrupoCliente) {
+    startAccion(async () => {
+      const res = await regenerarPinGrupo(g.id);
+      if (res.ok && res.pin) {
+        setPines((p) => ({ ...p, [g.id]: res.pin as string }));
+        toast.success(`PIN de ${g.codigo} regenerado`);
+        router.refresh();
+      } else toast.error(res.error ?? "No se pudo regenerar el PIN.");
     });
   }
 
@@ -223,12 +320,11 @@ export function LinksClient({
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">Links clientes</h1>
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">Links de clientes</h1>
         <p className="text-sm text-muted-foreground">
-          Cartera organizada por cliente y sus empresas. Cada empresa tiene su
-          propio link de portal (solicitudes + detalle remuneraciones); los
-          accesos por cliente vendrán sobre esta misma estructura. {conLink} de{" "}
-          {filas.length} empresas con link activo.
+          El portal de cada cliente: el <strong>link del cliente</strong> (con PIN, para enviar) y el{" "}
+          <strong>link interno</strong> (sin PIN, para revisar en la oficina — no compartir). {activos} de{" "}
+          {grupos.length} clientes con portal activo.
         </p>
       </div>
 
@@ -270,10 +366,7 @@ export function LinksClient({
 
       {grupos.map((g) => {
         const empresas = porGrupo.get(g.id);
-        if (!empresas || empresas.length === 0) {
-          // con búsqueda activa se ocultan los clientes sin coincidencias
-          if (buscar.trim()) return null;
-        }
+        if ((!empresas || empresas.length === 0) && buscar.trim()) return null;
         return (
           <section key={g.id} className="space-y-2">
             <h2 className="flex items-center gap-2 font-heading text-base font-semibold">
@@ -283,19 +376,22 @@ export function LinksClient({
                 {empresas?.length ?? 0} empresa{(empresas?.length ?? 0) === 1 ? "" : "s"}
               </span>
             </h2>
+
+            <PortalCliente
+              grupo={g}
+              pinRevelado={pines[g.id] ?? null}
+              ocupado={ocupado}
+              onActivar={activar}
+              onRegenerar={regenerar}
+              onCopiar={copiar}
+              onCerrarPin={() => setPines((p) => { const n = { ...p }; delete n[g.id]; return n; })}
+            />
+
             {empresas && empresas.length > 0 ? (
-              <TablaEmpresas
-                filas={empresas}
-                grupos={grupos}
-                ocupado={ocupado}
-                onCopiar={copiar}
-                onGenerar={generar}
-                onAsignar={asignar}
-              />
+              <TablaEmpresas filas={empresas} grupos={grupos} ocupado={ocupado} onAsignar={asignar} />
             ) : (
               <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-                Sin empresas asignadas — usa el selector "Cliente" de cualquier
-                empresa de abajo para asignarla.
+                Sin empresas asignadas — usa el selector "Cliente" de cualquier empresa de abajo para asignarla.
               </p>
             )}
           </section>
@@ -315,8 +411,6 @@ export function LinksClient({
             filas={porGrupo.get("__sin__") ?? []}
             grupos={grupos}
             ocupado={ocupado}
-            onCopiar={copiar}
-            onGenerar={generar}
             onAsignar={asignar}
           />
         </section>
