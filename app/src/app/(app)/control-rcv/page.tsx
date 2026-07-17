@@ -20,11 +20,15 @@ export default async function ControlRcvPage() {
   const supabase = await createClient();
 
   const [empresasRes, gruposRes, descargasRes] = await Promise.all([
+    // Solo empresas a las que les llevamos el RCV/contabilidad: hacen F29 (que se
+    // arma del RCV) o contabilidad completa. Excluye casa particular, solo-RRHH,
+    // solo-legal y trabajos puntuales.
     supabase
       .from("clientes")
       .select("id, razon_social, rut_empresa, clave_sii, hace_contabilidad_completa, grupo_id")
       .eq("activo", true)
       .eq("es_oficina", false)
+      .or("hace_f29.eq.true,hace_contabilidad_completa.eq.true")
       .order("razon_social"),
     supabase.from("grupos_cliente").select("id, codigo"),
     supabase
