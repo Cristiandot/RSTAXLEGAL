@@ -19,13 +19,14 @@ export default async function ControlRcvPage() {
   const periodos = ultimosPeriodos(6);
   const supabase = await createClient();
 
-  const [empresasRes, descargasRes] = await Promise.all([
+  const [empresasRes, gruposRes, descargasRes] = await Promise.all([
     supabase
       .from("clientes")
-      .select("id, razon_social, rut_empresa, clave_sii, hace_contabilidad_completa")
+      .select("id, razon_social, rut_empresa, clave_sii, hace_contabilidad_completa, grupo_id")
       .eq("activo", true)
       .eq("es_oficina", false)
       .order("razon_social"),
+    supabase.from("grupos_cliente").select("id, codigo"),
     supabase
       .from("rcv_descargas")
       .select(
@@ -34,6 +35,9 @@ export default async function ControlRcvPage() {
       .in("periodo", periodos),
   ]);
 
+  const codigoPorGrupo = new Map<string, string>();
+  for (const g of gruposRes.data ?? []) codigoPorGrupo.set(g.id as string, (g.codigo as string) ?? "");
+
   // La clave SII NUNCA viaja al navegador: solo el booleano de si existe.
   const empresas: EmpresaControl[] = (empresasRes.data ?? []).map((c) => ({
     id: c.id as string,
@@ -41,6 +45,7 @@ export default async function ControlRcvPage() {
     rut_empresa: (c.rut_empresa as string) ?? "",
     tieneClave: Boolean(c.clave_sii),
     contabilidad: Boolean(c.hace_contabilidad_completa),
+    grupoCodigo: (c.grupo_id ? codigoPorGrupo.get(c.grupo_id as string) : "") || "",
   }));
 
   const descargas = (descargasRes.data ?? []) as DescargaRcv[];

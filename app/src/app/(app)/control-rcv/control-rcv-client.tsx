@@ -20,7 +20,16 @@ export type EmpresaControl = {
   rut_empresa: string;
   tieneClave: boolean;
   contabilidad: boolean;
+  grupoCodigo: string;
 };
+
+/** Clave de orden por categoría: letra (A→D→…) y luego número (C.2 antes que C.10). */
+function claveOrdenGrupo(codigo: string): [string, number] {
+  const m = /^([A-Za-z]+)\.?(\d+)?/.exec(codigo ?? "");
+  const letra = m?.[1]?.toUpperCase() ?? "ZZZ"; // sin código va al final
+  const num = m?.[2] ? parseInt(m[2], 10) : 9999;
+  return [letra, num];
+}
 
 export type DescargaRcv = {
   cliente_id: string;
@@ -81,7 +90,7 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
   }, [descargas]);
 
   const filas = useMemo(() => {
-    return empresas.map((e) => {
+    const base = empresas.map((e) => {
       const celdas = periodos.map((p) => {
         const d = mapa.get(`${e.id}|${p}`) ?? null;
         return { d, estado: estadoDeCelda(d, e.tieneClave) };
@@ -93,6 +102,12 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
       // "Al día" = con clave, todos los meses descargados y todos cuadran (verificados).
       const alDia = e.tieneClave && !faltanMeses && !hayRevisar && !haySinVerificar;
       return { empresa: e, celdas, descargados, faltanMeses, hayRevisar, haySinVerificar, alDia };
+    });
+    // Orden por categoría de cliente (A → D → …), luego número y razón social.
+    return base.sort((a, b) => {
+      const [la, na] = claveOrdenGrupo(a.empresa.grupoCodigo);
+      const [lb, nb] = claveOrdenGrupo(b.empresa.grupoCodigo);
+      return la.localeCompare(lb) || na - nb || a.empresa.razon_social.localeCompare(b.empresa.razon_social, "es");
     });
   }, [empresas, periodos, mapa]);
 
@@ -176,8 +191,17 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
             {filtradas.map((f) => (
               <TableRow key={f.empresa.id}>
                 <TableCell>
-                  <div className="font-medium leading-tight">{f.empresa.razon_social}</div>
-                  <div className="text-xs text-muted-foreground">{f.empresa.rut_empresa}</div>
+                  <div className="flex items-center gap-2">
+                    {f.empresa.grupoCodigo && (
+                      <span className="inline-flex w-10 shrink-0 justify-center rounded bg-muted px-1 py-0.5 text-[11px] font-semibold text-muted-foreground tabular-nums">
+                        {f.empresa.grupoCodigo}
+                      </span>
+                    )}
+                    <div>
+                      <div className="font-medium leading-tight">{f.empresa.razon_social}</div>
+                      <div className="text-xs text-muted-foreground">{f.empresa.rut_empresa}</div>
+                    </div>
+                  </div>
                 </TableCell>
 
                 {f.celdas.map((c, i) => (
