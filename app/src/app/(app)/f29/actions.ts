@@ -45,10 +45,14 @@ export async function guardarF29(
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
 
-  // Presentado/declarado ante el SII se ata al pago: si aún no había fecha de
-  // presentación pero se guarda una fecha de pago del F29, esa fecha queda
-  // también como presentación (criterio Cristian 17-07-2026).
-  const fechaPresentado = input.fechaPresentado ?? input.fechaPagoF29;
+  // DECLARADO ante el SII se ata al FOLIO: el folio se obtiene al final de la
+  // declaración, así que el F29 pasa a «Declarado» recién cuando se le asigna
+  // un folio. Sin folio no puede estar declarado; si se borra el folio, se
+  // limpia la fecha de declaración (criterio Cristian 17-07-2026). Enviar el
+  // aviso NO requiere folio.
+  const folio = input.folio?.trim() || null;
+  const hoy = new Date().toISOString().slice(0, 10);
+  const fechaPresentado = folio ? (input.fechaPresentado ?? hoy) : null;
 
   const { error } = await supabase
     .from("ciclo_f29")
@@ -58,7 +62,7 @@ export async function guardarF29(
       fecha_f29_presentado: fechaPresentado,
       monto_a_pagar: input.monto,
       ppm: input.ppm,
-      folio_f29: input.folio,
+      folio_f29: folio,
       pago_por: input.pagoPor,
       fecha_pago_oficina: input.fechaPagoOficina,
       fecha_pago_f29: input.fechaPagoF29,
@@ -220,7 +224,7 @@ export async function enviarCorreoF29Pagado(
   const { data: row, error: errRow } = await supabase
     .from("ciclo_f29")
     .select(
-      "cliente_id, periodo, monto_a_pagar, fecha_pago_f29, fecha_f29_presentado, clientes(razon_social, correo_empresa)",
+      "cliente_id, periodo, monto_a_pagar, fecha_pago_f29, clientes(razon_social, correo_empresa)",
     )
     .eq("id", cicloId)
     .single();
@@ -276,16 +280,13 @@ export async function enviarCorreoF29Pagado(
   });
   if (!res.ok) return { ok: false, error: res.error };
 
-  // El F29 queda pagado: recién acá se marca como presentado/declarado ante el
-  // SII (criterio Cristian 17-07-2026). Si ya traía fecha de presentación, se
-  // conserva; si no, se estampa la del pago.
+  // El F29 queda pagado. NO se toca la declaración: «Declarado» se ata al folio
+  // (ver guardarF29), no al pago.
   await supabase
     .from("ciclo_f29")
     .update({
       numero_operacion: numOp,
       fecha_pago_f29: fechaPago,
-      fecha_f29_presentado:
-        (row.fecha_f29_presentado as string | null) ?? fechaPago,
       fecha_correo_pago_enviado: new Date().toISOString(),
     })
     .eq("id", cicloId);

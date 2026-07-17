@@ -205,6 +205,8 @@ export function claseEstado(estado: string): string {
     case "Cerrado":
     case "Guardado y enviado":
       return "border-sky-200 bg-sky-50 text-sky-700";
+    case "Declarado":
+      return "border-indigo-200 bg-indigo-50 text-indigo-700";
     case "Sin iniciar":
       return "border-slate-200 bg-slate-100 text-slate-600";
     case "Descargando":

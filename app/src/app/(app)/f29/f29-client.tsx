@@ -52,8 +52,8 @@ import {
 const ESTADOS = [
   "Sin iniciar",
   "Pendiente presentación",
-  "Cerrado",
   "Guardado y enviado",
+  "Declarado",
   "Fondos en RS",
   "Pagado",
 ];
@@ -274,9 +274,10 @@ export function F29Client({
       cicloId: ciclo.ciclo_id,
       clienteId: ciclo.cliente_id,
       responsableId: get("responsable"),
-      // fecha_f29_armado / fecha_f29_presentado ya no se gestionan a mano en la
-      // UI: la presentación/declaración se estampa al pagar el F29 (paso 3),
-      // nunca al enviar el aviso. Se conserva el valor histórico.
+      // fecha_f29_armado no se gestiona a mano; fecha_f29_presentado la deriva
+      // el server desde el folio (con folio → «Declarado»; sin folio → null),
+      // nunca desde el envío del aviso. Se conserva el valor histórico y el
+      // server decide (guardarF29).
       fechaArmado: ciclo.fecha_f29_armado,
       fechaPresentado: ciclo.fecha_f29_presentado,
       monto: get("monto"),
@@ -716,18 +717,9 @@ export function F29Client({
                   del paso 1 le ofrece la opción y explica cuánto pagaría ahora.
                 </span>
               </div>
-              <div className="col-span-2 flex flex-col gap-1.5">
-                <Label htmlFor="folio">Folio F29</Label>
-                <Input
-                  id="folio"
-                  name="folio"
-                  className="w-48"
-                  defaultValue={editando.folio_f29 ?? ""}
-                />
-              </div>
               </div>
 
-              {/* Columna derecha — envío, transferencia, pago y notas */}
+              {/* Columna derecha — envío, declaración, transferencia, pago y notas */}
               <div className="flex flex-col gap-3">
               {/* Paso 1 — cerrar el detalle: envía el aviso al cliente. */}
               <div className="col-span-2 flex flex-col gap-1.5 rounded-lg border border-sky-200 bg-sky-50/50 p-3">
@@ -759,14 +751,34 @@ export function F29Client({
                     ? "Guardando y enviando aviso…"
                     : editando.fecha_correo_f29_enviado
                       ? `Guardado y enviado el ${formatFecha(editando.fecha_correo_f29_enviado.slice(0, 10))}.`
-                      : "Guarda el formulario y envía al cliente el aviso (desglose, monto y plazo). El F29 pasa a «Guardado y enviado» —no se marca como declarado ante el SII, eso ocurre al pagar— y el correo se guarda en su ficha."}
+                      : "Guarda el formulario y envía al cliente el aviso (desglose, monto y plazo). El F29 pasa a «Guardado y enviado» —no se marca como declarado ante el SII, eso ocurre al asignar el folio (paso 2)— y el correo se guarda en su ficha."}
                 </span>
               </div>
 
-              {/* Paso 2 — el cliente transfirió los fondos a la oficina. */}
+              {/* Paso 2 — declaración ante el SII: el folio queda al final del F29. */}
+              <div className="col-span-2 flex flex-col gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50/50 p-3">
+                <Label htmlFor="folio" className="text-indigo-900">
+                  2 · Folio F29 (declaración)
+                </Label>
+                <Input
+                  id="folio"
+                  name="folio"
+                  placeholder="Folio del F29"
+                  className="w-48 bg-card"
+                  defaultValue={editando.folio_f29 ?? ""}
+                />
+                <span className="text-xs text-muted-foreground">
+                  El folio se obtiene al final, cuando el F29 queda declarado en
+                  el SII. Al guardar con folio, el F29 pasa a «Declarado». No es
+                  necesario para enviar el aviso, pero sin folio no puede quedar
+                  declarado.
+                </span>
+              </div>
+
+              {/* Paso 3 — el cliente transfirió los fondos a la oficina. */}
               <div className="col-span-2 flex flex-col gap-1.5 rounded-lg border border-violet-200 bg-violet-50/40 p-3">
                 <Label htmlFor="fecha_pago_oficina" className="text-violet-900">
-                  2 · Transfirieron a RS
+                  3 · Transfirieron a RS
                 </Label>
                 <Input
                   id="fecha_pago_oficina"
@@ -784,7 +796,7 @@ export function F29Client({
               {/* Paso 3 — RS pagó el F29: fecha de pago + comprobante al cliente. */}
               <div className="col-span-2 flex flex-col gap-2 rounded-lg border border-emerald-200 bg-emerald-50/50 p-3">
                 <Label className="text-emerald-900">
-                  3 · Pago del F29 y comprobante al cliente
+                  4 · Pago del F29 y comprobante al cliente
                 </Label>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">
