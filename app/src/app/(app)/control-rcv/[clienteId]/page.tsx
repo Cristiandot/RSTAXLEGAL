@@ -37,7 +37,7 @@ export default async function DetalleRcvPage({
   const supabase = await createClient();
 
   const [clienteRes, ventasRes, comprasRes] = await Promise.all([
-    supabase.from("clientes").select("id, razon_social, rut_empresa").eq("id", clienteId).maybeSingle(),
+    supabase.from("clientes").select("id, razon_social, rut_empresa, clave_sii").eq("id", clienteId).maybeSingle(),
     supabase
       .from("rcv_ventas")
       .select(COLS_VENTA)
@@ -61,6 +61,7 @@ export default async function DetalleRcvPage({
       <DetalleRcvClient
         razonSocial={clienteRes.data?.razon_social ?? "Empresa"}
         rutEmpresa={clienteRes.data?.rut_empresa ?? ""}
+        tieneClave={Boolean(clienteRes.data?.clave_sii)}
         clienteId={clienteId}
         periodo={periodo}
         periodos={periodos}

@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RutCopiable } from "@/components/rut-copiable";
+import { ClaveCell } from "@/components/credencial-celdas";
 import {
   Table,
   TableBody,
@@ -46,12 +48,17 @@ export type DocCompra = {
 type Props = {
   razonSocial: string;
   rutEmpresa: string;
+  tieneClave: boolean;
   clienteId: string;
   periodo: string;
   periodos: string[];
   ventas: DocVenta[];
   compras: DocCompra[];
 };
+
+/** Login del SII que, tras autenticar, redirige al Registro de Compras y Ventas. */
+const URL_RCV_SII =
+  "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?https://www4.sii.cl/consdcvinternetui/";
 
 function BadgeTipo({ tipo }: { tipo: number }) {
   const nc = tipo === 60 || tipo === 61 || tipo === 112;
@@ -141,7 +148,7 @@ function ResumenPorTipo({ titulo, filas }: { titulo: string; filas: FilaResumen[
   );
 }
 
-export function DetalleRcvClient({ razonSocial, rutEmpresa, clienteId, periodo, periodos, ventas, compras }: Props) {
+export function DetalleRcvClient({ razonSocial, rutEmpresa, tieneClave, clienteId, periodo, periodos, ventas, compras }: Props) {
   const sum = (arr: number[]) => arr.reduce((a, b) => a + (Number(b) || 0), 0);
   const resumenVentas = resumenPorTipo(ventas, (d) => (d as DocVenta).monto_iva);
   const resumenCompras = resumenPorTipo(compras, (d) => (d as DocCompra).iva_recuperable);
@@ -156,7 +163,30 @@ export function DetalleRcvClient({ razonSocial, rutEmpresa, clienteId, periodo, 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">{razonSocial}</h1>
-          <p className="text-sm text-muted-foreground">RUT {rutEmpresa} · Registro de Compras y Ventas del SII</p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="text-xs">RUT</span> <RutCopiable rut={rutEmpresa} />
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="text-xs">Clave SII</span>
+              <ClaveCell
+                clienteId={clienteId}
+                campo="clave_sii"
+                etiqueta="Clave SII"
+                razonSocial={razonSocial}
+                tiene={tieneClave}
+                compacto
+              />
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              render={<a href={URL_RCV_SII} target="_blank" rel="noopener noreferrer" />}
+            >
+              <ExternalLink className="size-4" />
+              Abrir RCV en el SII
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-1">
           {periodos.map((p) => (
