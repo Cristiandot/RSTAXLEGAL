@@ -70,8 +70,81 @@ function BadgeTipo({ tipo }: { tipo: number }) {
   );
 }
 
+type FilaResumen = { tipo: number; cantidad: number; exento: number; neto: number; iva: number; total: number };
+
+/** Agrupa documentos por tipo (como el resumen del SII): cantidad y montos por tipo de doc. */
+function resumenPorTipo(
+  docs: Array<{ tipo_doc: number; monto_exento: number; monto_neto: number; monto_total: number }>,
+  iva: (d: { tipo_doc: number; monto_exento: number; monto_neto: number; monto_total: number }) => number,
+): FilaResumen[] {
+  const m = new Map<number, FilaResumen>();
+  for (const d of docs) {
+    const f = m.get(d.tipo_doc) ?? { tipo: d.tipo_doc, cantidad: 0, exento: 0, neto: 0, iva: 0, total: 0 };
+    f.cantidad += 1;
+    f.exento += Number(d.monto_exento) || 0;
+    f.neto += Number(d.monto_neto) || 0;
+    f.iva += iva(d) || 0;
+    f.total += Number(d.monto_total) || 0;
+    m.set(d.tipo_doc, f);
+  }
+  return [...m.values()].sort((a, b) => a.tipo - b.tipo);
+}
+
+function ResumenPorTipo({ titulo, filas }: { titulo: string; filas: FilaResumen[] }) {
+  const tot = filas.reduce(
+    (a, f) => ({ cantidad: a.cantidad + f.cantidad, exento: a.exento + f.exento, neto: a.neto + f.neto, iva: a.iva + f.iva, total: a.total + f.total }),
+    { cantidad: 0, exento: 0, neto: 0, iva: 0, total: 0 },
+  );
+  return (
+    <div className="rounded-xl border bg-card">
+      <div className="border-b px-3 py-2 text-sm font-semibold">{titulo}</div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Tipo de documento</TableHead>
+            <TableHead className="text-right">Cant.</TableHead>
+            <TableHead className="text-right">Exento</TableHead>
+            <TableHead className="text-right">Neto</TableHead>
+            <TableHead className="text-right">IVA</TableHead>
+            <TableHead className="text-right">Total</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {filas.map((f) => (
+            <TableRow key={f.tipo}>
+              <TableCell><BadgeTipo tipo={f.tipo} /></TableCell>
+              <TableCell className="text-right font-medium tabular-nums">{f.cantidad}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatMonto(f.exento)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatMonto(f.neto)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatMonto(f.iva)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatMonto(f.total)}</TableCell>
+            </TableRow>
+          ))}
+          {filas.length === 0 && (
+            <TableRow><TableCell colSpan={6} className="py-4 text-center text-muted-foreground">Sin documentos.</TableCell></TableRow>
+          )}
+        </TableBody>
+        {filas.length > 0 && (
+          <TableFooter>
+            <TableRow>
+              <TableCell className="font-semibold">Total</TableCell>
+              <TableCell className="text-right font-semibold tabular-nums">{tot.cantidad}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatMonto(tot.exento)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatMonto(tot.neto)}</TableCell>
+              <TableCell className="text-right tabular-nums">{formatMonto(tot.iva)}</TableCell>
+              <TableCell className="text-right font-semibold tabular-nums">{formatMonto(tot.total)}</TableCell>
+            </TableRow>
+          </TableFooter>
+        )}
+      </Table>
+    </div>
+  );
+}
+
 export function DetalleRcvClient({ razonSocial, rutEmpresa, clienteId, periodo, periodos, ventas, compras }: Props) {
   const sum = (arr: number[]) => arr.reduce((a, b) => a + (Number(b) || 0), 0);
+  const resumenVentas = resumenPorTipo(ventas, (d) => (d as DocVenta).monto_iva);
+  const resumenCompras = resumenPorTipo(compras, (d) => (d as DocCompra).iva_recuperable);
 
   return (
     <div className="space-y-4 py-4">
@@ -99,10 +172,18 @@ export function DetalleRcvClient({ razonSocial, rutEmpresa, clienteId, periodo, 
         </div>
       </div>
 
-      {/* VENTAS */}
-      <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">Ventas ({ventas.length} documentos)</h2>
-        <div className="rounded-xl border bg-card">
+      {/* RESUMEN POR TIPO (comparación rápida con el SII) */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ResumenPorTipo titulo={`Ventas — resumen (${ventas.length} docs)`} filas={resumenVentas} />
+        <ResumenPorTipo titulo={`Compras — resumen (${compras.length} docs)`} filas={resumenCompras} />
+      </div>
+
+      {/* VENTAS — detalle plegable */}
+      <details className="rounded-xl border bg-card">
+        <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-muted-foreground">
+          Ventas — detalle documento por documento ({ventas.length})
+        </summary>
+        <div className="border-t">
           <Table stickyHeader>
             <TableHeader>
               <TableRow>
@@ -148,12 +229,14 @@ export function DetalleRcvClient({ razonSocial, rutEmpresa, clienteId, periodo, 
             )}
           </Table>
         </div>
-      </section>
+      </details>
 
-      {/* COMPRAS */}
-      <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">Compras ({compras.length} documentos)</h2>
-        <div className="rounded-xl border bg-card">
+      {/* COMPRAS — detalle plegable */}
+      <details className="rounded-xl border bg-card">
+        <summary className="cursor-pointer select-none px-3 py-2 text-sm font-semibold text-muted-foreground">
+          Compras — detalle documento por documento ({compras.length})
+        </summary>
+        <div className="border-t">
           <Table stickyHeader>
             <TableHeader>
               <TableRow>
@@ -199,7 +282,7 @@ export function DetalleRcvClient({ razonSocial, rutEmpresa, clienteId, periodo, 
             )}
           </Table>
         </div>
-      </section>
+      </details>
     </div>
   );
 }
