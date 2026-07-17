@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   Table,
@@ -206,7 +207,13 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
 
                 {f.celdas.map((c, i) => (
                   <TableCell key={periodos[i]} className="text-center">
-                    <CeldaEstado estado={c.estado} d={c.d} />
+                    {f.empresa.tieneClave ? (
+                      <Link href={`/control-rcv/${f.empresa.id}?periodo=${periodos[i]}`} className="inline-block hover:opacity-80" title="Ver detalle del mes">
+                        <CeldaEstado estado={c.estado} d={c.d} />
+                      </Link>
+                    ) : (
+                      <CeldaEstado estado={c.estado} d={c.d} />
+                    )}
                   </TableCell>
                 ))}
 
