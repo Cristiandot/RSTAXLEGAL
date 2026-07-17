@@ -100,17 +100,25 @@ export function filasDesgloseF29(d: DesgloseF29): {
  */
 export function cajaPostergacionIva(
   montoPostergable: number | string,
-  montoTotal: number | string | null,
+  desglose: DesgloseF29,
   fechaLimite?: string | null,
 ): string {
   const postergable = Number(montoPostergable);
-  const total = montoTotal !== null ? Number(montoTotal) : null;
-  const pagaAhora =
-    total !== null ? Math.max(0, total - postergable) : null;
-  const detallePago =
-    pagaAhora !== null
-      ? ` De acogerse, este mes pagaría solo <strong>${formatMonto(pagaAhora)}</strong> (los demás impuestos del formulario —PPM, impuesto único y retenciones— no son postergables y se pagan dentro del plazo normal).`
-      : "";
+  // "Pagaría solo" = los conceptos NO postergables del F29 (todo menos el IVA):
+  // Impuesto Único + Retenciones + PPM + Otros, sumados del desglose. NO se
+  // calcula como (total − postergable): eso era frágil al formato del monto
+  // postergado —un "845.117" se leía como 845,117 decimal y el pago salía mal—
+  // (criterio Cristian 17-07-2026).
+  const num = (v: number | string | null | undefined) =>
+    v === null || v === undefined || v === "" ? 0 : Number(v);
+  const pagaAhora = Math.max(
+    0,
+    num(desglose.impUnico) +
+      num(desglose.retenciones) +
+      num(desglose.ppm) +
+      num(desglose.otros),
+  );
+  const detallePago = ` De acogerse, este mes pagaría solo <strong>${formatMonto(pagaAhora)}</strong> (los demás impuestos del formulario —PPM, impuesto único y retenciones— no son postergables y se pagan dentro del plazo normal).`;
   // La postergación es siempre de 2 meses: si viene la fecha, se indica el nuevo
   // plazo concreto (día 20); si no, se deja la redacción genérica.
   const nuevoPlazo = fechaLimite
@@ -167,7 +175,7 @@ export function construirCorreoAvisoF29(d: DatosAvisoF29): {
     !esMontoCero &&
     d.postergacionMonto !== null &&
     Number(d.postergacionMonto) > 0
-      ? `<div style="margin:0 0 16px;">${cajaPostergacionIva(d.postergacionMonto, d.montoTotal, fechaLimitePostergacion(d.periodo))}</div>`
+      ? `<div style="margin:0 0 16px;">${cajaPostergacionIva(d.postergacionMonto, d.desglose, fechaLimitePostergacion(d.periodo))}</div>`
       : "";
 
   const notaContador = (d.comentarioContador ?? "").trim()
