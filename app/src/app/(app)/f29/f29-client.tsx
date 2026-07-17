@@ -347,8 +347,6 @@ export function F29Client({
       observaciones: get("observaciones"),
       multa: get("multa"),
       condonacion: get("condonacion"),
-      convenioFolio: get("convenio_folio"),
-      convenioMonto: get("convenio_monto"),
     };
   }
 
@@ -773,16 +771,16 @@ export function F29Client({
                   ahora. Se toma el IVA del detalle: no hay que escribir montos.
                 </span>
               </div>
-              {/* Recargos por atraso y convenio de pago. Alimentan el detalle
-                  F29 que ve el cliente (la postergación de IVA es el check de
-                  arriba: lo postergable = IVA del desglose). */}
+              {/* Recargos por atraso de la propia declaración (la postergación de
+                  IVA es el check de arriba; los convenios de pago viven en su
+                  módulo aparte). */}
               <div
                 key={`rec-${editando.ciclo_id}`}
                 className="col-span-2 grid grid-cols-2 gap-3 rounded-lg border border-border bg-muted/20 p-3"
               >
                 <div className="col-span-2 text-xs font-semibold text-muted-foreground">
-                  Recargos y convenio — llena solo lo que aplique (se muestran al
-                  cliente cuando tienen monto).
+                  Recargos por atraso — llena solo si el F29 se presentó/pagó
+                  fuera de plazo.
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="multa">Multa e interés ($)</Label>
@@ -805,30 +803,6 @@ export function F29Client({
                     placeholder="—"
                     defaultValue={editando.condonacion == null ? "" : String(editando.condonacion)}
                   />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="convenio_monto">Monto en convenio ($)</Label>
-                  <Input
-                    id="convenio_monto"
-                    name="convenio_monto"
-                    type="number"
-                    inputMode="numeric"
-                    placeholder="—"
-                    defaultValue={editando.convenio_monto == null ? "" : String(editando.convenio_monto)}
-                  />
-                </div>
-                <div className="col-span-2 flex flex-col gap-1.5">
-                  <Label htmlFor="convenio_folio">Convenio de pago N° (Tesorería)</Label>
-                  <Input
-                    id="convenio_folio"
-                    name="convenio_folio"
-                    placeholder="—"
-                    defaultValue={editando.convenio_folio ?? ""}
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    Si la deuda de este período quedó en un convenio de pago,
-                    escribe su N°: el cliente verá que este F29 está en convenio.
-                  </span>
                 </div>
               </div>
 

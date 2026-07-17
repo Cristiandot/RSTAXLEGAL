@@ -6,6 +6,7 @@ import {
   FilePlus2,
   FileSignature,
   FileWarning,
+  FileClock,
   CalendarDays,
   Clock4,
   Building2,
@@ -114,6 +115,15 @@ export const MODULOS: SeccionModulos[] = [
         descripcion: "Armado y presentación mensual. Plazo día 20.",
         href: "/f29",
         icon: FileText,
+        estado: "activo",
+      },
+      {
+        key: "convenios",
+        label: "Convenios y multas",
+        descripcion:
+          "Convenios de pago (Tesorería) y multas por empresa, con sus cuotas: fechas de vencimiento, pagos y estado. Se ingresan una vez y se controlan acá.",
+        href: "/convenios",
+        icon: FileClock,
         estado: "activo",
       },
       {

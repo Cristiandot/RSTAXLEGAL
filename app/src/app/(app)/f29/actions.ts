@@ -54,11 +54,9 @@ export type GuardarF29Input = {
   montoRetenciones: string | null;
   montoOtros: string | null;
   observaciones: string | null;
-  // Recargos por atraso y convenio de pago (la postergación de IVA es postergarIva).
+  // Recargos por atraso de la propia declaración (la postergación de IVA es postergarIva).
   multa: string | null;
   condonacion: string | null;
-  convenioFolio: string | null;
-  convenioMonto: string | null;
 };
 
 /**
@@ -110,11 +108,9 @@ export async function guardarF29(
       monto_retenciones: input.montoRetenciones,
       monto_otros: input.montoOtros,
       observaciones: input.observaciones,
-      // Recargos y convenio (la postergación de IVA la escribe postergar_iva de arriba).
+      // Recargos de la propia declaración (la postergación de IVA la escribe postergar_iva de arriba).
       multa: input.multa,
       condonacion: input.condonacion,
-      convenio_folio: input.convenioFolio,
-      convenio_monto: input.convenioMonto,
     })
     .eq("id", input.cicloId);
 
