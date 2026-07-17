@@ -30,11 +30,13 @@ export async function POST(req: Request) {
   const supabase = createServiceClient();
   const { data: cli } = await supabase
     .from("clientes")
-    .select("id")
+    .select("id, hace_tesoreria")
     .eq("form_token", token)
     .eq("activo", true)
     .maybeSingle();
   if (!cli) return NextResponse.json({ ok: false, error: "Link no válido." }, { status: 403 });
+  if (!cli.hace_tesoreria)
+    return NextResponse.json({ ok: false, error: "El servicio de tesorería no está activo para esta empresa." }, { status: 403 });
 
   const buffer = Buffer.from(await archivo.arrayBuffer());
   const parsed = parseCartola({ fuente, filename: archivo.name, buffer });

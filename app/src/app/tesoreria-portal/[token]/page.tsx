@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { docsPendientes, hoyChile, addDias, n } from "@/lib/tesoreria";
 import { formatMonto, formatFecha } from "@/lib/format";
 import { PortalUpload } from "./portal-upload";
+import { PortalConciliar, type MovPortal } from "./portal-conciliar";
 
 export const metadata = { title: "Mi Tesorería — RS Tax & Legal" };
 
@@ -22,10 +23,31 @@ export default async function TesoreriaPortalPage({
 
   const { data: cliente } = await supabase
     .from("clientes")
-    .select("id, razon_social, plazo_pago_ventas, plazo_pago_compras, conciliacion_desde")
+    .select("id, razon_social, hace_tesoreria, plazo_pago_ventas, plazo_pago_compras, conciliacion_desde")
     .eq("form_token", token)
     .eq("activo", true)
     .maybeSingle();
+
+  // Servicio adicional: solo empresas con tesorería contratada ven este portal.
+  if (cliente && cliente.hace_tesoreria !== true) {
+    return (
+      <main className="min-h-svh bg-background px-4 py-8">
+        <div className="mx-auto max-w-lg">
+          <div className="card-soft rounded-xl bg-card p-8 text-center">
+            <div className="mb-4 flex justify-center">
+              <Image src="/logo-claro.png" alt="RS Tax & Legal" width={200} height={56} priority className="h-auto w-[190px]" />
+            </div>
+            <h1 className="font-heading text-xl font-semibold">Tesorería no activada</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              El servicio de tesorería y conciliación bancaria no está activo para{" "}
+              {cliente.razon_social}. Si te interesa contratarlo, escríbele a tu ejecutivo de
+              RS Tax &amp; Legal.
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   if (!cliente) {
     return (
@@ -48,21 +70,33 @@ export default async function TesoreriaPortalPage({
   const hoy = hoyChile();
   const desde = (cliente.conciliacion_desde as string | null) ?? addDias(hoy, -365);
 
-  const [{ data: cuentas }, { data: movs }, cxc, cxp] = await Promise.all([
+  const [{ data: cuentas }, { data: movs }, { count: pendTotal }, cxc, cxp] = await Promise.all([
     supabase.from("banco_cuenta").select("id, alias, fuente, saldo_actual").eq("cliente_id", cliente.id),
     supabase
       .from("banco_movimiento")
       .select("id, fecha, glosa, abono, cargo, estado")
       .eq("cliente_id", cliente.id)
       .order("fecha", { ascending: false })
-      .limit(40),
+      .limit(80),
+    supabase
+      .from("banco_movimiento")
+      .select("id", { count: "exact", head: true })
+      .eq("cliente_id", cliente.id)
+      .eq("estado", "pendiente"),
     docsPendientes(supabase, cliente.id, "cobrar", n(cliente.plazo_pago_ventas), desde, hoy),
     docsPendientes(supabase, cliente.id, "pagar", n(cliente.plazo_pago_compras), desde, hoy),
   ]);
 
   const saldo = (cuentas ?? []).reduce((a, c) => a + (c.saldo_actual == null ? 0 : Number(c.saldo_actual)), 0);
-  const movRows = movs ?? [];
-  const pendientes = movRows.filter((m) => m.estado === "pendiente").length;
+  const movRows: MovPortal[] = (movs ?? []).map((m) => ({
+    id: m.id as string,
+    fecha: m.fecha as string,
+    glosa: (m.glosa as string) || null,
+    abono: n(m.abono as number),
+    cargo: n(m.cargo as number),
+    estado: m.estado as string,
+  }));
+  const pendientes = pendTotal ?? 0;
   const totalCxC = cxc.reduce((a, d) => a + d.pendiente, 0);
   const totalCxP = cxp.reduce((a, d) => a + d.pendiente, 0);
 
@@ -100,50 +134,20 @@ export default async function TesoreriaPortalPage({
 
         <PortalUpload token={token} />
 
-        <div className="mt-6">
-          <h2 className="font-heading text-lg font-semibold">Últimos movimientos</h2>
-          <div className="card-soft mt-2 overflow-hidden rounded-xl bg-card">
-            {movRows.length === 0 ? (
-              <div className="p-8 text-center text-sm text-muted-foreground">
-                Aún no hay movimientos. Sube tu cartola para empezar.
-              </div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="px-4 py-2">Fecha</th>
-                    <th className="px-4 py-2">Glosa</th>
-                    <th className="px-4 py-2 text-right">Cargo</th>
-                    <th className="px-4 py-2 text-right">Abono</th>
-                    <th className="px-4 py-2">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {movRows.map((m) => (
-                    <tr key={m.id} className="border-b border-border/60 last:border-0">
-                      <td className="whitespace-nowrap px-4 py-2 tabular-nums">{formatFecha(m.fecha)}</td>
-                      <td className="px-4 py-2">{m.glosa || "—"}</td>
-                      <td className="px-4 py-2 text-right tabular-nums text-red-600">
-                        {Number(m.cargo) > 0 ? formatMonto(Number(m.cargo)) : ""}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-emerald-600">
-                        {Number(m.abono) > 0 ? formatMonto(Number(m.abono)) : ""}
-                      </td>
-                      <td className="px-4 py-2 text-xs text-muted-foreground">
-                        {m.estado === "conciliado" ? "Conciliado" : m.estado === "ignorado" ? "—" : "Por conciliar"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-          {cuentas && cuentas.length > 0 && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Cuentas: {cuentas.map((c) => c.alias || NOMBRE_FUENTE[c.fuente] || c.fuente).join(" · ")}
-            </p>
-          )}
-        </div>
+        <PortalConciliar
+          token={token}
+          movimientos={movRows}
+          cuentas={(cuentas ?? []).map((c) => ({
+            id: c.id as string,
+            alias: (c.alias as string) || NOMBRE_FUENTE[c.fuente as string] || (c.fuente as string),
+          }))}
+          pendientes={pendientes}
+        />
+        {cuentas && cuentas.length > 0 && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Cuentas: {cuentas.map((c) => c.alias || NOMBRE_FUENTE[c.fuente] || c.fuente).join(" · ")}
+          </p>
+        )}
 
         <p className="mt-8 text-center text-xs text-muted-foreground">Rodríguez Samith Tax &amp; Legal · Viña del Mar</p>
       </div>
