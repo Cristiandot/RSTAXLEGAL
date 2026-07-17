@@ -28,7 +28,9 @@ export default async function ControlRcvPage() {
       .order("razon_social"),
     supabase
       .from("rcv_descargas")
-      .select("cliente_id, periodo, ventas_docs, compras_docs, alto_volumen, ultima_descarga")
+      .select(
+        "cliente_id, periodo, ventas_docs, compras_docs, ventas_docs_sii, compras_docs_sii, alto_volumen, ultima_descarga",
+      )
       .in("periodo", periodos),
   ]);
 

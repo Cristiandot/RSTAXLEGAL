@@ -27,6 +27,8 @@ export type DescargaRcv = {
   periodo: string;
   ventas_docs: number;
   compras_docs: number;
+  ventas_docs_sii: number | null;
+  compras_docs_sii: number | null;
   alto_volumen: boolean;
   ultima_descarga: string;
 };
@@ -37,6 +39,26 @@ type Props = {
   empresas: EmpresaControl[];
   descargas: DescargaRcv[];
   errorCarga: string | null;
+};
+
+/** Estado de un mes concreto de una empresa. */
+type EstadoCelda = "sin-clave" | "falta" | "parcial" | "sin-verificar" | "cuadra" | "revisar";
+
+function estadoDeCelda(d: DescargaRcv | null, tieneClave: boolean): EstadoCelda {
+  if (!tieneClave) return "sin-clave";
+  if (!d) return "falta";
+  if (d.alto_volumen) return "parcial";
+  if (d.ventas_docs_sii === null || d.compras_docs_sii === null) return "sin-verificar";
+  return d.ventas_docs === d.ventas_docs_sii && d.compras_docs === d.compras_docs_sii ? "cuadra" : "revisar";
+}
+
+const ESTILO_CELDA: Record<EstadoCelda, { clase: string; glifo: string }> = {
+  "cuadra": { clase: "border-emerald-200 bg-emerald-50 text-emerald-700", glifo: "✓" },
+  "revisar": { clase: "border-amber-200 bg-amber-50 text-amber-700", glifo: "≠" },
+  "parcial": { clase: "border-violet-200 bg-violet-50 text-violet-700", glifo: "≈" },
+  "sin-verificar": { clase: "border-sky-200 bg-sky-50 text-sky-700", glifo: "•" },
+  "falta": { clase: "border-red-200 bg-red-50 text-red-600", glifo: "falta" },
+  "sin-clave": { clase: "border-transparent text-slate-300", glifo: "·" },
 };
 
 function ResumenCard({ label, valor, tono }: { label: string; valor: number; tono?: string }) {
@@ -52,7 +74,6 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
   const [buscar, setBuscar] = useState("");
   const [soloPendientes, setSoloPendientes] = useState(false);
 
-  // Índice de descargas por "cliente|periodo".
   const mapa = useMemo(() => {
     const m = new Map<string, DescargaRcv>();
     for (const d of descargas) m.set(`${d.cliente_id}|${d.periodo}`, d);
@@ -61,11 +82,17 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
 
   const filas = useMemo(() => {
     return empresas.map((e) => {
-      const celdas = periodos.map((p) => mapa.get(`${e.id}|${p}`) ?? null);
-      const descargados = celdas.filter((c) => c !== null).length;
-      const conAltoVol = celdas.some((c) => c?.alto_volumen);
-      const completo = e.tieneClave && descargados === periodos.length && !conAltoVol;
-      return { empresa: e, celdas, descargados, conAltoVol, completo };
+      const celdas = periodos.map((p) => {
+        const d = mapa.get(`${e.id}|${p}`) ?? null;
+        return { d, estado: estadoDeCelda(d, e.tieneClave) };
+      });
+      const descargados = celdas.filter((c) => c.d !== null).length;
+      const faltanMeses = e.tieneClave && descargados < periodos.length;
+      const hayRevisar = celdas.some((c) => c.estado === "revisar" || c.estado === "parcial");
+      const haySinVerificar = celdas.some((c) => c.estado === "sin-verificar");
+      // "Al día" = con clave, todos los meses descargados y todos cuadran (verificados).
+      const alDia = e.tieneClave && !faltanMeses && !hayRevisar && !haySinVerificar;
+      return { empresa: e, celdas, descargados, faltanMeses, hayRevisar, haySinVerificar, alDia };
     });
   }, [empresas, periodos, mapa]);
 
@@ -73,20 +100,20 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
     const q = buscar.trim().toLowerCase();
     return filas.filter((f) => {
       if (q && !`${f.empresa.razon_social} ${f.empresa.rut_empresa}`.toLowerCase().includes(q)) return false;
-      if (soloPendientes && f.completo) return false;
+      if (soloPendientes && f.alDia) return false;
       return true;
     });
   }, [filas, buscar, soloPendientes]);
 
   const resumen = useMemo(() => {
-    let completas = 0, conFaltantes = 0, altoVol = 0, sinClave = 0;
+    let alDia = 0, porRevisar = 0, conFaltantes = 0, sinClave = 0;
     for (const f of filas) {
-      if (!f.empresa.tieneClave) sinClave++;
-      if (f.conAltoVol) altoVol++;
-      if (f.empresa.tieneClave && f.completo) completas++;
-      else if (f.empresa.tieneClave && !f.completo) conFaltantes++;
+      if (!f.empresa.tieneClave) { sinClave++; continue; }
+      if (f.faltanMeses) conFaltantes++;
+      else if (f.hayRevisar) porRevisar++;
+      else if (f.alDia) alDia++;
     }
-    return { total: filas.length, completas, conFaltantes, altoVol, sinClave };
+    return { total: filas.length, alDia, porRevisar, conFaltantes, sinClave };
   }, [filas]);
 
   return (
@@ -94,9 +121,9 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
       <div>
         <h1 className="text-xl font-semibold">Control de descargas RCV</h1>
         <p className="text-sm text-muted-foreground">
-          Estado del Registro de Compras y Ventas descargado del SII por empresa y período. Cada
-          celda muestra <span className="font-medium">ventas / compras</span> descargadas. Se
-          actualiza solo cuando corre la descarga.
+          Por empresa y mes: si el Registro de Compras y Ventas está descargado del SII y si los
+          documentos cuadran con lo que el SII declara. Pasa el cursor por una celda para ver el
+          detalle (nuestros documentos vs. los del SII).
         </p>
       </div>
 
@@ -108,13 +135,13 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <ResumenCard label="Empresas" valor={resumen.total} />
-        <ResumenCard label="Completas (todos los meses)" valor={resumen.completas} tono="text-emerald-600" />
-        <ResumenCard label="Con meses faltantes" valor={resumen.conFaltantes} tono="text-amber-600" />
-        <ResumenCard label="Con alto volumen pendiente" valor={resumen.altoVol} tono="text-violet-600" />
+        <ResumenCard label="Al día (descargado y cuadra)" valor={resumen.alDia} tono="text-emerald-600" />
+        <ResumenCard label="Por revisar (no cuadra)" valor={resumen.porRevisar} tono="text-amber-600" />
+        <ResumenCard label="Con meses faltantes" valor={resumen.conFaltantes} tono="text-red-600" />
         <ResumenCard label="Sin clave SII" valor={resumen.sinClave} tono="text-slate-500" />
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Input
           placeholder="Buscar empresa o RUT…"
           value={buscar}
@@ -125,10 +152,12 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
           <Checkbox checked={soloPendientes} onCheckedChange={(v) => setSoloPendientes(Boolean(v))} />
           Solo con pendientes
         </label>
-        <div className="ml-auto flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" /> descargado</span>
-          <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-violet-500" /> alto volumen</span>
-          <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-full bg-red-400" /> falta</span>
+        <div className="ml-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+          <LeyendaItem clase="bg-emerald-500" texto="cuadra" />
+          <LeyendaItem clase="bg-amber-500" texto="revisar" />
+          <LeyendaItem clase="bg-sky-500" texto="descargado sin verificar" />
+          <LeyendaItem clase="bg-violet-500" texto="alto volumen" />
+          <LeyendaItem clase="bg-red-400" texto="falta" />
         </div>
       </div>
 
@@ -153,21 +182,12 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
 
                 {f.celdas.map((c, i) => (
                   <TableCell key={periodos[i]} className="text-center">
-                    <CeldaEstado d={c} tieneClave={f.empresa.tieneClave} />
+                    <CeldaEstado estado={c.estado} d={c.d} />
                   </TableCell>
                 ))}
 
                 <TableCell className="text-center">
-                  {!f.empresa.tieneClave ? (
-                    <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-500">sin clave</Badge>
-                  ) : f.completo ? (
-                    <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">{f.descargados}/{periodos.length}</Badge>
-                  ) : (
-                    <Badge variant="outline" className={cn(
-                      "border-amber-200 bg-amber-50 text-amber-700",
-                      f.conAltoVol && "border-violet-200 bg-violet-50 text-violet-700",
-                    )}>{f.descargados}/{periodos.length}</Badge>
-                  )}
+                  <EstadoEmpresa fila={f} totalMeses={periodos.length} />
                 </TableCell>
               </TableRow>
             ))}
@@ -185,27 +205,58 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
   );
 }
 
-/** Celda por (empresa, período): ventas/compras descargadas, alto volumen o falta. */
-function CeldaEstado({ d, tieneClave }: { d: DescargaRcv | null; tieneClave: boolean }) {
-  if (!tieneClave) return <span className="text-slate-300">·</span>;
-  if (!d) {
-    return (
-      <Badge variant="outline" className="border-red-200 bg-red-50 text-red-600">falta</Badge>
-    );
-  }
-  const clase = d.alto_volumen
-    ? "border-violet-200 bg-violet-50 text-violet-700"
-    : "border-emerald-200 bg-emerald-50 text-emerald-700";
+function LeyendaItem({ clase, texto }: { clase: string; texto: string }) {
   return (
-    <span
-      className={cn("inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-xs tabular-nums", clase)}
-      title={
-        `Ventas ${d.ventas_docs} · Compras ${d.compras_docs}` +
-        (d.alto_volumen ? " · alto volumen: falta descarga asíncrona" : "") +
-        (d.ultima_descarga ? ` · ${new Date(d.ultima_descarga).toLocaleDateString("es-CL")}` : "")
-      }
-    >
-      {d.ventas_docs}/{d.compras_docs}{d.alto_volumen ? " ⚠" : ""}
+    <span className="flex items-center gap-1">
+      <span className={cn("inline-block h-2.5 w-2.5 rounded-full", clase)} />
+      {texto}
     </span>
   );
+}
+
+/** Celda por (empresa, período): estado de descarga + cuadratura, con el detalle en el tooltip. */
+function CeldaEstado({ estado, d }: { estado: EstadoCelda; d: DescargaRcv | null }) {
+  const { clase, glifo } = ESTILO_CELDA[estado];
+  if (estado === "sin-clave") return <span className="text-slate-300">·</span>;
+
+  const nuestros = d ? `${d.ventas_docs} ventas / ${d.compras_docs} compras` : "—";
+  const sii =
+    d && d.ventas_docs_sii !== null
+      ? `${d.ventas_docs_sii} ventas / ${d.compras_docs_sii} compras`
+      : "sin verificar";
+  const titulo =
+    estado === "falta"
+      ? "No descargado"
+      : `Descargado: ${nuestros}\nSegún SII: ${sii}` +
+        (estado === "parcial" ? "\nAlto volumen: falta descarga asíncrona" : "") +
+        (estado === "revisar" ? "\n⚠ No cuadra con el SII" : "") +
+        (d?.ultima_descarga ? `\nDescargado el ${new Date(d.ultima_descarga).toLocaleDateString("es-CL")}` : "");
+
+  return (
+    <span
+      className={cn("inline-flex min-w-[2.2rem] items-center justify-center rounded-md border px-1.5 py-0.5 text-xs font-medium", clase)}
+      title={titulo}
+    >
+      {glifo}
+    </span>
+  );
+}
+
+/** Estado global de la empresa en el rango. */
+function EstadoEmpresa({
+  fila,
+  totalMeses,
+}: {
+  fila: { empresa: EmpresaControl; descargados: number; faltanMeses: boolean; hayRevisar: boolean; haySinVerificar: boolean; alDia: boolean };
+  totalMeses: number;
+}) {
+  if (!fila.empresa.tieneClave)
+    return <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-500">sin clave</Badge>;
+  if (fila.faltanMeses)
+    return <Badge variant="outline" className="border-red-200 bg-red-50 text-red-600">faltan {totalMeses - fila.descargados}</Badge>;
+  if (fila.hayRevisar)
+    return <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">revisar</Badge>;
+  if (fila.haySinVerificar)
+    return <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">sin verificar</Badge>;
+  return <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">al día</Badge>;
 }
