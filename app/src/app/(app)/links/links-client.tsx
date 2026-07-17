@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { comparar } from "@/lib/ordenar";
 
 export type GrupoCliente = {
   id: string;
@@ -207,11 +208,15 @@ export function LinksClient({
 
   const visibles = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    if (!q) return grupos;
-    return grupos.filter((g) => {
-      const emp = (empresasPorGrupo.get(g.id) ?? []).join(" ");
-      return `${g.codigo} ${g.nombre} ${emp}`.toLowerCase().includes(q);
-    });
+    const base = !q
+      ? grupos
+      : grupos.filter((g) => {
+          const emp = (empresasPorGrupo.get(g.id) ?? []).join(" ");
+          return `${g.codigo} ${g.nombre} ${emp}`.toLowerCase().includes(q);
+        });
+    // Orden correlativo por código: C.2 antes que C.10 (numeric-aware). El
+    // servidor entrega .order("codigo") como texto plano, que no lo respeta.
+    return [...base].sort((a, b) => comparar(a.codigo, b.codigo, "asc"));
   }, [grupos, empresasPorGrupo, buscar]);
 
   const activos = grupos.filter((g) => g.slug && g.token).length;
