@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TesoreriaNav } from "../tesoreria-nav";
 
 export type FilaFlujo = {
   mes: string;
@@ -64,7 +65,8 @@ export function FlujoClient({
         <TrendingUp className="h-5 w-5 text-muted-foreground" />
         <h1 className="font-heading text-2xl font-semibold">Flujo de caja</h1>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <TesoreriaNav cliente={clienteSeleccionado} />
+      <p className="mt-3 text-sm text-muted-foreground">
         Proyección = saldo en banco + cobros esperados (por cobrar) − pagos esperados (por pagar),
         ordenados por vencimiento. Los documentos vencidos se esperan en el mes en curso. Al día{" "}
         {formatFecha(generado)}.

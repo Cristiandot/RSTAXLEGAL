@@ -22,6 +22,7 @@ import {
   conciliarAutomatico,
   type Sugerencia,
 } from "./actions";
+import { TesoreriaNav } from "./tesoreria-nav";
 
 export type CuentaResumen = {
   id: string;
@@ -201,7 +202,8 @@ export function TesoreriaClient({
         <Landmark className="h-5 w-5 text-muted-foreground" />
         <h1 className="font-heading text-2xl font-semibold">Tesorería y Banco</h1>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <TesoreriaNav cliente={cuenta?.clienteId ?? null} />
+      <p className="mt-3 text-sm text-muted-foreground">
         Conciliación bancaria: la cartola que sube el cliente, cruzada contra las facturas y pagos
         que ya tenemos del SII.
       </p>

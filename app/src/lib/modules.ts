@@ -275,27 +275,9 @@ export const MODULOS: SeccionModulos[] = [
         key: "tesoreria",
         label: "Tesorería y Banco",
         descripcion:
-          "Conciliación bancaria estilo Chipax: el cliente sube su cartola y el panel cruza los movimientos contra las facturas y pagos que ya tenemos del SII. Saldo real, conciliado vs. pendiente y flujo de caja.",
-        href: "/tesoreria",
+          "Tesorería estilo Chipax sobre los DTE del SII que ya tenemos: vista general, conciliación bancaria (el cliente sube su cartola), cuentas por cobrar/pagar con aging y flujo de caja proyectado.",
+        href: "/tesoreria/general",
         icon: Landmark,
-        estado: "activo",
-      },
-      {
-        key: "cuentas-cobrar-pagar",
-        label: "Cuentas por cobrar / pagar",
-        descripcion:
-          "Aging de cuentas por cobrar y por pagar armado con los DTE del SII que ya tenemos (ventas y compras), con vencimiento por plazo de pago. No requiere recargar facturas.",
-        href: "/tesoreria/cuentas",
-        icon: HandCoins,
-        estado: "activo",
-      },
-      {
-        key: "flujo-caja",
-        label: "Flujo de caja",
-        descripcion:
-          "Proyección de caja por empresa: saldo en banco + cobros esperados − pagos esperados, ordenados por vencimiento. Se alimenta de la conciliación y los DTE del SII.",
-        href: "/tesoreria/flujo",
-        icon: TrendingUp,
         estado: "activo",
       },
       {

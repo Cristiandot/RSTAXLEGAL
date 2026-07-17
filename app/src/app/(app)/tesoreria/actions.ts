@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseCartola } from "@/lib/banco/parsers";
 import { upsertCuenta, insertarMovimientos } from "@/lib/banco/ingesta";
+import { docsPendientes, hoyChile, addDias, n as num } from "@/lib/tesoreria";
+import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
+import { correosCopiaCliente } from "@/lib/correos-cliente";
+import { getUsuarioActual } from "@/lib/auth";
+import { formatFecha } from "@/lib/format";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -380,6 +385,90 @@ export async function actualizarPlazoPago(input: {
   if (error) return { ok: false, error: error.message };
   revalidatePath("/tesoreria/cuentas");
   return { ok: true };
+}
+
+const CLP = (v: number) => "$" + Math.round(v).toLocaleString("es-CL");
+
+/**
+ * Cobranza (patrón Chipax "Enviar"): manda al deudor el estado de pago con
+ * TODOS sus documentos pendientes de la empresa, a nombre del usuario
+ * conectado, con copia a la empresa (contacto + correos adicionales).
+ */
+export async function enviarEstadoPago(input: {
+  clienteId: string; // empresa que cobra (cliente del panel)
+  rut: string; // RUT del deudor
+  correo: string; // destinatario
+  nota?: string;
+}): Promise<{ ok: boolean; docs?: number; error?: string }> {
+  const correo = input.correo.trim();
+  if (!correo.includes("@")) return { ok: false, error: "Correo del destinatario inválido." };
+
+  const supabase = await createClient();
+  const { data: empresa } = await supabase
+    .from("clientes")
+    .select("id, razon_social, contacto_correo, plazo_pago_ventas, conciliacion_desde")
+    .eq("id", input.clienteId)
+    .maybeSingle();
+  if (!empresa) return { ok: false, error: "Empresa no encontrada." };
+
+  const hoy = hoyChile();
+  const desde = (empresa.conciliacion_desde as string | null) ?? addDias(hoy, -365);
+  const todos = await docsPendientes(
+    supabase,
+    empresa.id,
+    "cobrar",
+    num(empresa.plazo_pago_ventas as number),
+    desde,
+    hoy,
+  );
+  const docs = todos.filter((d) => rutKey(d.rut) === rutKey(input.rut));
+  if (!docs.length) return { ok: false, error: "El deudor no tiene documentos pendientes." };
+
+  const total = docs.reduce((a, d) => a + d.pendiente, 0);
+  const deudor = docs[0].contraparte;
+  const filas = docs
+    .map(
+      (d) => `<tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;">${d.folio ?? "—"}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;">${formatFecha(d.fecha)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;${d.diasMora > 0 ? "color:#dc2626;" : ""}">${formatFecha(d.vencimiento)}${d.diasMora > 0 ? ` (${d.diasMora}d vencida)` : ""}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;text-align:right;">${CLP(d.pendiente)}</td>
+      </tr>`,
+    )
+    .join("");
+  const cuerpo = `
+    <p>Junto con saludar, compartimos el estado de pago de <strong>${deudor}</strong> con
+    <strong>${empresa.razon_social}</strong> al ${formatFecha(hoy)}:</p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin:12px 0;">
+      <thead><tr style="background:#f1f5f9;">
+        <th style="padding:6px 10px;text-align:left;">Folio</th>
+        <th style="padding:6px 10px;text-align:left;">Emisión</th>
+        <th style="padding:6px 10px;text-align:left;">Vencimiento</th>
+        <th style="padding:6px 10px;text-align:right;">Monto pendiente</th>
+      </tr></thead>
+      <tbody>${filas}</tbody>
+      <tfoot><tr>
+        <td colspan="3" style="padding:8px 10px;font-weight:bold;">Total pendiente</td>
+        <td style="padding:8px 10px;text-align:right;font-weight:bold;">${CLP(total)}</td>
+      </tr></tfoot>
+    </table>
+    ${input.nota ? `<p>${input.nota}</p>` : ""}
+    <p>Si alguno de estos documentos ya fue pagado, agradecemos indicarlo respondiendo este correo.</p>`;
+
+  const usuario = await getUsuarioActual();
+  const cc = [
+    ...(empresa.contacto_correo && empresa.contacto_correo !== correo ? [empresa.contacto_correo as string] : []),
+    ...(await correosCopiaCliente([empresa.id], [correo, empresa.contacto_correo as string | null])),
+  ];
+  const res = await enviarCorreo({
+    para: correo,
+    asunto: `Estado de pago — ${empresa.razon_social} (${docs.length} documento${docs.length !== 1 ? "s" : ""} pendiente${docs.length !== 1 ? "s" : ""})`,
+    html: htmlCorreoDocumento({ titulo: `Estado de pago — ${empresa.razon_social}`, cuerpo }),
+    de: { nombre: usuario.nombre, correo: usuario.correo },
+    cc,
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+  return { ok: true, docs: docs.length };
 }
 
 /** Fija (o limpia) la fecha de inicio de conciliación de una empresa. */

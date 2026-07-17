@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, HandCoins, Receipt } from "lucide-react";
+import { Search, HandCoins, Receipt, Mail, Loader2 } from "lucide-react";
 import { formatMonto, formatFecha } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { actualizarPlazoPago, actualizarConciliacionDesde } from "../actions";
+import { actualizarPlazoPago, actualizarConciliacionDesde, enviarEstadoPago } from "../actions";
+import { TesoreriaNav } from "../tesoreria-nav";
 
 export type Aging = {
   vigente: number;
@@ -82,6 +83,7 @@ export function CuentasClient({
   conciliacionDesde,
   aging,
   filas,
+  correoPorRut,
   generado,
 }: {
   tipo: "cobrar" | "pagar";
@@ -91,6 +93,7 @@ export function CuentasClient({
   conciliacionDesde: string | null;
   aging: Aging;
   filas: FilaCuenta[];
+  correoPorRut: Record<string, string>;
   generado: string;
 }) {
   const router = useRouter();
@@ -98,6 +101,42 @@ export function CuentasClient({
   const [plazoEdit, setPlazoEdit] = useState(String(plazo));
   const [desdeEdit, setDesdeEdit] = useState(conciliacionDesde ?? "");
   const [pending, startTransition] = useTransition();
+
+  // Cobranza (solo Por cobrar): panel de envío del estado de pago por deudor.
+  const rutKey = (r: string | null) => (r ?? "").toUpperCase().replace(/[^0-9K]/g, "");
+  const [cobranzaRut, setCobranzaRut] = useState<string | null>(null);
+  const [correoEnvio, setCorreoEnvio] = useState("");
+  const [notaEnvio, setNotaEnvio] = useState("");
+  const [msgEnvio, setMsgEnvio] = useState<{ ok: boolean; texto: string } | null>(null);
+
+  function abrirCobranza(f: FilaCuenta) {
+    const rk = rutKey(f.rut);
+    if (cobranzaRut === rk) {
+      setCobranzaRut(null);
+      return;
+    }
+    setCobranzaRut(rk);
+    setCorreoEnvio(correoPorRut[rk] ?? "");
+    setNotaEnvio("");
+    setMsgEnvio(null);
+  }
+
+  function enviarCobranza(f: FilaCuenta) {
+    if (!clienteSeleccionado || !f.rut) return;
+    startTransition(async () => {
+      const res = await enviarEstadoPago({
+        clienteId: clienteSeleccionado,
+        rut: f.rut!,
+        correo: correoEnvio,
+        nota: notaEnvio || undefined,
+      });
+      if (!res.ok) setMsgEnvio({ ok: false, texto: res.error ?? "No se pudo enviar." });
+      else {
+        setMsgEnvio({ ok: true, texto: `Estado de pago enviado (${res.docs} documento${res.docs !== 1 ? "s" : ""}).` });
+        setNotaEnvio("");
+      }
+    });
+  }
 
   function guardarDesde() {
     if (!clienteSeleccionado || (desdeEdit || null) === (conciliacionDesde ?? null)) return;
@@ -149,7 +188,8 @@ export function CuentasClient({
           {esCobrar ? "Cuentas por cobrar" : "Cuentas por pagar"}
         </h1>
       </div>
-      <p className="mt-1 text-sm text-muted-foreground">
+      <TesoreriaNav cliente={clienteSeleccionado} />
+      <p className="mt-3 text-sm text-muted-foreground">
         {esCobrar
           ? "Facturas de venta emitidas al SII que aún no se concilian como pagadas."
           : "Facturas de compra del SII que aún no se concilian como pagadas."}{" "}
@@ -269,39 +309,109 @@ export function CuentasClient({
               <TableHead className="w-[120px]">Vence</TableHead>
               <TableHead className="w-[130px]">Antigüedad</TableHead>
               <TableHead className="w-[140px] text-right">Pendiente</TableHead>
+              {esCobrar && <TableHead className="w-[110px] text-right">Cobranza</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtrados.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={esCobrar ? 7 : 6} className="py-8 text-center text-sm text-muted-foreground">
                   Sin documentos {esCobrar ? "por cobrar" : "por pagar"} para esta empresa.
                 </TableCell>
               </TableRow>
             ) : (
-              filtrados.map((f) => (
-                <TableRow key={f.id}>
-                  <TableCell>
-                    <span className="block">{f.contraparte}</span>
-                    {f.rut && <span className="block text-xs text-muted-foreground">{f.rut}</span>}
-                  </TableCell>
-                  <TableCell className="tabular-nums">{f.folio ?? "—"}</TableCell>
-                  <TableCell className="whitespace-nowrap tabular-nums">{formatFecha(f.fecha)}</TableCell>
-                  <TableCell className="whitespace-nowrap tabular-nums">{formatFecha(f.vencimiento)}</TableCell>
-                  <TableCell>
-                    <BucketBadge bucket={f.bucket} />
-                    {f.diasMora > 0 && (
-                      <span className="ml-1 text-xs text-muted-foreground">{f.diasMora}d</span>
+              filtrados.map((f) => {
+                const abierto = esCobrar && cobranzaRut === rutKey(f.rut);
+                return (
+                  <Fragment key={f.id}>
+                    <TableRow>
+                      <TableCell>
+                        <span className="block">{f.contraparte}</span>
+                        {f.rut && <span className="block text-xs text-muted-foreground">{f.rut}</span>}
+                      </TableCell>
+                      <TableCell className="tabular-nums">{f.folio ?? "—"}</TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums">{formatFecha(f.fecha)}</TableCell>
+                      <TableCell className="whitespace-nowrap tabular-nums">{formatFecha(f.vencimiento)}</TableCell>
+                      <TableCell>
+                        <BucketBadge bucket={f.bucket} />
+                        {f.diasMora > 0 && (
+                          <span className="ml-1 text-xs text-muted-foreground">{f.diasMora}d</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums font-medium">
+                        {formatMonto(f.pendiente)}
+                        {f.pagadoPct > 0 && (
+                          <span className="block text-xs text-muted-foreground">{f.pagadoPct}% pagado</span>
+                        )}
+                      </TableCell>
+                      {esCobrar && (
+                        <TableCell className="text-right">
+                          {f.rut ? (
+                            <button
+                              onClick={() => abrirCobranza(f)}
+                              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-muted/50"
+                            >
+                              <Mail className="h-3.5 w-3.5" /> Enviar
+                            </button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">sin RUT</span>
+                          )}
+                        </TableCell>
+                      )}
+                    </TableRow>
+                    {abierto && (
+                      <TableRow className="bg-muted/30 hover:bg-muted/30">
+                        <TableCell colSpan={7} className="p-4">
+                          <div className="text-xs font-medium text-muted-foreground">
+                            Enviar estado de pago a {f.contraparte} — incluye TODOS sus documentos
+                            pendientes con esta empresa, con copia a la empresa.
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-end gap-2">
+                            <div>
+                              <label className="block text-xs text-muted-foreground">Correo del deudor</label>
+                              <Input
+                                type="email"
+                                value={correoEnvio}
+                                onChange={(e) => setCorreoEnvio(e.target.value)}
+                                placeholder="correo@deudor.cl"
+                                className="mt-1 h-9 w-64"
+                              />
+                            </div>
+                            <div className="min-w-64 flex-1">
+                              <label className="block text-xs text-muted-foreground">Nota (opcional)</label>
+                              <Input
+                                value={notaEnvio}
+                                onChange={(e) => setNotaEnvio(e.target.value)}
+                                placeholder="Ej: favor regularizar antes de fin de mes"
+                                className="mt-1 h-9 w-full"
+                              />
+                            </div>
+                            <button
+                              onClick={() => enviarCobranza(f)}
+                              disabled={pending || !correoEnvio.includes("@")}
+                              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                            >
+                              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                              Enviar estado de pago
+                            </button>
+                          </div>
+                          {msgEnvio && (
+                            <div
+                              className={`mt-2 rounded-lg border p-2.5 text-sm ${
+                                msgEnvio.ok
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                  : "border-red-200 bg-red-50 text-red-700"
+                              }`}
+                            >
+                              {msgEnvio.texto}
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
                     )}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums font-medium">
-                    {formatMonto(f.pendiente)}
-                    {f.pagadoPct > 0 && (
-                      <span className="block text-xs text-muted-foreground">{f.pagadoPct}% pagado</span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
+                  </Fragment>
+                );
+              })
             )}
           </TableBody>
         </Table>
