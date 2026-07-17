@@ -9,6 +9,7 @@ import { TIPOS_PERMISO } from "@/lib/permisos";
 import { formatFecha } from "@/lib/format";
 import { calcularVacaciones } from "@/lib/feriados";
 import { BANCOS_DT, TIPOS_CUENTA_DT } from "@/lib/dt-finiquitos";
+import { IMM_REFERENCIA } from "@/lib/imm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -139,9 +140,9 @@ function NotaMinimos() {
   return (
     <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 sm:col-span-3">
       <strong>Sueldos mínimos de referencia</strong> (Ingreso Mínimo Mensual
-      $539.000 por jornada completa de 42 hrs; proporcional según horas):{" "}
-      <strong>42 hrs → $539.000</strong> · <strong>30 hrs → $385.000</strong> ·{" "}
-      <strong>20 hrs → $256.667</strong>. El sueldo base no puede ser inferior
+      {" "}{IMM_REFERENCIA.imm} por jornada completa de 42 hrs; proporcional según horas):{" "}
+      <strong>42 hrs → {IMM_REFERENCIA.h42}</strong> · <strong>30 hrs → {IMM_REFERENCIA.h30}</strong> ·{" "}
+      <strong>20 hrs → {IMM_REFERENCIA.h20}</strong>. El sueldo base no puede ser inferior
       al mínimo proporcional de las horas pactadas.
     </div>
   );

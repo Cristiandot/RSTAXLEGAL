@@ -6,6 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowLeft, Download, FileCheck2 } from "lucide-react";
 import { validarRut } from "@/lib/rut";
+import { IMM_REFERENCIA } from "@/lib/imm";
 import { crearContrato, type CrearContratoResult } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -410,10 +411,10 @@ export function NuevoContratoClient({ empresas }: { empresas: EmpresaConPlantill
             </Campo>
           ) : null}
           <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 sm:col-span-3">
-            <strong>Sueldos mínimos de referencia</strong> (IMM $539.000 por 42
-            hrs; proporcional según horas): <strong>42 hrs → $539.000</strong> ·{" "}
-            <strong>30 hrs → $385.000</strong> ·{" "}
-            <strong>20 hrs → $256.667</strong>.
+            <strong>Sueldos mínimos de referencia</strong> (IMM {IMM_REFERENCIA.imm} por 42
+            hrs; proporcional según horas): <strong>42 hrs → {IMM_REFERENCIA.h42}</strong> ·{" "}
+            <strong>30 hrs → {IMM_REFERENCIA.h30}</strong> ·{" "}
+            <strong>20 hrs → {IMM_REFERENCIA.h20}</strong>.
           </div>
           <Campo label="Cláusulas adicionales (opcional — van al contrato, antes de las firmas)" span2>
             <Textarea
