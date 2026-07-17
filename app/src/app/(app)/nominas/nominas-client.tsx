@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, ChevronRight } from "lucide-react";
+import { Search, ChevronRight, Link2 } from "lucide-react";
+import { toast } from "sonner";
 import { RutCopiable } from "@/components/rut-copiable";
 import { ThSort } from "@/components/th-sort";
 import { Progreso } from "@/components/progreso";
@@ -34,6 +35,8 @@ export type NominaEmpresaRow = {
   /** % de completitud de los datos de los trabajadores. */
   pct_trab: number | null;
   faltan_trab: number;
+  /** Token del link público para que el cliente complete datos faltantes. */
+  form_token: string | null;
 };
 
 function StatCard({ label, valor }: { label: string; valor: string | number }) {
@@ -194,7 +197,7 @@ export function NominasClient({
               <ThSort col="faltan" orden={orden} setOrden={setOrden} className="text-center">
                 Faltan
               </ThSort>
-              <TableHead className="w-8" />
+              <TableHead className="w-40 text-right" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -259,8 +262,24 @@ export function NominasClient({
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    <ChevronRight className="size-4" />
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-1 text-muted-foreground">
+                      {e.form_token && e.faltan_trab > 0 ? (
+                        <button
+                          title="Copiar link para que el cliente complete los datos faltantes"
+                          className="inline-flex items-center gap-1 rounded-md border border-input px-2 py-1 text-xs hover:bg-muted"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            const url = `${window.location.origin}/completar-nomina/${e.form_token}`;
+                            void navigator.clipboard.writeText(url);
+                            toast.success("Link copiado", { description: url });
+                          }}
+                        >
+                          <Link2 className="size-3.5" /> Solicitar datos
+                        </button>
+                      ) : null}
+                      <ChevronRight className="size-4" />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

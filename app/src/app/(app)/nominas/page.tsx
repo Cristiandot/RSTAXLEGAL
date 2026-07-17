@@ -11,7 +11,7 @@ export default async function NominasPage() {
     // Solo empresas con liquidaciones de sueldo.
     supabase
       .from("clientes")
-      .select("id, razon_social, rut_empresa, grupo_id, n_trabajadores_esperados")
+      .select("id, razon_social, rut_empresa, grupo_id, n_trabajadores_esperados, form_token")
       .eq("hace_liquidaciones", true)
       .order("razon_social"),
     supabase
@@ -64,6 +64,7 @@ export default async function NominasPage() {
       n_trab_total: totalPorEmpresa.get(e.id) ?? 0,
       pct_trab: pctPorEmpresa.get(e.id)?.pct ?? null,
       faltan_trab: pctPorEmpresa.get(e.id)?.faltan ?? 0,
+      form_token: (e as { form_token?: string | null }).form_token ?? null,
     };
   });
 
