@@ -85,7 +85,11 @@ export default async function PortalGrupoPage({
             </p>
           </div>
         ) : (
-          <PortalGrupo grupo={info.grupo} empresas={empresas} />
+          <PortalGrupo
+            grupo={info.grupo}
+            empresas={empresas}
+            slug={grupoToken !== seg ? seg : null}
+          />
         )}
         <p className="mt-6 text-center text-xs text-muted-foreground">
           Rodríguez Samith Tax &amp; Legal · Viña del Mar
