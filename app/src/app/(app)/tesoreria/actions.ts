@@ -11,9 +11,13 @@ import {
   categorizarMovimientoCore,
   desconciliarMovimientoCore,
   conciliarAutomaticoCore,
+  buscarDocumentosCore,
   type DocTipoConciliacion,
   type Sugerencia,
+  type ParConciliacion,
 } from "@/lib/banco/conciliacion";
+
+export type { ParConciliacion };
 import { docsPendientes, hoyChile, addDias, n as num } from "@/lib/tesoreria";
 import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
 import { correosCopiaCliente } from "@/lib/correos-cliente";
@@ -51,6 +55,24 @@ export async function sugerenciasConciliacion(
 ): Promise<{ ok: boolean; sugerencias?: Sugerencia[]; error?: string }> {
   const supabase = await createClient();
   return sugerenciasParaMovimiento(supabase, movimientoId);
+}
+
+/** Búsqueda manual de documentos para un movimiento (folio/nombre/monto). */
+export async function buscarDocumentos(
+  movimientoId: string,
+  q: string,
+): Promise<{ ok: boolean; sugerencias?: Sugerencia[]; error?: string }> {
+  const supabase = await createClient();
+  return buscarDocumentosCore(supabase, movimientoId, q);
+}
+
+/** Pares del cruce SIN conciliar (cola "Sugerencias" del panel interno). */
+export async function sugerenciasLote(
+  cuentaId: string,
+): Promise<{ ok: boolean; pares?: ParConciliacion[]; error?: string }> {
+  const supabase = await createClient();
+  const res = await conciliarAutomaticoCore(supabase, cuentaId, { dryRun: true });
+  return { ok: res.ok, pares: res.pares, error: res.error };
 }
 
 /** Concilia un movimiento contra un documento (panel interno). */

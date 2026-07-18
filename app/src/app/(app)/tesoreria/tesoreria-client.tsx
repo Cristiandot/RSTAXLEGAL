@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Landmark, Wallet, ChevronDown, Check, Loader2, Undo2, Zap } from "lucide-react";
+import { Search, Landmark, Wallet, ChevronDown, Check, Loader2, Undo2, Zap, X } from "lucide-react";
 import { formatMonto, formatFecha } from "@/lib/format";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
@@ -23,8 +23,11 @@ import {
   desconciliarMovimiento,
   conciliarAutomatico,
   actualizarAutomatizacion,
+  buscarDocumentos,
+  sugerenciasLote,
   type Sugerencia,
   type CampoAutomatizacion,
+  type ParConciliacion,
 } from "./actions";
 import { TesoreriaNav } from "./tesoreria-nav";
 
@@ -167,6 +170,10 @@ export function TesoreriaClient({
   const [ordenCartolas, setOrdenCartolas] = useState<Orden>(null);
   const [expandido, setExpandido] = useState<string | null>(null);
   const [sugs, setSugs] = useState<Record<string, Sugerencia[] | "cargando">>({});
+  const [busqueda, setBusqueda] = useState<Record<string, { q: string; resultados: Sugerencia[] | "cargando" | null }>>({});
+  const [seleccion, setSeleccion] = useState<Record<string, Sugerencia>>({});
+  const [pares, setPares] = useState<ParConciliacion[] | "cargando" | null>(null);
+  const [descartados, setDescartados] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const [autoMsg, setAutoMsg] = useState<string | null>(null);
@@ -217,11 +224,29 @@ export function TesoreriaClient({
       return;
     }
     setExpandido(m.id);
+    setSeleccion({});
     if (!sugs[m.id]) {
       setSugs((s) => ({ ...s, [m.id]: "cargando" }));
       const res = await sugerenciasConciliacion(m.id);
       setSugs((s) => ({ ...s, [m.id]: res.sugerencias ?? [] }));
     }
+  }
+
+  async function buscarDocs(m: Movimiento) {
+    const q = busqueda[m.id]?.q ?? "";
+    if (q.trim().length < 2) return;
+    setBusqueda((b) => ({ ...b, [m.id]: { q, resultados: "cargando" } }));
+    const res = await buscarDocumentos(m.id, q);
+    setBusqueda((b) => ({ ...b, [m.id]: { q, resultados: res.sugerencias ?? [] } }));
+  }
+
+  function limpiarTrasAccion() {
+    setMsg(null);
+    setExpandido(null);
+    setSeleccion({});
+    setPares(null);
+    setDescartados(new Set());
+    router.refresh();
   }
 
   function confirmar(m: Movimiento, sug: Sugerencia) {
@@ -231,14 +256,74 @@ export function TesoreriaClient({
         docTipo: sug.docTipo,
         docId: sug.docId,
         docRef: sug.ref,
-        monto: Math.abs(m.abono - m.cargo),
+        monto: Math.min(Math.abs(m.abono - m.cargo), sug.monto),
       });
       if (!res.ok) setMsg(res.error ?? "Error al conciliar");
-      else {
-        setMsg(null);
-        setExpandido(null);
-        router.refresh();
+      else limpiarTrasAccion();
+    });
+  }
+
+  // Multidocumento: un movimiento contra varios documentos seleccionados.
+  function confirmarSeleccion(m: Movimiento) {
+    const docs = Object.values(seleccion);
+    if (!docs.length) return;
+    startTransition(async () => {
+      let restante = Math.abs(m.abono - m.cargo);
+      for (const s of docs) {
+        if (restante <= 0) break;
+        const asignar = Math.min(restante, s.monto);
+        const res = await conciliarMovimiento({
+          movimientoId: m.id,
+          docTipo: s.docTipo,
+          docId: s.docId,
+          docRef: s.ref,
+          monto: asignar,
+        });
+        if (!res.ok) {
+          setMsg(res.error ?? "Error al conciliar");
+          return;
+        }
+        restante -= asignar;
       }
+      limpiarTrasAccion();
+    });
+  }
+
+  function toggleSel(s: Sugerencia) {
+    const k = `${s.docTipo}:${s.docId ?? s.ref}`;
+    setSeleccion((sel) => {
+      const nuevo = { ...sel };
+      if (nuevo[k]) delete nuevo[k];
+      else nuevo[k] = s;
+      return nuevo;
+    });
+  }
+
+  async function abrirPares() {
+    if (!cuentaSeleccionada || pares !== null) return;
+    setPares("cargando");
+    const res = await sugerenciasLote(cuentaSeleccionada);
+    setPares(res.ok ? (res.pares ?? []) : []);
+  }
+
+  function conciliarTodasLasPares() {
+    if (!Array.isArray(pares)) return;
+    const lista = pares.filter((p) => !descartados.has(p.movimientoId));
+    if (!lista.length) return;
+    startTransition(async () => {
+      let hechas = 0;
+      for (const p of lista) {
+        const res = await conciliarMovimiento({
+          movimientoId: p.movimientoId,
+          docTipo: p.docTipo,
+          docId: p.docId,
+          docRef: p.docRef,
+          monto: p.monto,
+        });
+        if (res.ok) hechas++;
+      }
+      setAutoMsg(`${hechas} sugerencia${hechas !== 1 ? "s" : ""} conciliada${hechas !== 1 ? "s" : ""}.`);
+      limpiarTrasAccion();
     });
   }
 
@@ -435,6 +520,95 @@ export function TesoreriaClient({
             </details>
           )}
 
+          {/* Sugerencias del cruce (pares mov↔doc en dry-run, patrón Chipax) */}
+          {cuenta && cuenta.pendientes > 0 && (
+            <details className="card-soft mt-5 rounded-xl bg-card p-4" onToggle={(e) => e.currentTarget.open && abrirPares()}>
+              <summary className="cursor-pointer text-sm font-medium">
+                Sugerencias del cruce
+                {Array.isArray(pares) && (
+                  <span className="ml-1.5 tabular-nums">({pares.filter((p) => !descartados.has(p.movimientoId)).length})</span>
+                )}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  revisa los pares propuestos y concílialos de una vez
+                </span>
+              </summary>
+              {pares === "cargando" || pares === null ? (
+                <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Buscando coincidencias…
+                </div>
+              ) : pares.filter((p) => !descartados.has(p.movimientoId)).length === 0 ? (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Sin sugerencias pendientes: lo inequívoco ya está conciliado o descartado.
+                </p>
+              ) : (
+                <>
+                  <div className="mt-3 mb-2 flex justify-end">
+                    <button
+                      onClick={conciliarTodasLasPares}
+                      disabled={pending}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                    >
+                      {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      Conciliar todas ({pares.filter((p) => !descartados.has(p.movimientoId)).length})
+                    </button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {pares
+                      .filter((p) => !descartados.has(p.movimientoId))
+                      .map((p) => (
+                        <div
+                          key={p.movimientoId}
+                          className="grid grid-cols-1 items-center gap-2 rounded-lg border border-border px-3 py-2 sm:grid-cols-[1fr_auto_1fr_auto]"
+                        >
+                          <div className="min-w-0 text-sm">
+                            <span className="block truncate">{p.movGlosa || "—"}</span>
+                            <span className="block text-xs tabular-nums text-muted-foreground">
+                              {formatFecha(p.movFecha)} · {p.esCargo ? "−" : "+"}
+                              {formatMonto(p.monto)}
+                            </span>
+                          </div>
+                          <span className="hidden text-muted-foreground sm:block">⇄</span>
+                          <div className="min-w-0 text-sm">
+                            <span className="block truncate font-medium">{p.docRef}</span>
+                            <span className="block truncate text-xs text-muted-foreground">{p.contraparte}</span>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5 justify-self-end">
+                            <button
+                              onClick={() =>
+                                startTransition(async () => {
+                                  const r = await conciliarMovimiento({
+                                    movimientoId: p.movimientoId,
+                                    docTipo: p.docTipo,
+                                    docId: p.docId,
+                                    docRef: p.docRef,
+                                    monto: p.monto,
+                                  });
+                                  if (r.ok) limpiarTrasAccion();
+                                  else setMsg(r.error ?? "Error al conciliar");
+                                })
+                              }
+                              disabled={pending}
+                              className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                            >
+                              <Check className="h-3.5 w-3.5" /> Conciliar
+                            </button>
+                            <button
+                              onClick={() => setDescartados((d) => new Set(d).add(p.movimientoId))}
+                              disabled={pending}
+                              title="Descartar esta sugerencia"
+                              className="rounded-md border border-border p-1 text-muted-foreground hover:text-foreground"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </>
+              )}
+            </details>
+          )}
+
           {/* Filtros */}
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <div className="relative">
@@ -563,9 +737,16 @@ export function TesoreriaClient({
                                   {sug.map((s, i) => (
                                     <div
                                       key={`${s.docTipo}-${s.docId}-${i}`}
-                                      className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2"
+                                      className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2"
                                     >
-                                      <div className="text-sm">
+                                      <input
+                                        type="checkbox"
+                                        checked={!!seleccion[`${s.docTipo}:${s.docId ?? s.ref}`]}
+                                        onChange={() => toggleSel(s)}
+                                        title="Seleccionar para conciliar contra varios documentos"
+                                        className="size-4 shrink-0 accent-[var(--brand-teal,#17a2b8)]"
+                                      />
+                                      <div className="min-w-0 flex-1 text-sm">
                                         <span className="font-medium">{s.ref}</span>
                                         <span className="text-muted-foreground"> · {s.contraparte ?? "—"}</span>
                                         <span className="ml-2 tabular-nums text-muted-foreground">
@@ -606,6 +787,96 @@ export function TesoreriaClient({
                               ) : (
                                 <div className="mt-2 text-sm text-muted-foreground">
                                   No se encontró ningún documento que calce por monto.
+                                </div>
+                              )}
+
+                              {/* Búsqueda manual de documentos (folio / nombre / monto) */}
+                              <div className="mt-3 border-t border-border pt-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-xs text-muted-foreground">¿No está? Búscalo:</span>
+                                  <Input
+                                    value={busqueda[m.id]?.q ?? ""}
+                                    onChange={(e) =>
+                                      setBusqueda((b) => ({
+                                        ...b,
+                                        [m.id]: { q: e.target.value, resultados: b[m.id]?.resultados ?? null },
+                                      }))
+                                    }
+                                    onKeyDown={(e) => e.key === "Enter" && buscarDocs(m)}
+                                    placeholder="Folio, proveedor/cliente o monto…"
+                                    className="h-8 w-64"
+                                  />
+                                  <button
+                                    onClick={() => buscarDocs(m)}
+                                    disabled={pending || (busqueda[m.id]?.q ?? "").trim().length < 2}
+                                    className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted/50 disabled:opacity-40"
+                                  >
+                                    <Search className="h-3.5 w-3.5" /> Buscar documento
+                                  </button>
+                                </div>
+                                {busqueda[m.id]?.resultados === "cargando" ? (
+                                  <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Loader2 className="h-4 w-4 animate-spin" /> Buscando…
+                                  </div>
+                                ) : Array.isArray(busqueda[m.id]?.resultados) ? (
+                                  (busqueda[m.id]!.resultados as Sugerencia[]).length > 0 ? (
+                                    <div className="mt-2 space-y-1.5">
+                                      {(busqueda[m.id]!.resultados as Sugerencia[]).map((s, i) => (
+                                        <div
+                                          key={`b-${s.docTipo}-${s.docId}-${i}`}
+                                          className="flex items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={!!seleccion[`${s.docTipo}:${s.docId ?? s.ref}`]}
+                                            onChange={() => toggleSel(s)}
+                                            className="size-4 shrink-0 accent-[var(--brand-teal,#17a2b8)]"
+                                          />
+                                          <div className="min-w-0 flex-1 text-sm">
+                                            <span className="font-medium">{s.ref}</span>
+                                            <span className="text-muted-foreground"> · {s.contraparte ?? "—"}</span>
+                                            <span className="ml-2 tabular-nums text-muted-foreground">
+                                              {formatMonto(s.monto)} · {formatFecha(s.fecha)}
+                                            </span>
+                                            {s.parcial && (
+                                              <Badge variant="outline" className="ml-2 border-amber-200 bg-amber-50 text-amber-700">
+                                                abono parcial
+                                              </Badge>
+                                            )}
+                                          </div>
+                                          <button
+                                            onClick={() => confirmar(m, s)}
+                                            disabled={pending}
+                                            className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                                          >
+                                            <Check className="h-3.5 w-3.5" /> Conciliar
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="mt-2 text-sm text-muted-foreground">Sin resultados para esa búsqueda.</div>
+                                  )
+                                ) : null}
+                              </div>
+
+                              {/* Barra multidocumento */}
+                              {Object.keys(seleccion).length > 0 && (
+                                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--brand-teal,#17a2b8)]/40 bg-card px-3 py-2">
+                                  <span className="text-sm">
+                                    {Object.keys(seleccion).length} documento{Object.keys(seleccion).length !== 1 ? "s" : ""} ·{" "}
+                                    <span className="font-medium tabular-nums">
+                                      {formatMonto(Object.values(seleccion).reduce((a, s) => a + s.monto, 0))}
+                                    </span>{" "}
+                                    de <span className="tabular-nums">{formatMonto(Math.abs(m.abono - m.cargo))}</span> del movimiento
+                                  </span>
+                                  <button
+                                    onClick={() => confirmarSeleccion(m)}
+                                    disabled={pending}
+                                    className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                                  >
+                                    <Check className="h-3.5 w-3.5" /> Conciliar seleccionados
+                                  </button>
                                 </div>
                               )}
 
