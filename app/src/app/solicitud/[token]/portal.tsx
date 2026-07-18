@@ -14,6 +14,7 @@ import { AlertasFinancieras } from "./alertas";
 import { RentaProyectada } from "./renta";
 import { Contabilidad } from "./contabilidad";
 import { RecursosHumanos } from "./rrhh";
+import { TesoreriaBoton } from "./tesoreria-boton";
 
 type Tab = "financiera" | "rrhh" | "remuneraciones";
 
@@ -65,7 +66,8 @@ export function PortalCliente({
   return (
     <div className="space-y-5">
       {!embedded ? (
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-3">
+          <TesoreriaBoton token={token} />
           <Image
             src="/logo-claro.png"
             alt="Rodríguez Samith Tax & Legal"
@@ -75,7 +77,11 @@ export function PortalCliente({
             className="h-auto w-[150px] sm:w-[180px]"
           />
         </div>
-      ) : null}
+      ) : (
+        <div className="flex justify-end">
+          <TesoreriaBoton token={token} />
+        </div>
+      )}
 
       {/* Datos de la empresa: % de cumplimiento, faltantes en rojo y accesos */}
       <DatosEmpresa token={token} />

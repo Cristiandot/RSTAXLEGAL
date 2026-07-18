@@ -39,6 +39,12 @@ export async function POST(req: Request) {
 
   const clienteId = cli.id as string;
 
+  // Ping liviano: ¿la empresa tiene tesorería activa? (para mostrar el acceso
+  // en el portal del cliente solo cuando corresponde)
+  if (accion === "estado") {
+    return NextResponse.json({ ok: true });
+  }
+
   if (accion === "sugerencias") {
     const res = await sugerenciasParaMovimiento(supabase, String(body.movimientoId ?? ""), clienteId);
     return NextResponse.json(res, { status: res.ok ? 200 : 400 });
