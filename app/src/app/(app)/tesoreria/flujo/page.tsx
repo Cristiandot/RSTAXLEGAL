@@ -29,6 +29,7 @@ export default async function FlujoPage({
   const hoy = hoyChile();
   let saldoInicial = 0;
   let filas: FilaFlujo[] = [];
+  let vencidas: FilaFlujo[] = [];
   let totalCxC = 0;
   let totalCxP = 0;
   let saldoConfigurado = false;
@@ -71,6 +72,29 @@ export default async function FlujoPage({
     for (const d of cxc) entradas.set(claveBucket(d.vencimiento), (entradas.get(claveBucket(d.vencimiento)) ?? 0) + d.pendiente);
     for (const d of cxp) salidas.set(claveBucket(d.vencimiento), (salidas.get(claveBucket(d.vencimiento)) ?? 0) + d.pendiente);
 
+    // Desglose de lo VENCIDO por mes de vencimiento (enero → mes pasado): estos
+    // montos se apilan en el mes en curso de la proyección, pero acá se muestra
+    // de qué mes viene cada peso.
+    const vencEntradas = new Map<string, number>();
+    const vencSalidas = new Map<string, number>();
+    for (const d of cxc) {
+      const vk = d.vencimiento.slice(0, 7);
+      if (vk < meses[0]) vencEntradas.set(vk, (vencEntradas.get(vk) ?? 0) + d.pendiente);
+    }
+    for (const d of cxp) {
+      const vk = d.vencimiento.slice(0, 7);
+      if (vk < meses[0]) vencSalidas.set(vk, (vencSalidas.get(vk) ?? 0) + d.pendiente);
+    }
+    const mesesVencidos = [...new Set([...vencEntradas.keys(), ...vencSalidas.keys()])].sort();
+    vencidas = mesesVencidos.map((k) => ({
+      mes: k,
+      label: labelMes(k),
+      entradas: vencEntradas.get(k) ?? 0,
+      salidas: vencSalidas.get(k) ?? 0,
+      neto: (vencEntradas.get(k) ?? 0) - (vencSalidas.get(k) ?? 0),
+      saldoProyectado: 0, // no aplica en el desglose de vencidos
+    }));
+
     const orden = [...meses, "posterior"];
     let saldo = saldoInicial;
     filas = orden.map((k) => {
@@ -102,6 +126,7 @@ export default async function FlujoPage({
         totalCxC={totalCxC}
         totalCxP={totalCxP}
         filas={filas}
+        vencidas={vencidas}
         generado={hoy}
       />
     </main>
