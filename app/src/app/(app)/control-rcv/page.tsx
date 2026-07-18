@@ -4,19 +4,22 @@ import { ControlRcvClient, type EmpresaControl, type DescargaRcv, type TotalesRc
 
 export const metadata = { title: "Control RCV — RS Tax & Legal" };
 
-/** Los `n` últimos períodos (YYYY-MM) terminando en el mes por defecto (mes anterior al actual). */
-function ultimosPeriodos(n: number): string[] {
-  const [y, m] = periodoPorDefecto().split("-").map(Number);
+/** Todos los períodos (YYYY-MM) desde `desde` hasta el mes por defecto (mes anterior al actual). */
+function periodosDesde(desde: string): string[] {
+  const [yF, mF] = periodoPorDefecto().split("-").map(Number);
   const out: string[] = [];
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(y, m - 1 - i, 1);
-    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  let [y, m] = desde.split("-").map(Number);
+  while (y < yF || (y === yF && m <= mF)) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    if (m === 12) { y++; m = 1; } else m++;
   }
   return out;
 }
 
 export default async function ControlRcvPage() {
-  const periodos = ultimosPeriodos(6);
+  // Histórico completo cargado en la BD: 2025 entero + 2026 hasta el mes vigente.
+  // El cliente filtra por año (pestañas), así la grilla no muestra 18 columnas de golpe.
+  const periodos = periodosDesde("2025-01");
   const supabase = await createClient();
 
   const [empresasRes, gruposRes, descargasRes, totalesRes] = await Promise.all([

@@ -132,12 +132,37 @@ function ResumenCard({ label, valor, tono }: { label: string; valor: number; ton
   );
 }
 
-export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, totales, errorCarga }: Props) {
+export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetasTodas, empresas, descargas, totales, errorCarga }: Props) {
   const [buscar, setBuscar] = useState("");
   const [soloPendientes, setSoloPendientes] = useState(false);
   const [orden, setOrden] = useState<Orden>(null);
+
+  // Año visible: la BD trae el histórico completo (2025 + 2026), pero la grilla
+  // muestra un año a la vez para no reventar el ancho. Default = año vigente.
+  const anios = useMemo(
+    () => Array.from(new Set(periodosTodos.map((p) => p.slice(0, 4)))),
+    [periodosTodos],
+  );
+  const [anio, setAnio] = useState(anios[anios.length - 1]);
+  const periodos = useMemo(
+    () => periodosTodos.filter((p) => p.startsWith(anio)),
+    [periodosTodos, anio],
+  );
+  const etiquetas = useMemo(
+    () => periodosTodos.map((p, i) => ({ p, e: etiquetasTodas[i] })).filter((x) => x.p.startsWith(anio)).map((x) => x.e),
+    [periodosTodos, etiquetasTodas, anio],
+  );
+
   // Mes cuyos totales (ventas/compras/NC) se muestran en las columnas de montos.
   const [mesTotales, setMesTotales] = useState(periodos[periodos.length - 1]);
+
+  function cambiarAnio(a: string) {
+    setAnio(a);
+    // Los totales saltan al último mes del año elegido (el selector solo lista ese año).
+    const delAnio = periodosTodos.filter((p) => p.startsWith(a));
+    setMesTotales(delAnio[delAnio.length - 1]);
+    setOrden(null); // el orden por columna-mes del otro año deja de existir
+  }
 
   const mapa = useMemo(() => {
     const m = new Map<string, DescargaRcv>();
@@ -264,6 +289,23 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, tot
           <Checkbox checked={soloPendientes} onCheckedChange={(v) => setSoloPendientes(Boolean(v))} />
           Solo con pendientes
         </label>
+        <div className="flex items-center gap-1 rounded-lg border bg-muted/40 p-0.5" role="tablist" aria-label="Año">
+          {anios.map((a) => (
+            <button
+              key={a}
+              type="button"
+              role="tab"
+              aria-selected={anio === a}
+              onClick={() => cambiarAnio(a)}
+              className={cn(
+                "rounded-md px-3 py-1 text-sm font-medium transition-colors",
+                anio === a ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {a}
+            </button>
+          ))}
+        </div>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           Totales de
           <select
