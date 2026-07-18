@@ -42,6 +42,7 @@ export function FlujoClient({
   totalCxC,
   totalCxP,
   filas,
+  vencidas,
   generado,
 }: {
   clientes: EmpresaOpcion[];
@@ -51,6 +52,7 @@ export function FlujoClient({
   totalCxC: number;
   totalCxP: number;
   filas: FilaFlujo[];
+  vencidas: FilaFlujo[];
   generado: string;
 }) {
   const router = useRouter();
@@ -95,6 +97,62 @@ export function FlujoClient({
         />
       </div>
 
+      {/* Desglose de lo vencido por mes de vencimiento: explica de qué meses
+          viene el monto que la proyección apila en el mes en curso. */}
+      {vencidas.length > 0 && (
+        <div className="mt-4">
+          <h2 className="font-heading text-base font-semibold">
+            Vencido pendiente por mes de vencimiento
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Documentos que vencieron en meses anteriores y siguen sin conciliarse. La proyección
+            los espera completos en el mes en curso.
+          </p>
+          <div className="card-soft mt-2 overflow-hidden rounded-xl bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[120px]">Venció en</TableHead>
+                  <TableHead className="text-right">Por cobrar</TableHead>
+                  <TableHead className="text-right">Por pagar</TableHead>
+                  <TableHead className="text-right">Neto</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {vencidas.map((f) => (
+                  <TableRow key={f.mes} className="text-sm">
+                    <TableCell className="font-medium capitalize">
+                      {f.label} <span className="ml-1 rounded border border-red-200 bg-red-50 px-1 py-0.5 text-[10px] text-red-700">vencido</span>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-emerald-600">
+                      {f.entradas > 0 ? formatMonto(f.entradas) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-red-600">
+                      {f.salidas > 0 ? formatMonto(f.salidas) : "—"}
+                    </TableCell>
+                    <TableCell className={`text-right tabular-nums ${f.neto >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {formatMonto(f.neto)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="bg-muted/40 font-semibold">
+                  <TableCell>Total vencido</TableCell>
+                  <TableCell className="text-right tabular-nums text-emerald-600">
+                    {formatMonto(vencidas.reduce((a, f) => a + f.entradas, 0))}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-red-600">
+                    {formatMonto(vencidas.reduce((a, f) => a + f.salidas, 0))}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatMonto(vencidas.reduce((a, f) => a + f.neto, 0))}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+
       {!saldoConfigurado && (
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           El saldo inicial en banco no está configurado (se asume $0), así que la proyección muestra la
@@ -122,12 +180,19 @@ export function FlujoClient({
                 </TableCell>
               </TableRow>
             ) : (
-              filas.map((f) => {
+              filas.map((f, i) => {
                 const ancho = Math.round((Math.abs(f.saldoProyectado) / maxAbs) * 100);
                 const neg = f.saldoProyectado < 0;
                 return (
                   <TableRow key={f.mes}>
-                    <TableCell className="font-medium capitalize">{f.label}</TableCell>
+                    <TableCell className="font-medium capitalize">
+                      {f.label}
+                      {i === 0 && vencidas.length > 0 && (
+                        <span className="ml-1.5 rounded border border-amber-200 bg-amber-50 px-1 py-0.5 text-[10px] font-normal text-amber-700">
+                          incluye vencido
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums text-emerald-600">
                       {f.entradas > 0 ? formatMonto(f.entradas) : "—"}
                     </TableCell>
