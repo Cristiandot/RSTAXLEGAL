@@ -6,7 +6,6 @@ import { PieChart, Users, Table2, MapPin, MessageCircle, Clock, Loader2 } from "
 import { tieneFinanciera } from "./estado-resultado-actions";
 import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
 import { DetalleRemuneraciones } from "./remuneraciones";
-import { GastosMenores } from "./gastos-menores";
 import { DatosEmpresa } from "./datos-empresa";
 import { EstadoResultado } from "./estado-resultado";
 import { Reportes } from "./reportes";
@@ -14,7 +13,6 @@ import { Facturas } from "./facturas";
 import { AlertasFinancieras } from "./alertas";
 import { ConveniosCliente } from "./convenios-cliente";
 import { RentaProyectada } from "./renta";
-import { Contabilidad } from "./contabilidad";
 import { RecursosHumanos } from "./rrhh";
 
 type Tab = "financiera" | "rrhh" | "remuneraciones";
@@ -156,8 +154,6 @@ export function PortalCliente({
             <RentaProyectada token={token} anio={anioFin} />
             <Facturas token={token} anio={anioFin} />
             <Reportes token={token} anio={anioFin} />
-            <Contabilidad token={token} />
-            <GastosMenores token={token} empresa={empresa} />
           </div>
         )
       ) : null}

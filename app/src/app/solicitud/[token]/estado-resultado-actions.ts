@@ -7,6 +7,7 @@ export type MesResultado = {
   ingresos: number;
   servicios: number;
   insumos: number;
+  arriendo: number;
   otros: number;
   honorarios: number;
   compras_total: number;

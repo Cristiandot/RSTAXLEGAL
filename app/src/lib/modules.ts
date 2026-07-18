@@ -25,7 +25,6 @@ import {
   HardHat,
   KeyRound,
   ScrollText,
-  Tags,
   ReceiptText,
   Home,
   Scale,
@@ -288,15 +287,6 @@ export const MODULOS: SeccionModulos[] = [
           "Libro Mayor anual importado desde KAME por empresa: detalle de movimientos, resumen por cuenta y cuadratura. Estado por cliente (cargado / sin información).",
         href: "/contabilidad/libro-mayor",
         icon: Library,
-        estado: "activo",
-      },
-      {
-        key: "clasificacion",
-        label: "Clasificación de gastos",
-        descripcion:
-          "Diccionario de reglas (nombre → categoría) y auto-clasificación de proveedores exentos por empresa, con clasificación manual de lo que no calza.",
-        href: "/clasificacion",
-        icon: Tags,
         estado: "activo",
       },
       {

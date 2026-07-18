@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, AlertTriangle, TrendingUp, Users, Receipt, Building2, Tags } from "lucide-react";
+import { Loader2, AlertTriangle, Receipt, Building2, Tags } from "lucide-react";
 import {
   cargarReportes,
   cargarSinClasificarParticipacion,
@@ -71,13 +71,6 @@ export function Reportes({ token, anio }: { token: string; anio: number }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <span className="font-heading text-lg font-semibold tracking-tight">
-          <TrendingUp className="mr-1.5 inline size-5 align-middle text-[var(--brand-teal)]" aria-hidden="true" />
-          Reportes {anio}
-        </span>
-      </div>
-
       {sinPart && sinPart.pct > 0 ? (
         <div className={card}>
           <p className="mb-1 text-sm font-medium">
@@ -128,7 +121,21 @@ export function Reportes({ token, anio }: { token: string; anio: number }) {
         </div>
       </div>
 
-      {/* 1b. Boletas y ticket promedio */}
+      {/* IVA crédito no recuperable */}
+      <div className={card}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">IVA crédito no recuperable</p>
+            <p className="mt-1 text-xs text-muted-foreground">Giro exento: el IVA de las compras no se recupera y se vuelve costo.</p>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-semibold tabular-nums text-amber-600">{clp(d.iva_credito_no_recuperable)}</div>
+            <div className="text-xs text-muted-foreground">{anio}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Boletas y ticket promedio */}
       {d.boletas_mensual.length > 0 ? (() => {
         const totN = d.boletas_mensual.reduce((a, m) => a + m.n, 0);
         const totMonto = d.boletas_mensual.reduce((a, m) => a + m.monto, 0);
@@ -156,20 +163,6 @@ export function Reportes({ token, anio }: { token: string; anio: number }) {
         );
       })() : null}
 
-      {/* 2. IVA crédito no recuperable */}
-      <div className={card}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium">IVA crédito no recuperable</p>
-            <p className="mt-1 text-xs text-muted-foreground">Giro exento: el IVA de las compras no se recupera y se vuelve costo.</p>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-semibold tabular-nums text-amber-600">{clp(d.iva_credito_no_recuperable)}</div>
-            <div className="text-xs text-muted-foreground">{anio}</div>
-          </div>
-        </div>
-      </div>
-
       {/* 3. Top proveedores + concentración */}
       <div className={card}>
         <p className="mb-1 text-sm font-medium"><Building2 className="mr-1 inline size-4 align-middle text-muted-foreground" aria-hidden="true" />Top proveedores</p>
@@ -191,21 +184,6 @@ export function Reportes({ token, anio }: { token: string; anio: number }) {
           })}
         </div>
       </div>
-
-      {/* 4. Servicios profesionales exentos (clasificados) */}
-      {d.servicios_profesionales.length > 0 ? (
-        <div className={card}>
-          <p className="mb-2 text-sm font-medium"><Receipt className="mr-1 inline size-4 align-middle text-muted-foreground" aria-hidden="true" />Servicios profesionales (exentos)</p>
-          <div className="space-y-1.5 text-sm">
-            {d.servicios_profesionales.slice(0, 6).map((p) => (
-              <div key={p.nombre} className="flex justify-between gap-2">
-                <span className="truncate" title={p.nombre}>{p.nombre}</span>
-                <span className="shrink-0 tabular-nums text-muted-foreground">{clp(p.monto)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
       {/* 4b. Facturas por clasificar (caen en Otros gastos hasta clasificarse) */}
       {d.sin_clasificar.length > 0 ? (
@@ -238,30 +216,6 @@ export function Reportes({ token, anio }: { token: string; anio: number }) {
         </div>
       ) : null}
 
-      {/* 5. Costo de remuneraciones */}
-      <div className={card}>
-        <p className="mb-2 text-sm font-medium"><Users className="mr-1 inline size-4 align-middle text-muted-foreground" aria-hidden="true" />Costo de remuneraciones</p>
-        {d.remuneraciones_mensual.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Sin remuneraciones cargadas para {anio}.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-sm tabular-nums">
-              <thead><tr className="border-b text-xs text-muted-foreground"><th className="py-1.5 text-left font-medium">Mes</th><th className="py-1.5 font-medium">Dotación</th><th className="py-1.5 font-medium">Costo empresa</th><th className="py-1.5 font-medium">% ingresos</th></tr></thead>
-              <tbody>
-                {d.remuneraciones_mensual.map((m) => (
-                  <tr key={m.periodo} className="border-b border-border/60">
-                    <td className="py-1.5 text-left font-medium">{mesDe(m.periodo)}</td>
-                    <td className="py-1.5 text-muted-foreground">{m.dotacion}</td>
-                    <td className="py-1.5">{clp(m.costo)}</td>
-                    <td className="py-1.5 text-muted-foreground">{ing ? Math.round((m.costo / (ing / 12)) * 100) : 0}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="mt-1 text-xs text-muted-foreground">% sobre ingreso mensual promedio del año.</p>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
