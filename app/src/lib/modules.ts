@@ -33,6 +33,7 @@ import {
   Library,
   DownloadCloud,
   Briefcase,
+  Landmark,
   type LucideIcon,
 } from "lucide-react";
 
@@ -268,6 +269,15 @@ export const MODULOS: SeccionModulos[] = [
           "Resumen mensual de pagos por empresa: Previred por centro de costo, F29 y facturas RS pendientes, con envío al cliente.",
         href: "/comunicacion",
         icon: Send,
+        estado: "activo",
+      },
+      {
+        key: "tesoreria",
+        label: "Tesorería y Banco",
+        descripcion:
+          "Tesorería estilo Chipax sobre los DTE del SII que ya tenemos: vista general, conciliación bancaria (el cliente sube su cartola), cuentas por cobrar/pagar con aging y flujo de caja proyectado.",
+        href: "/tesoreria/general",
+        icon: Landmark,
         estado: "activo",
       },
       {

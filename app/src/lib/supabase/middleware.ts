@@ -40,6 +40,8 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/portal") || // portal por grupo/cliente (tokenizado)
     pathname.startsWith("/bienvenida") || // onboarding inicial de clientes nuevos (tokenizado)
     pathname.startsWith("/completar-nomina") || // completar datos faltantes de trabajadores (tokenizado)
+    pathname.startsWith("/tesoreria-portal") || // portal de tesorería del cliente (tokenizado)
+    pathname.startsWith("/api/tesoreria/") || // subida de cartola desde el portal (valida token)
     pathname.startsWith("/datos-transferencia") || // datos bancarios de RS (copiar para pagar F29)
     pathname.startsWith("/api/agent/") || // API del agente: exige Bearer AGENT_API_TOKEN (lib/agente)
     pathname === "/api/version"; // diagnóstico de deploy (solo SHA)
