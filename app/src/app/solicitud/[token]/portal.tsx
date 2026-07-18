@@ -10,7 +10,7 @@ import { GastosMenores } from "./gastos-menores";
 import { DatosEmpresa } from "./datos-empresa";
 import { EstadoResultado } from "./estado-resultado";
 import { Reportes } from "./reportes";
-import { ClasificarGastos } from "./clasificar";
+import { Facturas } from "./facturas";
 import { AlertasFinancieras } from "./alertas";
 import { ConveniosCliente } from "./convenios-cliente";
 import { RentaProyectada } from "./renta";
@@ -154,7 +154,7 @@ export function PortalCliente({
             <ConveniosCliente token={token} />
             <EstadoResultado token={token} anio={anioFin} />
             <RentaProyectada token={token} anio={anioFin} />
-            <ClasificarGastos token={token} />
+            <Facturas token={token} anio={anioFin} />
             <Reportes token={token} anio={anioFin} />
             <Contabilidad token={token} />
             <GastosMenores token={token} empresa={empresa} />
