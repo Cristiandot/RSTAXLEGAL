@@ -1,0 +1,106 @@
+{
+ "compras_encabezados": [
+  "Tipo Doc",
+  "Tipo Compra",
+  "RUT Proveedor",
+  "Razon Social",
+  "Folio",
+  "Fecha Docto",
+  "Fecha Recepcion",
+  "Fecha Acuse",
+  "Monto Exento",
+  "Monto Neto",
+  "IVA Recuperable",
+  "IVA No Recuperable",
+  "Cod IVA No Rec",
+  "Monto Total",
+  "Neto Activo Fijo",
+  "IVA Activo Fijo",
+  "IVA Uso Comun",
+  "Impto Sin Cred",
+  "IVA No Retenido",
+  "Tabacos Puros",
+  "Tabacos Cigarrillos",
+  "Tabacos Elaborados",
+  "NCE/NDE",
+  "Cod Otro Imp",
+  "Valor Otro Imp",
+  "Tasa Otro Imp",
+  "Periodo",
+  "PAGADO",
+  "Cuenta Gasto"
+ ],
+ "compras_por_periodo": {
+  "202601": {
+   "n": 34,
+   "neto": 11317849,
+   "iva": 2150393,
+   "total": 13488239
+  },
+  "202602": {
+   "n": 50,
+   "neto": 11974333,
+   "iva": 2275127,
+   "total": 14274199
+  },
+  "202603": {
+   "n": 66,
+   "neto": 28756077,
+   "iva": 5463656,
+   "total": 34266174
+  },
+  "202604": {
+   "n": 68,
+   "neto": 14065532,
+   "iva": 2672453,
+   "total": 17048071
+  },
+  "202605": {
+   "n": 42,
+   "neto": 7882306,
+   "iva": 1497641,
+   "total": 9537332
+  }
+ },
+ "honorarios_encabezados": [
+  "Periodo",
+  "N°",
+  "Fecha",
+  "Estado",
+  "Fecha Anulación",
+  "RUT",
+  "Nombre / Razón Social",
+  "Soc. Prof.",
+  "Brutos",
+  "Retención",
+  "Líquido Pagado",
+  "PAGADO",
+  "Cuenta Gasto"
+ ],
+ "honorarios_por_periodo": {
+  "202601": {
+   "n": 1,
+   "brutos": 112094,
+   "retencion": 17094,
+   "liquido": 95000
+  },
+  "202602": {
+   "n": 1,
+   "brutos": 115988,
+   "retencion": 17688,
+   "liquido": 98300
+  },
+  "202603": {
+   "n": 2,
+   "brutos": 335457,
+   "retencion": 51157,
+   "liquido": 284300
+  },
+  "202604": {
+   "n": 1,
+   "brutos": 115988,
+   "retencion": 17688,
+   "liquido": 98300
+  }
+ }
+}

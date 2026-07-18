@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Building2, Home, LayoutGrid } from "lucide-react";
 import { PortalCliente } from "@/app/solicitud/[token]/portal";
+import { TesoreriaBoton } from "@/app/solicitud/[token]/tesoreria-boton";
 import { type InfoEmpresa } from "@/app/solicitud/[token]/solicitud-form";
 
 export type EmpresaMeta = {
@@ -53,16 +54,24 @@ export function PortalGrupo({
 
   return (
     <div className="space-y-5">
-      {/* Logo de la oficina arriba-izquierda, sobre el nombre del grupo */}
+      {/* Logo de la oficina arriba-izquierda; arriba a la derecha el acceso de
+          prueba a la conciliación bancaria (solo empresas con tesorería activa) */}
       <div className="space-y-3">
-        <Image
-          src="/logo-claro.png"
-          alt="Rodríguez Samith Tax & Legal"
-          width={200}
-          height={56}
-          priority
-          className="h-auto w-[150px] sm:w-[180px]"
-        />
+        <div className="flex items-start justify-between gap-3">
+          <Image
+            src="/logo-claro.png"
+            alt="Rodríguez Samith Tax & Legal"
+            width={200}
+            height={56}
+            priority
+            className="h-auto w-[150px] sm:w-[180px]"
+          />
+          <div className="flex flex-wrap justify-end gap-2">
+            {empresas.map((e) => (
+              <TesoreriaBoton key={e.meta.token} token={e.meta.token} />
+            ))}
+          </div>
+        </div>
         <div>
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
             {grupo}
