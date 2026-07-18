@@ -4,6 +4,7 @@ import {
   type CuentaResumen,
   type Movimiento,
   type ResumenCartola,
+  type Automatizaciones,
 } from "./tesoreria-client";
 
 export const metadata = { title: "Tesorería y Banco — RS Tax & Legal" };
@@ -93,6 +94,31 @@ export default async function TesoreriaPage({
   const cuentaId = cuentaSel && cuentas.some((c) => c.id === cuentaSel) ? cuentaSel : cuentas[0]?.id ?? null;
   let movimientos: Movimiento[] = [];
   let cartolas: ResumenCartola[] = [];
+  let auto: Automatizaciones | null = null;
+  const clienteDeCuenta = cuentas.find((c) => c.id === cuentaId)?.clienteId ?? null;
+  if (clienteDeCuenta) {
+    const [{ data: flags }, { data: ejec }] = await Promise.all([
+      supabase
+        .from("clientes")
+        .select("auto_conc_rut, auto_conc_folio, auto_conc_panel, auto_conc_monto")
+        .eq("id", clienteDeCuenta)
+        .maybeSingle(),
+      supabase
+        .from("banco_conciliacion")
+        .select("criterio")
+        .eq("cliente_id", clienteDeCuenta)
+        .eq("origen", "auto"),
+    ]);
+    const cuenta_ = (k: string) => (ejec ?? []).filter((e) => e.criterio === k).length;
+    auto = {
+      clienteId: clienteDeCuenta,
+      rut: flags?.auto_conc_rut !== false,
+      folio: flags?.auto_conc_folio === true,
+      panel: flags?.auto_conc_panel === true,
+      monto: flags?.auto_conc_monto === true,
+      ejecuciones: { rut: cuenta_("rut"), folio: cuenta_("folio"), panel: cuenta_("panel"), monto: cuenta_("monto") },
+    };
+  }
   if (cuentaId) {
     const { data: movData } = await supabase
       .from("banco_movimiento")
@@ -151,6 +177,7 @@ export default async function TesoreriaPage({
         cuentaSeleccionada={cuentaId}
         movimientos={movimientos}
         cartolas={cartolas}
+        auto={auto}
         errorCarga={errCuentas?.message ?? null}
       />
     </main>

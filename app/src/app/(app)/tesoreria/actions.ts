@@ -227,6 +227,26 @@ export async function enviarEstadoPago(input: {
   return { ok: true, docs: docs.length };
 }
 
+const CAMPOS_AUTO = ["auto_conc_rut", "auto_conc_folio", "auto_conc_panel", "auto_conc_monto"] as const;
+export type CampoAutomatizacion = (typeof CAMPOS_AUTO)[number];
+
+/** Activa/desactiva una automatización de conciliación de la empresa. */
+export async function actualizarAutomatizacion(input: {
+  clienteId: string;
+  campo: CampoAutomatizacion;
+  valor: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!CAMPOS_AUTO.includes(input.campo)) return { ok: false, error: "Campo inválido." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("clientes")
+    .update({ [input.campo]: input.valor })
+    .eq("id", input.clienteId);
+  if (error) return { ok: false, error: error.message };
+  refrescar();
+  return { ok: true };
+}
+
 /** Actualiza el plazo de pago por defecto de una empresa (ventas o compras). */
 export async function actualizarPlazoPago(input: {
   clienteId: string;

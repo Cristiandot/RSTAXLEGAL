@@ -20,7 +20,9 @@ import {
   categorizarMovimiento,
   desconciliarMovimiento,
   conciliarAutomatico,
+  actualizarAutomatizacion,
   type Sugerencia,
+  type CampoAutomatizacion,
 } from "./actions";
 import { TesoreriaNav } from "./tesoreria-nav";
 
@@ -53,6 +55,16 @@ export type Movimiento = {
   categoria: string | null;
   referencia: string | null;
   contraparte: string | null;
+};
+
+/** Automatizaciones de conciliación de la empresa (patrón Chipax). */
+export type Automatizaciones = {
+  clienteId: string;
+  rut: boolean;
+  folio: boolean;
+  panel: boolean;
+  monto: boolean;
+  ejecuciones: { rut: number; folio: number; panel: number; monto: number };
 };
 
 /** Cuadratura por cartola importada (archivo): rango, totales y saldo final. */
@@ -116,12 +128,14 @@ export function TesoreriaClient({
   cuentaSeleccionada,
   movimientos,
   cartolas,
+  auto,
   errorCarga,
 }: {
   cuentas: CuentaResumen[];
   cuentaSeleccionada: string | null;
   movimientos: Movimiento[];
   cartolas: ResumenCartola[];
+  auto: Automatizaciones | null;
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -199,6 +213,15 @@ export function TesoreriaClient({
         setExpandido(null);
         router.refresh();
       }
+    });
+  }
+
+  function toggleAuto(campo: CampoAutomatizacion, valor: boolean) {
+    if (!auto) return;
+    startTransition(async () => {
+      const res = await actualizarAutomatizacion({ clienteId: auto.clienteId, campo, valor });
+      if (!res.ok) setMsg(res.error ?? "Error");
+      else router.refresh();
     });
   }
 
@@ -310,6 +333,54 @@ export function TesoreriaClient({
                   ))}
                 </tbody>
               </table>
+            </details>
+          )}
+
+          {/* Automatizaciones de conciliación (patrón Chipax, opt-in por empresa) */}
+          {auto && (
+            <details className="card-soft mt-5 rounded-xl bg-card p-4">
+              <summary className="cursor-pointer text-sm font-medium">
+                Automatizaciones
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  qué se concilia solo al correr el cruce automático
+                </span>
+              </summary>
+              <div className="mt-3 space-y-2">
+                {(
+                  [
+                    { campo: "auto_conc_rut", clave: "rut", nombre: "Por RUT", desc: "Monto exacto + RUT de la contraparte, candidato único. Recomendado." },
+                    { campo: "auto_conc_folio", clave: "folio", nombre: "Por folio", desc: "El folio de la factura aparece en la glosa de la transferencia." },
+                    { campo: "auto_conc_panel", clave: "panel", nombre: "Por registro del panel", desc: "Calza con el F29, Previred o las remuneraciones del ciclo que administra RSTL." },
+                    { campo: "auto_conc_monto", clave: "monto", nombre: "Por monto", desc: "Monto exacto con candidato único aunque no haya RUT. El más agresivo." },
+                  ] as { campo: CampoAutomatizacion; clave: keyof Automatizaciones["ejecuciones"]; nombre: string; desc: string }[]
+                ).map((a) => {
+                  const activo = auto[a.clave] as boolean;
+                  return (
+                    <div key={a.campo} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
+                      <div>
+                        <span className="block text-sm font-medium">{a.nombre}</span>
+                        <span className="block text-xs text-muted-foreground">{a.desc}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {auto.ejecuciones[a.clave]} ejec.
+                        </span>
+                        <button
+                          onClick={() => toggleAuto(a.campo, !activo)}
+                          disabled={pending}
+                          className={`relative h-5 w-9 rounded-full transition ${activo ? "bg-emerald-500" : "bg-muted-foreground/30"}`}
+                          title={activo ? "Desactivar" : "Activar"}
+                        >
+                          <span
+                            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${activo ? "left-4.5 translate-x-0" : "left-0.5"}`}
+                            style={{ left: activo ? "18px" : "2px" }}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </details>
           )}
 
