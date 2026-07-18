@@ -2,17 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { PieChart, Users, Table2, MapPin, MessageCircle } from "lucide-react";
+import { PieChart, Users, Table2, MapPin, MessageCircle, Clock, Loader2 } from "lucide-react";
+import { tieneFinanciera } from "./estado-resultado-actions";
 import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
 import { DetalleRemuneraciones } from "./remuneraciones";
-import { GastosMenores } from "./gastos-menores";
 import { DatosEmpresa } from "./datos-empresa";
 import { EstadoResultado } from "./estado-resultado";
 import { Reportes } from "./reportes";
-import { ClasificarGastos } from "./clasificar";
+import { Facturas } from "./facturas";
 import { AlertasFinancieras } from "./alertas";
+import { ConveniosCliente } from "./convenios-cliente";
 import { RentaProyectada } from "./renta";
-import { Contabilidad } from "./contabilidad";
 import { RecursosHumanos } from "./rrhh";
 import { TesoreriaBoton } from "./tesoreria-boton";
 
@@ -37,7 +37,20 @@ export function PortalCliente({
 }) {
   const [tab, setTab] = useState<Tab>("financiera");
   const [anioFin, setAnioFin] = useState(2026);
+  // null = cargando; false = sin datos (mostrar aviso); true = Financiera completa.
+  const [hayFinanciera, setHayFinanciera] = useState<boolean | null>(null);
   const claveTab = `rstl_portal_tab_${token}`;
+
+  useEffect(() => {
+    let vivo = true;
+    setHayFinanciera(null);
+    tieneFinanciera(token).then((r) => {
+      if (vivo) setHayFinanciera(r);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [token]);
 
   // Recordar la pestaña al refrescar (se lee tras montar para no romper la
   // hidratación; el primer render siempre es "empresa").
@@ -106,31 +119,49 @@ export function PortalCliente({
       </div>
 
       {tab === "financiera" ? (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm text-muted-foreground">Información del año</span>
-            <div className="inline-flex rounded-md bg-muted p-0.5">
-              {[2025, 2026].map((a) => (
-                <button
-                  key={a}
-                  onClick={() => setAnioFin(a)}
-                  className={`rounded px-3 py-1 text-sm font-medium transition ${
-                    anioFin === a ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
-                  }`}
-                >
-                  {a}
-                </button>
-              ))}
-            </div>
+        hayFinanciera === null ? (
+          <div className="card-soft flex items-center gap-2 rounded-xl bg-card p-5 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Cargando tu información financiera…
           </div>
-          <AlertasFinancieras token={token} anio={anioFin} />
-          <EstadoResultado token={token} anio={anioFin} />
-          <RentaProyectada token={token} anio={anioFin} />
-          <ClasificarGastos token={token} />
-          <Reportes token={token} anio={anioFin} />
-          <Contabilidad token={token} />
-          <GastosMenores token={token} empresa={empresa} />
-        </div>
+        ) : !hayFinanciera ? (
+          <div className="card-soft rounded-xl bg-card p-8 text-center">
+            <div className="mb-3 flex justify-center">
+              <span className="inline-flex size-12 items-center justify-center rounded-full bg-muted text-[var(--brand-teal)]">
+                <Clock className="size-6" />
+              </span>
+            </div>
+            <h2 className="font-heading text-lg font-semibold">Estamos preparando tu información</h2>
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+              Aún no tenemos cargada la información financiera de esta empresa. En cuanto esté lista
+              verás aquí tu estado de resultado, impuestos y reportes. Si tienes dudas, escríbenos.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-muted-foreground">Información del año</span>
+              <div className="inline-flex rounded-md bg-muted p-0.5">
+                {[2025, 2026].map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => setAnioFin(a)}
+                    className={`rounded px-3 py-1 text-sm font-medium transition ${
+                      anioFin === a ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+                    }`}
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <AlertasFinancieras token={token} anio={anioFin} />
+            <ConveniosCliente token={token} />
+            <EstadoResultado token={token} anio={anioFin} />
+            <RentaProyectada token={token} anio={anioFin} />
+            <Facturas token={token} anio={anioFin} />
+            <Reportes token={token} anio={anioFin} />
+          </div>
+        )
       ) : null}
       {tab === "rrhh" ? (
         <div className="space-y-6">

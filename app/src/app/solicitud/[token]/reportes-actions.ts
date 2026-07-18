@@ -63,3 +63,23 @@ export async function cargarRenta(
   if (error || !data) return { ok: false };
   return { ok: true, data: data as Renta };
 }
+
+export type SinClasificarPart = {
+  monto_sin: number;
+  monto_total: number;
+  docs: number;
+  pct: number;
+};
+
+export async function cargarSinClasificarParticipacion(
+  token: string,
+  anio: number,
+): Promise<{ ok: boolean; data?: SinClasificarPart }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_sin_clasificar_participacion", {
+    p_token: token,
+    p_anio: anio,
+  });
+  if (error || !data) return { ok: false };
+  return { ok: true, data: data as SinClasificarPart };
+}

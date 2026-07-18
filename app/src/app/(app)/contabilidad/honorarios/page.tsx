@@ -1,0 +1,81 @@
+import { createClient } from "@/lib/supabase/server";
+import { HonorariosGrid, type FilaHonorarios } from "./honorarios-grid";
+
+export const metadata = { title: "Honorarios — RS Tax & Legal" };
+
+export default async function HonorariosGridPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ anio?: string }>;
+}) {
+  const { anio: a } = await searchParams;
+  const anio = /^\d{4}$/.test(a ?? "") ? Number(a) : 2026;
+  const supabase = await createClient();
+
+  const [clientesRes, honRes] = await Promise.all([
+    supabase
+      .from("clientes")
+      .select("id, razon_social, rut_empresa, activo, fecha_termino_servicio")
+      .order("razon_social"),
+    supabase
+      .from("honorarios_periodo")
+      .select("cliente_id, brutos, retencion, liquido, cuenta_id, estado, updated_at")
+      .like("periodo", `${anio}-%`)
+      .limit(20000),
+  ]);
+
+  type Agg = {
+    n: number;
+    bruto: number;
+    retencion: number;
+    liquido: number;
+    sinClasificar: number;
+    actualizado: string | null;
+  };
+  const porCliente = new Map<string, Agg>();
+  for (const h of honRes.data ?? []) {
+    const cid = h.cliente_id as string;
+    const cur =
+      porCliente.get(cid) ??
+      { n: 0, bruto: 0, retencion: 0, liquido: 0, sinClasificar: 0, actualizado: null };
+    // las anuladas no suman a los totales
+    const anulada = (h.estado as string) === "ANULADA";
+    cur.n += 1;
+    if (!anulada) {
+      cur.bruto += Number(h.brutos ?? 0);
+      cur.retencion += Number(h.retencion ?? 0);
+      cur.liquido += Number(h.liquido ?? 0);
+    }
+    if (!h.cuenta_id) cur.sinClasificar += 1;
+    const upd = h.updated_at as string | null;
+    if (upd && (!cur.actualizado || upd > cur.actualizado)) cur.actualizado = upd;
+    porCliente.set(cid, cur);
+  }
+
+  const filas: FilaHonorarios[] = (clientesRes.data ?? []).map((c) => {
+    const a = porCliente.get(c.id as string);
+    return {
+      clienteId: c.id as string,
+      razonSocial: c.razon_social as string,
+      rutEmpresa: (c.rut_empresa as string | null) ?? null,
+      terminado: !c.activo || c.fecha_termino_servicio != null,
+      cargado: !!a,
+      nBoletas: a?.n ?? 0,
+      bruto: a?.bruto ?? 0,
+      retencion: a?.retencion ?? 0,
+      liquido: a?.liquido ?? 0,
+      sinClasificar: a?.sinClasificar ?? 0,
+      actualizado: a?.actualizado ?? null,
+    };
+  });
+
+  return (
+    <main className="mx-auto max-w-[1400px] px-4 pb-10 sm:px-6">
+      <HonorariosGrid
+        anio={anio}
+        filas={filas}
+        errorCarga={clientesRes.error?.message ?? honRes.error?.message ?? null}
+      />
+    </main>
+  );
+}

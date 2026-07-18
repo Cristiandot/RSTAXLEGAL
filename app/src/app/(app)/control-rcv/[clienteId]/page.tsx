@@ -36,7 +36,7 @@ export default async function DetalleRcvPage({
   const periodo = normaliza(p, periodos);
   const supabase = await createClient();
 
-  const [clienteRes, ventasRes, comprasRes] = await Promise.all([
+  const [clienteRes, ventasRes, comprasRes, catsRes, provCatRes] = await Promise.all([
     supabase.from("clientes").select("id, razon_social, rut_empresa, clave_sii").eq("id", clienteId).maybeSingle(),
     supabase
       .from("rcv_ventas")
@@ -54,7 +54,14 @@ export default async function DetalleRcvPage({
       .order("fecha_docto", { ascending: true })
       .order("folio", { ascending: true })
       .limit(5000),
+    supabase.from("categoria_gasto").select("codigo, etiqueta").order("orden"),
+    supabase.from("rcv_proveedor_categoria").select("rut_proveedor, categoria").eq("cliente_id", clienteId),
   ]);
+
+  const catPorRut: Record<string, string> = {};
+  for (const r of provCatRes.data ?? []) {
+    if (r.rut_proveedor) catPorRut[r.rut_proveedor as string] = r.categoria as string;
+  }
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
@@ -67,6 +74,8 @@ export default async function DetalleRcvPage({
         periodos={periodos}
         ventas={(ventasRes.data ?? []) as DocVenta[]}
         compras={(comprasRes.data ?? []) as DocCompra[]}
+        categorias={(catsRes.data ?? []) as { codigo: string; etiqueta: string }[]}
+        catInicial={catPorRut}
       />
     </main>
   );

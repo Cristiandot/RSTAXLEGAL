@@ -41,3 +41,27 @@ export async function desbloquearPortal(
   }
   return { ok: false, bloqueado: r.bloqueado, restantes: r.restantes };
 }
+
+/**
+ * El cliente cambia su propio PIN del portal. Se identifica por slug (el de la
+ * URL) y valida el PIN actual; el token interno del grupo (acceso sin PIN de la
+ * oficina) no se ve afectado.
+ */
+export async function cambiarPinPortal(
+  slug: string,
+  pinActual: string,
+  pinNuevo: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!/^\d{4}$/.test(pinNuevo)) {
+    return { ok: false, error: "El PIN nuevo debe ser de 4 dígitos." };
+  }
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_cambiar_pin", {
+    p_slug: slug,
+    p_pin_actual: pinActual,
+    p_pin_nuevo: pinNuevo,
+  });
+  if (error) return { ok: false, error: "No se pudo cambiar el PIN. Reintenta." };
+  const r = (data ?? {}) as { ok?: boolean; error?: string };
+  return r.ok ? { ok: true } : { ok: false, error: r.error ?? "No se pudo cambiar el PIN." };
+}

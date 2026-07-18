@@ -53,6 +53,7 @@ export function EstadoResultado({ token, anio }: { token: string; anio: number }
   const margen = totIng ? Math.round((totRes / totIng) * 100) : 0;
   const faltaRemun = (meses ?? []).some((m) => !m.remun_cargada);
   const hayHonorarios = (meses ?? []).some((m) => (Number(m.honorarios) || 0) > 0);
+  const hayArriendo = (meses ?? []).some((m) => (Number(m.arriendo) || 0) > 0);
 
   return (
     <div className="card-soft rounded-xl bg-card p-5">
@@ -104,6 +105,7 @@ export function EstadoResultado({ token, anio }: { token: string; anio: number }
                   <th className="py-2 font-medium">Ingresos</th>
                   <th className="py-2 font-medium">Serv. prof.</th>
                   <th className="py-2 font-medium">Insumos</th>
+                  {hayArriendo ? <th className="py-2 font-medium">Arriendo</th> : null}
                   <th className="py-2 font-medium">Otros</th>
                   {hayHonorarios ? <th className="py-2 font-medium">Honorarios</th> : null}
                   <th className="py-2 font-medium">Remuner.</th>
@@ -122,6 +124,7 @@ export function EstadoResultado({ token, anio }: { token: string; anio: number }
                       <td className="py-1.5">{clp(m.ingresos)}</td>
                       <td className="py-1.5 text-muted-foreground">{clp(m.servicios)}</td>
                       <td className="py-1.5 text-muted-foreground">{clp(m.insumos)}</td>
+                      {hayArriendo ? <td className="py-1.5 text-muted-foreground">{clp(m.arriendo)}</td> : null}
                       <td className="py-1.5 text-muted-foreground">{clp(m.otros)}</td>
                       {hayHonorarios ? (
                         <td className="py-1.5 text-muted-foreground">{clp(m.honorarios)}</td>

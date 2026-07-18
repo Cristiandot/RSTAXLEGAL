@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { ArrowLeft, ExternalLink } from "lucide-react";
+import { clasificarManual } from "@/app/(app)/clasificacion/actions";
 import { Button } from "@/components/ui/button";
 import { RutCopiable } from "@/components/rut-copiable";
 import { ClaveCell } from "@/components/credencial-celdas";
@@ -56,7 +58,12 @@ type Props = {
   periodos: string[];
   ventas: DocVenta[];
   compras: DocCompra[];
+  categorias: { codigo: string; etiqueta: string }[];
+  catInicial: Record<string, string>;
 };
+
+const selectCatCls =
+  "rounded-md border px-2 py-0.5 text-xs shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 /** Login del SII que, tras autenticar, redirige al Registro de Compras y Ventas. */
 const URL_RCV_SII =
@@ -166,8 +173,23 @@ function ResumenPorTipo({ titulo, filas }: { titulo: string; filas: FilaResumen[
   );
 }
 
-export function DetalleRcvClient({ razonSocial, rutEmpresa, tieneClave, clienteId, periodo, periodos, ventas, compras }: Props) {
+export function DetalleRcvClient({ razonSocial, rutEmpresa, tieneClave, clienteId, periodo, periodos, ventas, compras, categorias, catInicial }: Props) {
   const sum = (arr: number[]) => arr.reduce((a, b) => a + (Number(b) || 0), 0);
+  const [catByRut, setCatByRut] = useState<Record<string, string>>(catInicial);
+  const [, startCat] = useTransition();
+
+  function clasificar(rut: string | null, valor: string) {
+    if (!rut) return;
+    const prev = catByRut[rut] ?? "";
+    setCatByRut((m) => ({ ...m, [rut]: valor === "sin_clasificar" ? "" : valor }));
+    startCat(async () => {
+      const r = await clasificarManual(clienteId, rut, valor);
+      if (!r.ok) {
+        setCatByRut((m) => ({ ...m, [rut]: prev }));
+        toast.error(r.error ?? "No se pudo clasificar");
+      }
+    });
+  }
   const resumenVentas = resumenPorTipo(ventas, (d) => (d as DocVenta).monto_iva);
   const resumenCompras = resumenPorTipo(compras, (d) => (d as DocCompra).iva_recuperable);
 
@@ -203,6 +225,11 @@ export function DetalleRcvClient({ razonSocial, rutEmpresa, tieneClave, clienteI
         case "fecha": return d.fecha_docto;
         case "rut": return d.rut_proveedor;
         case "razon": return d.razon_social;
+        // Etiqueta de la categoría asignada; sin clasificar queda al final.
+        case "categoria": {
+          const cod = d.rut_proveedor ? catByRut[d.rut_proveedor] : "";
+          return cod ? (categorias.find((c) => c.codigo === cod)?.etiqueta ?? cod) : null;
+        }
         case "exento": return Number(d.monto_exento) || 0;
         case "neto": return Number(d.monto_neto) || 0;
         case "iva": return Number(d.iva_recuperable) || 0;
@@ -211,7 +238,7 @@ export function DetalleRcvClient({ razonSocial, rutEmpresa, tieneClave, clienteI
       }
     };
     return [...compras].sort((a, b) => comparar(valor(a), valor(b), ordenCompras.dir));
-  }, [compras, ordenCompras]);
+  }, [compras, ordenCompras, catByRut, categorias]);
 
   return (
     <div className="space-y-4 py-4">
@@ -335,6 +362,7 @@ export function DetalleRcvClient({ razonSocial, rutEmpresa, tieneClave, clienteI
                 <ThSort col="fecha" orden={ordenCompras} setOrden={setOrdenCompras}>Fecha</ThSort>
                 <ThSort col="rut" orden={ordenCompras} setOrden={setOrdenCompras}>RUT proveedor</ThSort>
                 <ThSort col="razon" orden={ordenCompras} setOrden={setOrdenCompras}>Razón social</ThSort>
+                <ThSort col="categoria" orden={ordenCompras} setOrden={setOrdenCompras}>Categoría</ThSort>
                 <ThSort col="exento" orden={ordenCompras} setOrden={setOrdenCompras} className="text-right">Exento</ThSort>
                 <ThSort col="neto" orden={ordenCompras} setOrden={setOrdenCompras} className="text-right">Neto</ThSort>
                 <ThSort col="iva" orden={ordenCompras} setOrden={setOrdenCompras} className="text-right">IVA recup.</ThSort>
@@ -349,6 +377,28 @@ export function DetalleRcvClient({ razonSocial, rutEmpresa, tieneClave, clienteI
                   <TableCell>{formatFecha(d.fecha_docto)}</TableCell>
                   <TableCell className="tabular-nums">{d.rut_proveedor ?? "—"}</TableCell>
                   <TableCell className="max-w-[280px] truncate">{d.razon_social ?? "—"}</TableCell>
+                  <TableCell>
+                    {d.rut_proveedor ? (
+                      <select
+                        value={catByRut[d.rut_proveedor] || "sin_clasificar"}
+                        onChange={(e) => clasificar(d.rut_proveedor, e.target.value)}
+                        className={cn(
+                          selectCatCls,
+                          catByRut[d.rut_proveedor]
+                            ? "border-input bg-background"
+                            : "border-amber-300 bg-amber-50 text-amber-800",
+                        )}
+                        aria-label={`Clasificar ${d.razon_social ?? ""}`}
+                      >
+                        <option value="sin_clasificar">Sin clasificar</option>
+                        {categorias.map((c) => (
+                          <option key={c.codigo} value={c.codigo}>{c.etiqueta}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{formatMonto(d.monto_exento)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMonto(d.monto_neto)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMonto(d.iva_recuperable)}</TableCell>
@@ -356,13 +406,13 @@ export function DetalleRcvClient({ razonSocial, rutEmpresa, tieneClave, clienteI
                 </TableRow>
               ))}
               {compras.length === 0 && (
-                <TableRow><TableCell colSpan={9} className="py-6 text-center text-muted-foreground">Sin compras en {etiquetaPeriodo(periodo)}.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="py-6 text-center text-muted-foreground">Sin compras en {etiquetaPeriodo(periodo)}.</TableCell></TableRow>
               )}
             </TableBody>
             {compras.length > 0 && (
               <TableFooter>
                 <TableRow>
-                  <TableCell colSpan={5} className="font-medium">Totales</TableCell>
+                  <TableCell colSpan={6} className="font-medium">Totales</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMonto(sum(compras.map((d) => d.monto_exento)))}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMonto(sum(compras.map((d) => d.monto_neto)))}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatMonto(sum(compras.map((d) => d.iva_recuperable)))}</TableCell>

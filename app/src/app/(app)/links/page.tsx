@@ -7,7 +7,10 @@ export default async function LinksPage() {
   const supabase = await createClient();
 
   const [grupRes, cliRes] = await Promise.all([
-    supabase.from("grupos_cliente").select("id, codigo, nombre").order("codigo"),
+    supabase
+      .from("grupos_cliente")
+      .select("id, codigo, nombre, portal_slug, form_token, portal_pin_hash, portal_pin_visible")
+      .order("codigo"),
     supabase
       .from("clientes")
       .select("id, razon_social, rut_empresa, form_token, correo_empresa, grupo_id")
@@ -19,6 +22,10 @@ export default async function LinksPage() {
     id: g.id,
     codigo: g.codigo,
     nombre: g.nombre,
+    slug: g.portal_slug ?? null,
+    token: g.form_token ?? null,
+    tienePin: Boolean(g.portal_pin_hash),
+    pinVisible: g.portal_pin_visible ?? null,
   }));
 
   const filas: LinkClienteRow[] = (cliRes.data ?? []).map((c) => ({

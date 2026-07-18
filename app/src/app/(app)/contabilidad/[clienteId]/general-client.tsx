@@ -128,33 +128,54 @@ export function GeneralClient({
       {/* ── Tendencia ── */}
       {ult.length > 0 ? (
         <div className="card-soft rounded-xl bg-card p-4">
-          <h2 className="mb-3 text-sm font-semibold">Tendencia (últimos meses)</h2>
-          <div className="space-y-2">
+          <h2 className="text-sm font-semibold">Tendencia (últimos meses)</h2>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Ventas y compras netas por mes, a la misma escala.
+          </p>
+          <div className="space-y-2.5">
+            {/* Encabezado: leyenda + títulos de las columnas de montos */}
+            <div className="flex items-center gap-3 text-[11px] font-medium text-muted-foreground">
+              <span className="w-20 shrink-0" />
+              <span className="flex-1" />
+              <span className="flex w-28 shrink-0 items-center justify-end gap-1.5">
+                <span className="size-2 shrink-0 rounded-full bg-emerald-600" />
+                Ventas
+              </span>
+              <span className="flex w-28 shrink-0 items-center justify-end gap-1.5">
+                <span className="size-2 shrink-0 rounded-full bg-sky-600" />
+                Compras
+              </span>
+            </div>
             {ult.map((m) => (
               <div key={m.periodo} className="flex items-center gap-3 text-xs">
                 <span className="w-20 shrink-0 text-muted-foreground">
                   {etiquetaPeriodo(m.periodo)}
                 </span>
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="h-3 rounded bg-emerald-400/70"
-                      style={{ width: `${(m.ventasNeto / maxBarra) * 100}%` }}
-                    />
-                    <span className="tabular-nums text-muted-foreground">
-                      V {formatMonto(m.ventasNeto)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="h-3 rounded bg-sky-400/70"
-                      style={{ width: `${(m.comprasNeto / maxBarra) * 100}%` }}
-                    />
-                    <span className="tabular-nums text-muted-foreground">
-                      C {formatMonto(m.comprasNeto)}
-                    </span>
-                  </div>
+                <div
+                  className="flex-1 space-y-[2px]"
+                  title={`${etiquetaPeriodo(m.periodo)} — Ventas ${formatMonto(m.ventasNeto)} · Compras ${formatMonto(m.comprasNeto)}`}
+                >
+                  <div
+                    className="h-2.5 rounded-r bg-emerald-600"
+                    style={{
+                      width: `${(m.ventasNeto / maxBarra) * 100}%`,
+                      minWidth: m.ventasNeto > 0 ? 3 : 0,
+                    }}
+                  />
+                  <div
+                    className="h-2.5 rounded-r bg-sky-600"
+                    style={{
+                      width: `${(m.comprasNeto / maxBarra) * 100}%`,
+                      minWidth: m.comprasNeto > 0 ? 3 : 0,
+                    }}
+                  />
                 </div>
+                <span className="w-28 shrink-0 text-right tabular-nums">
+                  {formatMonto(m.ventasNeto)}
+                </span>
+                <span className="w-28 shrink-0 text-right tabular-nums text-muted-foreground">
+                  {formatMonto(m.comprasNeto)}
+                </span>
               </div>
             ))}
           </div>
