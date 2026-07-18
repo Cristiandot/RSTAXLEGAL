@@ -389,6 +389,10 @@ export function TesoreriaClient({
                                           <Badge variant="outline" className="ml-2 border-emerald-200 bg-emerald-50 text-emerald-700">
                                             RUT calza
                                           </Badge>
+                                        ) : s.docTipo === "impuesto" || s.docTipo === "remuneracion" ? (
+                                          <Badge variant="outline" className="ml-2 border-violet-200 bg-violet-50 text-violet-700">
+                                            registro del panel
+                                          </Badge>
                                         ) : (
                                           <Badge variant="outline" className="ml-2 border-amber-200 bg-amber-50 text-amber-700">
                                             solo monto
