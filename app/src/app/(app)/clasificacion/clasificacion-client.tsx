@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Trash2, Play, Wand2, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Plus, Trash2, Play, Wand2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { comparar, siguienteOrden, type Orden } from "@/lib/ordenar";
 import type { CategoriaOpcion } from "@/app/solicitud/[token]/clasificar-actions";
 import {
   guardarRegla,
@@ -23,6 +24,40 @@ const selectCls =
   "h-9 rounded-md border border-input bg-card px-2 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const clp = (n: number) => "$" + new Intl.NumberFormat("es-CL").format(Math.round(n));
 
+/** Encabezado ordenable para la tabla HTML cruda del diccionario (flechita como ThSort). */
+function ThOrdenable({
+  col,
+  orden,
+  setOrden,
+  className,
+  children,
+}: {
+  col: string;
+  orden: Orden;
+  setOrden: (o: Orden) => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const activo = orden?.col === col;
+  return (
+    <th className={`p-2 text-left font-medium ${className ?? ""}`}>
+      <button
+        type="button"
+        onClick={() => setOrden(siguienteOrden(orden, col))}
+        className={`inline-flex items-center gap-1 transition-colors hover:text-foreground ${activo ? "text-foreground" : ""}`}
+        title="Ordenar"
+      >
+        {children}
+        {activo ? (
+          orden!.dir === "asc" ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />
+        ) : (
+          <ArrowUpDown className="size-3.5 opacity-35" />
+        )}
+      </button>
+    </th>
+  );
+}
+
 export function ClasificacionClient({
   reglas,
   categorias,
@@ -39,6 +74,21 @@ export function ClasificacionClient({
 
   // ---- Diccionario ----
   const [nuevo, setNuevo] = useState({ patron: "", categoria: categorias[0]?.codigo ?? "", orden: "100" });
+  const [ordenTabla, setOrdenTabla] = useState<Orden>(null);
+
+  const reglasOrdenadas = useMemo(() => {
+    if (!ordenTabla) return reglas; // default: orden de evaluación (columna Orden, del server)
+    const etiquetaDe = (cod: string) => categorias.find((c) => c.codigo === cod)?.etiqueta ?? cod;
+    const valor = (r: Regla): unknown => {
+      switch (ordenTabla.col) {
+        case "patron": return r.patron;
+        case "categoria": return etiquetaDe(r.categoria);
+        case "orden": return r.orden;
+        default: return null;
+      }
+    };
+    return [...reglas].sort((a, b) => comparar(valor(a), valor(b), ordenTabla.dir));
+  }, [reglas, categorias, ordenTabla]);
 
   function agregarRegla() {
     start(async () => {
@@ -147,14 +197,14 @@ export function ClasificacionClient({
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-xs text-muted-foreground">
               <tr>
-                <th className="p-2 text-left font-medium">Patrón</th>
-                <th className="p-2 text-left font-medium">Categoría</th>
-                <th className="p-2 text-left font-medium w-20">Orden</th>
+                <ThOrdenable col="patron" orden={ordenTabla} setOrden={setOrdenTabla}>Patrón</ThOrdenable>
+                <ThOrdenable col="categoria" orden={ordenTabla} setOrden={setOrdenTabla}>Categoría</ThOrdenable>
+                <ThOrdenable col="orden" orden={ordenTabla} setOrden={setOrdenTabla} className="w-20">Orden</ThOrdenable>
                 <th className="p-2 text-right font-medium w-16"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {reglas.map((r) => (
+              {reglasOrdenadas.map((r) => (
                 <tr key={r.id}>
                   <td className="p-1.5">
                     <Input defaultValue={r.patron} onBlur={(e) => { if (e.target.value.trim() && e.target.value !== r.patron) editarRegla(r.id, { patron: e.target.value.trim() }, r); }} className="h-8 bg-card" />

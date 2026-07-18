@@ -6,6 +6,8 @@ import { Search, ChevronRight } from "lucide-react";
 import { formatMonto } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ThSort } from "@/components/th-sort";
+import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import {
   Table,
   TableBody,
@@ -19,6 +21,7 @@ export type FilaHonorarios = {
   clienteId: string;
   razonSocial: string;
   rutEmpresa: string | null;
+  grupoCodigo: string | null; // código del grupo (A.1, B.2…) para el orden por prioridad
   terminado: boolean;
   cargado: boolean;
   nBoletas: number;
@@ -60,10 +63,11 @@ export function HonorariosGrid({
   const [buscar, setBuscar] = useState("");
   const [estadoF, setEstadoF] = useState("");
   const [servicioF, setServicioF] = useState("activas");
+  const [orden, setOrden] = useState<Orden>(null);
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return filas.filter((f) => {
+    const out = filas.filter((f) => {
       if (q) {
         const t = `${f.razonSocial} ${f.rutEmpresa ?? ""}`.toLowerCase();
         if (!t.includes(q)) return false;
@@ -76,7 +80,25 @@ export function HonorariosGrid({
         return false;
       return true;
     });
-  }, [filas, buscar, estadoF, servicioF]);
+    // Orden por defecto = prioridad de cartera (A.1 → D.45), razón social de desempate.
+    if (!orden) {
+      return ordenarPorGrupo(out, (f) => f.grupoCodigo, (f) => f.razonSocial);
+    }
+    const valor = (f: FilaHonorarios): unknown => {
+      switch (orden.col) {
+        case "cliente": return f.razonSocial;
+        case "rut": return f.rutEmpresa;
+        // Estado: sin clasificar primero al ordenar asc, luego con info, luego sin info.
+        case "estado": return !f.cargado ? 2 : f.sinClasificar > 0 ? 0 : 1;
+        case "boletas": return f.cargado ? f.nBoletas : null;
+        case "bruto": return f.cargado ? f.bruto : null;
+        case "retencion": return f.cargado ? f.retencion : null;
+        case "liquido": return f.cargado ? f.liquido : null;
+        default: return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
+  }, [filas, buscar, estadoF, servicioF, orden]);
 
   const universo = filas.filter((f) =>
     servicioF === "activas"
@@ -178,13 +200,13 @@ export function HonorariosGrid({
         <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[300px]">Cliente</TableHead>
-              <TableHead>RUT</TableHead>
-              <TableHead>Estado {anio}</TableHead>
-              <TableHead className="text-right">N° boletas</TableHead>
-              <TableHead className="text-right">Brutos</TableHead>
-              <TableHead className="text-right">Retención</TableHead>
-              <TableHead className="text-right">Líquido</TableHead>
+              <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[300px]">Cliente</ThSort>
+              <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT</ThSort>
+              <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado {anio}</ThSort>
+              <ThSort col="boletas" orden={orden} setOrden={setOrden} className="text-right">N° boletas</ThSort>
+              <ThSort col="bruto" orden={orden} setOrden={setOrden} className="text-right">Brutos</ThSort>
+              <ThSort col="retencion" orden={orden} setOrden={setOrden} className="text-right">Retención</ThSort>
+              <ThSort col="liquido" orden={orden} setOrden={setOrden} className="text-right">Líquido</ThSort>
               <TableHead className="w-8" />
             </TableRow>
           </TableHeader>

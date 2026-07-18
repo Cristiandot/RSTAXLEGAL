@@ -15,7 +15,7 @@ export default async function HonorariosGridPage({
   const [clientesRes, honRes] = await Promise.all([
     supabase
       .from("clientes")
-      .select("id, razon_social, rut_empresa, activo, fecha_termino_servicio")
+      .select("id, razon_social, rut_empresa, activo, fecha_termino_servicio, grupo:grupos_cliente(codigo)")
       .order("razon_social"),
     supabase
       .from("honorarios_periodo")
@@ -52,12 +52,19 @@ export default async function HonorariosGridPage({
     porCliente.set(cid, cur);
   }
 
+  // El join embebido puede venir como objeto o arreglo según la relación.
+  const codigoDelGrupo = (g: unknown): string | null => {
+    const v = Array.isArray(g) ? g[0] : g;
+    return (v as { codigo?: string } | null)?.codigo ?? null;
+  };
+
   const filas: FilaHonorarios[] = (clientesRes.data ?? []).map((c) => {
     const a = porCliente.get(c.id as string);
     return {
       clienteId: c.id as string,
       razonSocial: c.razon_social as string,
       rutEmpresa: (c.rut_empresa as string | null) ?? null,
+      grupoCodigo: codigoDelGrupo(c.grupo),
       terminado: !c.activo || c.fecha_termino_servicio != null,
       cargado: !!a,
       nBoletas: a?.n ?? 0,
