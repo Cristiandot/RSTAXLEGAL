@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Receipt, ChevronDown, Check, Circle } from "lucide-react";
+import { Loader2, Receipt, ChevronDown, Check, Circle, AlertTriangle } from "lucide-react";
 import {
   cargarFacturas,
   marcarPago,
@@ -23,8 +23,6 @@ function fmtFecha(f: string | null): string {
   const m = f?.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m ? `${m[3]}-${m[2]}-${m[1]}` : (f ?? "—");
 }
-const CAT_LABEL: Record<string, string> = { servicio: "Servicios prof.", insumos: "Insumos", otros: "Otros" };
-
 export function Facturas({ token, anio = 2026 }: { token: string; anio?: number }) {
   const [tipo, setTipo] = useState<TipoFactura>("recibidas");
   const [facturas, setFacturas] = useState<FacturaPortal[] | null>(null);
@@ -57,6 +55,14 @@ export function Facturas({ token, anio = 2026 }: { token: string; anio?: number 
       arr.push(f);
       map.set(f.periodo, arr);
     }
+    // Dentro de cada mes, las sin clasificar primero.
+    for (const arr of map.values()) {
+      arr.sort((a, b) => {
+        const sa = a.clasificable && !a.categoria ? 0 : 1;
+        const sb = b.clasificable && !b.categoria ? 0 : 1;
+        return sa - sb;
+      });
+    }
     return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
   }, [facturas]);
 
@@ -74,13 +80,14 @@ export function Facturas({ token, anio = 2026 }: { token: string; anio?: number 
     }
   }
 
-  async function reclasificar(f: FacturaPortal, categoria: string) {
-    if (!categoria || !f.rut) return;
+  async function reclasificar(f: FacturaPortal, valor: string) {
+    if (!valor || !f.rut) return;
+    const categoria = valor === "sin_clasificar" ? null : valor;
     setGuardando(f.id);
-    const r = await clasificarProveedor(token, f.rut, categoria);
+    const r = await clasificarProveedor(token, f.rut, valor);
     setGuardando(null);
     if (r.ok) {
-      // Aplica a todas las facturas del mismo proveedor.
+      // Aplica a todas las facturas del mismo proveedor (RUT).
       setFacturas((prev) => (prev ?? []).map((x) => (x.rut === f.rut ? { ...x, categoria } : x)));
     }
   }
@@ -119,10 +126,18 @@ export function Facturas({ token, anio = 2026 }: { token: string; anio?: number 
         {tipo === "recibidas"
           ? "Facturas que recibes de tus proveedores, por mes. Se asumen pagadas; toca el estado para marcar un pago pendiente. Puedes reclasificar cualquier proveedor exento."
           : "Facturas y boletas que emites, por mes. Se asumen cobradas; toca el estado para marcar un pago no recibido."}
-        {tipo === "recibidas" && sinClasificar > 0 ? (
-          <span className="ml-1 font-medium text-amber-700">{sinClasificar} sin clasificar.</span>
-        ) : null}
       </p>
+
+      {tipo === "recibidas" && facturas && sinClasificar > 0 ? (
+        <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            Tienes <strong>{sinClasificar}</strong> factura{sinClasificar === 1 ? "" : "s"} sin
+            clasificar. Aparecen primero en cada mes — asígnales una categoría para ordenar tu Estado
+            de Resultado.
+          </span>
+        </div>
+      ) : null}
 
       {facturas === null ? (
         <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
@@ -180,24 +195,22 @@ export function Facturas({ token, anio = 2026 }: { token: string; anio?: number 
                           {f.pagado ? (tipo === "emitidas" ? "Cobrada" : "Pagada") : "Pendiente"}
                         </button>
                         {tipo === "recibidas" ? (
-                          f.clasificable ? (
-                            <select
-                              value={f.categoria ?? ""}
-                              disabled={guardando === f.id}
-                              onChange={(e) => reclasificar(f, e.target.value)}
-                              className="rounded-md border border-input bg-background px-2 py-0.5 text-xs"
-                              aria-label={`Clasificar ${f.contraparte ?? ""}`}
-                            >
-                              <option value="" disabled>Sin clasificar</option>
-                              {cats.map((c) => (
-                                <option key={c.codigo} value={c.codigo}>{c.etiqueta}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground">
-                              {CAT_LABEL[f.categoria ?? ""] ?? "Afecto"}
-                            </span>
-                          )
+                          <select
+                            value={f.categoria ?? "sin_clasificar"}
+                            disabled={guardando === f.id}
+                            onChange={(e) => reclasificar(f, e.target.value)}
+                            className={`rounded-md border px-2 py-0.5 text-xs ${
+                              f.categoria
+                                ? "border-input bg-background"
+                                : "border-amber-300 bg-amber-50 text-amber-800"
+                            }`}
+                            aria-label={`Clasificar ${f.contraparte ?? ""}`}
+                          >
+                            <option value="sin_clasificar">Sin clasificar</option>
+                            {cats.map((c) => (
+                              <option key={c.codigo} value={c.codigo}>{c.etiqueta}</option>
+                            ))}
+                          </select>
                         ) : null}
                       </div>
                     ))}

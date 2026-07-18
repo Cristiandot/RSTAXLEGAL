@@ -59,7 +59,7 @@ export async function estadoCliente(
       .from("rcv_proveedor_categoria")
       .select("rut_proveedor", { count: "exact", head: true })
       .eq("cliente_id", clienteId)
-      .eq("fuente", "manual"),
+      .in("fuente", ["oficina", "cliente"]),
   ]);
   if (sinRes.error) return { ok: false };
   return {
@@ -77,10 +77,20 @@ export async function clasificarManual(
   categoria: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
+  // La clasificación del cliente prima: la oficina no la sobrescribe.
+  const { data: actual } = await supabase
+    .from("rcv_proveedor_categoria")
+    .select("fuente")
+    .eq("cliente_id", clienteId)
+    .eq("rut_proveedor", rut)
+    .maybeSingle();
+  if (actual?.fuente === "cliente") {
+    return { ok: false, error: "El cliente ya clasificó este proveedor; su elección prima." };
+  }
   const { error } = await supabase
     .from("rcv_proveedor_categoria")
     .upsert(
-      { cliente_id: clienteId, rut_proveedor: rut, categoria, fuente: "manual" },
+      { cliente_id: clienteId, rut_proveedor: rut, categoria, fuente: "oficina" },
       { onConflict: "cliente_id,rut_proveedor" },
     );
   if (error) return { ok: false, error: error.message };

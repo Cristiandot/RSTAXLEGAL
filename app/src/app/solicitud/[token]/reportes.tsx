@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, AlertTriangle, TrendingUp, Users, Receipt, Building2 } from "lucide-react";
-import { cargarReportes, type Reportes as RepData } from "./reportes-actions";
+import { Loader2, AlertTriangle, TrendingUp, Users, Receipt, Building2, Tags } from "lucide-react";
+import {
+  cargarReportes,
+  cargarSinClasificarParticipacion,
+  type Reportes as RepData,
+  type SinClasificarPart,
+} from "./reportes-actions";
 
 const NOMBRE_MES: Record<string, string> = {
   "01":"Ene","02":"Feb","03":"Mar","04":"Abr","05":"May","06":"Jun",
@@ -16,15 +21,20 @@ function mesDe(p: string) { const m = p.match(/-(\d{2})$/); return m ? NOMBRE_ME
 
 export function Reportes({ token, anio }: { token: string; anio: number }) {
   const [d, setD] = useState<RepData | null>(null);
+  const [sinPart, setSinPart] = useState<SinClasificarPart | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     let vivo = true;
     setCargando(true);
+    setSinPart(null);
     cargarReportes(token, anio).then((r) => {
       if (!vivo) return;
       setD(r.ok ? (r.data ?? null) : null);
       setCargando(false);
+    });
+    cargarSinClasificarParticipacion(token, anio).then((r) => {
+      if (vivo) setSinPart(r.ok ? (r.data ?? null) : null);
     });
     return () => { vivo = false; };
   }, [token, anio]);
@@ -67,6 +77,31 @@ export function Reportes({ token, anio }: { token: string; anio: number }) {
           Reportes {anio}
         </span>
       </div>
+
+      {sinPart && sinPart.pct > 0 ? (
+        <div className={card}>
+          <p className="mb-1 text-sm font-medium">
+            <Tags className="mr-1.5 inline size-4 align-middle text-amber-600" aria-hidden="true" />
+            Facturas sin clasificar
+          </p>
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <div className="text-2xl font-semibold tabular-nums text-amber-700">{sinPart.pct}%</div>
+              <div className="text-xs text-muted-foreground">
+                {clp(sinPart.monto_sin)} de {clp(sinPart.monto_total)} en compras · {sinPart.docs} doc
+                {sinPart.docs === 1 ? "" : "s"}
+              </div>
+            </div>
+            <div className="h-2 w-32 overflow-hidden rounded-full bg-slate-200">
+              <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.min(sinPart.pct, 100)}%` }} />
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Participación de tus compras aún sin categoría. Clasifícalas en &quot;Tus facturas&quot; para
+            afinar el Estado de Resultado.
+          </p>
+        </div>
+      ) : null}
 
       {/* 1. Estructura de costos y márgenes */}
       <div className={card}>
