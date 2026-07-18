@@ -34,7 +34,13 @@ export function PortalUpload({ token }: { token: string }) {
       if (!data.ok) {
         setMsg({ ok: false, texto: data.error ?? "No se pudo procesar el archivo." });
       } else {
-        setMsg({ ok: true, texto: `Cartola cargada: ${data.insertados} movimientos nuevos (de ${data.total}).` });
+        const auto = Number(data.conciliados ?? 0);
+        setMsg({
+          ok: true,
+          texto: `Cartola cargada: ${data.insertados} movimientos nuevos (de ${data.total})${
+            auto > 0 ? ` · ${auto} conciliados automáticamente` : ""
+          }.`,
+        });
         setArchivo(null);
         if (inputRef.current) inputRef.current.value = "";
         router.refresh();

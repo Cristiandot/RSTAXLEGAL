@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { parseCartola } from "@/lib/banco/parsers";
 import { upsertCuenta, insertarMovimientos } from "@/lib/banco/ingesta";
+import { conciliarAutomaticoCore } from "@/lib/banco/conciliacion";
 
 /**
  * Subida de cartola desde el portal del cliente (público, por token). Valida el
@@ -53,5 +54,13 @@ export async function POST(req: Request) {
   );
   if (res.error) return NextResponse.json({ ok: false, error: res.error }, { status: 500 });
 
-  return NextResponse.json({ ok: true, insertados: res.insertados, total: res.total });
+  // Cruce automático al tiro (estilo Chipax): lo inequívoco se concilia solo.
+  const auto = await conciliarAutomaticoCore(supabase, cuenta.id, { clienteId: cli.id as string });
+
+  return NextResponse.json({
+    ok: true,
+    insertados: res.insertados,
+    total: res.total,
+    conciliados: auto.ok ? (auto.conciliados ?? 0) : 0,
+  });
 }

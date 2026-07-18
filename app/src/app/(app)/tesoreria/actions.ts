@@ -100,10 +100,13 @@ export async function conciliarAutomatico(
   return res;
 }
 
-/** Carga interna de una cartola (equipo RS): parsea, ubica/crea la cuenta e inserta. */
+/**
+ * Carga interna de una cartola (equipo RS): parsea, ubica/crea la cuenta,
+ * inserta y corre el cruce automático al tiro.
+ */
 export async function subirCartola(
   formData: FormData,
-): Promise<{ ok: boolean; insertados?: number; total?: number; error?: string }> {
+): Promise<{ ok: boolean; insertados?: number; total?: number; conciliados?: number; error?: string }> {
   const archivo = formData.get("archivo");
   const clienteId = String(formData.get("clienteId") ?? "");
   const fuente = String(formData.get("fuente") ?? "");
@@ -127,8 +130,15 @@ export async function subirCartola(
     parsed.movimientos,
   );
   if (res.error) return { ok: false, error: res.error };
+  // Cruce automático al tiro: lo inequívoco se concilia solo.
+  const auto = await conciliarAutomaticoCore(supabase, cuenta.id, { creadoPor: importadoPor });
   refrescar();
-  return { ok: true, insertados: res.insertados, total: res.total };
+  return {
+    ok: true,
+    insertados: res.insertados,
+    total: res.total,
+    conciliados: auto.ok ? (auto.conciliados ?? 0) : 0,
+  };
 }
 
 const CLP = (v: number) => "$" + Math.round(v).toLocaleString("es-CL");
