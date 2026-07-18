@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { toast } from "sonner";
+import { Send } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -10,12 +12,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { formatMonto } from "@/lib/format";
+import { formatMonto, formatFecha } from "@/lib/format";
+import { etiquetaPeriodo } from "@/lib/periodos";
 import { ThSort } from "@/components/th-sort";
 import { comparar, type Orden } from "@/lib/ordenar";
+import { enviarReporteAvance } from "./actions";
 
 export type EmpresaControl = {
   id: string;
@@ -24,6 +39,17 @@ export type EmpresaControl = {
   tieneClave: boolean;
   contabilidad: boolean;
   grupoCodigo: string;
+  correoEmpresa: string | null;
+};
+
+/** Fila de `rcv_reporte_avance` del mes en curso (reporte del día 23 ya enviado o borrador). */
+export type ReporteAvance = {
+  cliente_id: string;
+  periodo: string;
+  fecha_corte: string | null;
+  fecha_correo_enviado: string | null;
+  destinatario: string | null;
+  observaciones: string | null;
 };
 
 /** Clave de orden por categoría: letra (A→D→…) y luego número (C.2 antes que C.10). */
@@ -67,6 +93,10 @@ export type TotalesRcv = {
   // lista, ej. DIN 914 de importación). Solo para el semáforo de cuadratura.
   ventas_total_rcv: number | string | null;
   compras_total_rcv: number | string | null;
+  // IVA del período (débito de ventas / crédito recuperable de compras) — para
+  // el IVA estimado del reporte de avance del 23.
+  ventas_iva_total: number | string | null;
+  compras_iva_total: number | string | null;
 };
 
 type Props = {
@@ -75,6 +105,9 @@ type Props = {
   empresas: EmpresaControl[];
   descargas: DescargaRcv[];
   totales: TotalesRcv[];
+  /** Mes EN CURSO (no está en la grilla de meses): alimenta el reporte de avance del 23. */
+  periodoEnCurso: string;
+  reportes: ReporteAvance[];
   errorCarga: string | null;
 };
 
@@ -132,10 +165,12 @@ function ResumenCard({ label, valor, tono }: { label: string; valor: number; ton
   );
 }
 
-export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetasTodas, empresas, descargas, totales, errorCarga }: Props) {
+export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetasTodas, empresas, descargas, totales, periodoEnCurso, reportes, errorCarga }: Props) {
   const [buscar, setBuscar] = useState("");
   const [soloPendientes, setSoloPendientes] = useState(false);
   const [orden, setOrden] = useState<Orden>(null);
+  // Reporte de avance del 23: empresa cuyo modal de revisión/envío está abierto.
+  const [reporteDe, setReporteDe] = useState<EmpresaControl | null>(null);
 
   // Año visible: la BD trae el histórico completo (2025 + 2026), pero la grilla
   // muestra un año a la vez para no reventar el ancho. Default = año vigente.
@@ -175,6 +210,12 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
     for (const t of totales) m.set(`${t.cliente_id}|${t.periodo}`, t);
     return m;
   }, [totales]);
+
+  const mapaReportes = useMemo(() => {
+    const m = new Map<string, ReporteAvance>();
+    for (const r of reportes) m.set(r.cliente_id, r);
+    return m;
+  }, [reportes]);
 
   const multiAnio = new Set(periodos.map((p) => p.slice(0, 4))).size > 1;
 
@@ -226,6 +267,11 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
           return tot?.bhe_emitidas_total !== null && tot?.bhe_emitidas_total !== undefined ? Number(tot.bhe_emitidas_total) : null;
         case "bhe_recibidas":
           return tot?.bhe_recibidas_total !== null && tot?.bhe_recibidas_total !== undefined ? Number(tot.bhe_recibidas_total) : null;
+        case "reporte": {
+          // Avance del 23: pendientes primero (asc), enviados después, sin clave al final.
+          if (!f.empresa.tieneClave) return 2;
+          return mapaReportes.get(f.empresa.id)?.fecha_correo_enviado ? 1 : 0;
+        }
         case "estado":
           // Estado global: al día → sin verificar → revisar → faltan → sin clave.
           if (!f.empresa.tieneClave) return 4;
@@ -238,18 +284,19 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
       }
     };
     return [...out].sort((a, b) => comparar(val(a), val(b), orden.dir));
-  }, [filas, buscar, soloPendientes, orden, periodos, mapaTotales, mesTotales]);
+  }, [filas, buscar, soloPendientes, orden, periodos, mapaTotales, mesTotales, mapaReportes]);
 
   const resumen = useMemo(() => {
-    let alDia = 0, porRevisar = 0, conFaltantes = 0, sinClave = 0;
+    let alDia = 0, porRevisar = 0, conFaltantes = 0, sinClave = 0, avanceEnviados = 0;
     for (const f of filas) {
       if (!f.empresa.tieneClave) { sinClave++; continue; }
+      if (mapaReportes.get(f.empresa.id)?.fecha_correo_enviado) avanceEnviados++;
       if (f.faltanMeses) conFaltantes++;
       else if (f.hayRevisar) porRevisar++;
       else if (f.alDia) alDia++;
     }
-    return { total: filas.length, alDia, porRevisar, conFaltantes, sinClave };
-  }, [filas]);
+    return { total: filas.length, alDia, porRevisar, conFaltantes, sinClave, avanceEnviados };
+  }, [filas, mapaReportes]);
 
   return (
     <div className="space-y-4 py-4">
@@ -270,12 +317,13 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
         <ResumenCard label="Empresas" valor={resumen.total} />
         <ResumenCard label="Al día (descargado y cuadra)" valor={resumen.alDia} tono="text-emerald-600" />
         <ResumenCard label="Por revisar (no cuadra)" valor={resumen.porRevisar} tono="text-amber-600" />
         <ResumenCard label="Con meses faltantes" valor={resumen.conFaltantes} tono="text-red-600" />
         <ResumenCard label="Sin clave SII" valor={resumen.sinClave} tono="text-slate-500" />
+        <ResumenCard label={`Avance ${etiquetaCorta(periodoEnCurso, false)} enviados`} valor={resumen.avanceEnviados} tono="text-sky-600" />
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -355,6 +403,11 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
               <ThSort col="estado" orden={orden} setOrden={setOrden} className="text-center">
                 Estado
               </ThSort>
+              <ThSort col="reporte" orden={orden} setOrden={setOrden} className="text-center">
+                <span title={`Reporte de avance de ${etiquetaPeriodo(periodoEnCurso)} al cliente (ritual del día 23)`}>
+                  Avance {etiquetaCorta(periodoEnCurso, false)}
+                </span>
+              </ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -402,11 +455,22 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
                 <TableCell className="text-center">
                   <EstadoEmpresa fila={f} totalMeses={periodos.length} />
                 </TableCell>
+
+                <TableCell className="text-center">
+                  {f.empresa.tieneClave ? (
+                    <CeldaReporte
+                      reporte={mapaReportes.get(f.empresa.id) ?? null}
+                      onAbrir={() => setReporteDe(f.empresa)}
+                    />
+                  ) : (
+                    <span className="text-slate-300">·</span>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
             {filtradas.length === 0 && (
               <TableRow>
-                <TableCell colSpan={periodos.length + 6} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={periodos.length + 7} className="py-8 text-center text-muted-foreground">
                   Sin empresas para el filtro.
                 </TableCell>
               </TableRow>
@@ -414,7 +478,37 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
           </TableBody>
         </Table>
       </div>
+
+      {reporteDe && (
+        <ReporteAvanceDialog
+          empresa={reporteDe}
+          periodo={periodoEnCurso}
+          tot={mapaTotales.get(`${reporteDe.id}|${periodoEnCurso}`) ?? null}
+          d={mapa.get(`${reporteDe.id}|${periodoEnCurso}`) ?? null}
+          reporte={mapaReportes.get(reporteDe.id) ?? null}
+          onCerrar={() => setReporteDe(null)}
+        />
+      )}
     </div>
+  );
+}
+
+/** Celda "Avance": botón para revisar/enviar el reporte del mes en curso, o el estado del envío. */
+function CeldaReporte({ reporte, onAbrir }: { reporte: ReporteAvance | null; onAbrir: () => void }) {
+  if (reporte?.fecha_correo_enviado) {
+    return (
+      <button type="button" onClick={onAbrir} title={`Enviado a ${reporte.destinatario ?? "—"} — clic para revisar o reenviar`}>
+        <Badge variant="outline" className="cursor-pointer border-emerald-200 bg-emerald-50 text-emerald-700">
+          ✓ {formatFecha(reporte.fecha_correo_enviado)}
+        </Badge>
+      </button>
+    );
+  }
+  return (
+    <Button variant="outline" size="sm" onClick={onAbrir}>
+      <Send className="size-3.5" />
+      Revisar
+    </Button>
   );
 }
 
@@ -524,6 +618,148 @@ function CeldaBhe({ tot, tipo }: { tot: TotalesRcv | null; tipo: "emitidas" | "r
         {docs} boleta{docs === 1 ? "" : "s"}
       </div>
     </TableCell>
+  );
+}
+
+/**
+ * Modal del reporte de avance del mes en curso (ritual del día 23): la contadora
+ * revisa el acumulado (mismas cifras que verá el cliente), puede dejar un
+ * comentario, confirmar el correo de destino y enviar. El envío queda registrado
+ * en rcv_reporte_avance (snapshot + fecha) y el correo sale a nombre del usuario
+ * conectado con los correos adicionales del cliente en copia.
+ */
+function ReporteAvanceDialog({
+  empresa,
+  periodo,
+  tot,
+  d,
+  reporte,
+  onCerrar,
+}: {
+  empresa: EmpresaControl;
+  periodo: string;
+  tot: TotalesRcv | null;
+  d: DescargaRcv | null;
+  reporte: ReporteAvance | null;
+  onCerrar: () => void;
+}) {
+  const [destino, setDestino] = useState(reporte?.destinatario ?? empresa.correoEmpresa ?? "");
+  const [obs, setObs] = useState(reporte?.observaciones ?? "");
+  const [enviando, startEnviar] = useTransition();
+
+  const n = (v: number | string | null | undefined) => Number(v ?? 0);
+  const ivaDebito = n(tot?.ventas_iva_total);
+  const ivaCredito = n(tot?.compras_iva_total);
+  const ivaEstimado = ivaDebito - ivaCredito;
+
+  function enviar() {
+    startEnviar(async () => {
+      const r = await enviarReporteAvance({
+        clienteId: empresa.id,
+        periodo,
+        destinatario: destino,
+        observaciones: obs,
+      });
+      if (r.ok) {
+        toast.success(`Reporte de avance enviado a ${r.enviadoA}`);
+        onCerrar();
+      } else {
+        toast.error(r.error ?? "No se pudo enviar el reporte.");
+      }
+    });
+  }
+
+  const Fila = ({ etiqueta, valor, destacada }: { etiqueta: string; valor: string; destacada?: boolean }) => (
+    <div className={cn("flex items-center justify-between border-b border-border/60 py-1.5 text-sm", destacada && "font-semibold")}>
+      <span>{etiqueta}</span>
+      <span className="tabular-nums">{valor}</span>
+    </div>
+  );
+
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onCerrar(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Avance de {etiquetaPeriodo(periodo)} — {empresa.razon_social}</DialogTitle>
+          <DialogDescription>
+            Cifras del mes en curso según el RCV del SII, para que el cliente decida compras o
+            ventas antes del cierre. Revisa, comenta y envía.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!tot ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            No hay documentos de {etiquetaPeriodo(periodo)} descargados para esta empresa.
+            Corre primero la descarga del RCV del mes en curso y vuelve a abrir este reporte.
+          </div>
+        ) : (
+          <div>
+            <Fila etiqueta="Ventas del mes (neto de NC)" valor={formatMonto(n(tot.ventas_total))} />
+            {n(tot.ventas_nc_docs) > 0 && (
+              <Fila etiqueta={`Notas de crédito de venta (${tot.ventas_nc_docs})`} valor={formatMonto(n(tot.ventas_nc_total))} />
+            )}
+            <Fila etiqueta="Compras del mes (neto de NC)" valor={formatMonto(n(tot.compras_total))} />
+            {n(tot.compras_nc_docs) > 0 && (
+              <Fila etiqueta={`Notas de crédito de compra (${tot.compras_nc_docs})`} valor={formatMonto(n(tot.compras_nc_total))} />
+            )}
+            {n(tot.bhe_recibidas_docs) > 0 && (
+              <Fila etiqueta={`BHE recibidas (${tot.bhe_recibidas_docs})`} valor={formatMonto(n(tot.bhe_recibidas_total))} />
+            )}
+            {n(tot.bhe_emitidas_docs) > 0 && (
+              <Fila etiqueta={`BHE emitidas (${tot.bhe_emitidas_docs})`} valor={formatMonto(n(tot.bhe_emitidas_total))} />
+            )}
+            <Fila etiqueta="IVA débito acumulado" valor={formatMonto(ivaDebito)} />
+            <Fila etiqueta="IVA crédito acumulado" valor={formatMonto(ivaCredito)} />
+            <Fila
+              etiqueta={ivaEstimado >= 0 ? "IVA estimado si el mes cerrara hoy" : "Remanente estimado a favor"}
+              valor={formatMonto(Math.abs(ivaEstimado))}
+              destacada
+            />
+            <p className="mt-2 text-xs text-muted-foreground">
+              {d?.ultima_descarga
+                ? `Última descarga del mes: ${formatFecha(d.ultima_descarga)}. Si quieres cifras más frescas, re-corre el sync antes de enviar.`
+                : "Este mes aún no tiene control de descarga registrado — verifica que el RCV esté al día antes de enviar."}
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label htmlFor="reporte-correo">Correo del cliente</Label>
+            <Input
+              id="reporte-correo"
+              type="email"
+              placeholder="cliente@correo.cl"
+              value={destino}
+              onChange={(e) => setDestino(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Si lo cambias, se actualiza la ficha. Los correos adicionales del cliente van en copia.
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="reporte-obs">Comentario para el cliente (opcional)</Label>
+            <Textarea
+              id="reporte-obs"
+              rows={3}
+              placeholder="Ej: conviene adelantar compras esta semana para bajar el IVA del período…"
+              value={obs}
+              onChange={(e) => setObs(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onCerrar} disabled={enviando}>
+            Cancelar
+          </Button>
+          <Button onClick={enviar} disabled={enviando || !tot || !destino.includes("@")}>
+            <Send className="size-3.5" />
+            {enviando ? "Enviando…" : reporte?.fecha_correo_enviado ? "Reenviar reporte" : "Enviar reporte"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
