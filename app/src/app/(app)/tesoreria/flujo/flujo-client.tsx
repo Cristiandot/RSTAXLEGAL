@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TesoreriaNav } from "../tesoreria-nav";
+import { EmpresaSelect, type EmpresaOpcion } from "../empresa-select";
 
 export type FilaFlujo = {
   mes: string;
@@ -21,9 +22,6 @@ export type FilaFlujo = {
   neto: number;
   saldoProyectado: number;
 };
-
-const selectCls =
-  "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function KpiCard({ label, valor, tono, sub }: { label: string; valor: string; tono?: "ok" | "alerta"; sub?: string }) {
   const color = tono === "ok" ? "text-emerald-600" : tono === "alerta" ? "text-red-600" : "";
@@ -46,7 +44,7 @@ export function FlujoClient({
   filas,
   generado,
 }: {
-  clientes: { id: string; razonSocial: string }[];
+  clientes: EmpresaOpcion[];
   clienteSeleccionado: string | null;
   saldoInicial: number;
   saldoConfigurado: boolean;
@@ -74,17 +72,11 @@ export function FlujoClient({
 
       <div className="mt-5">
         <label className="block text-xs text-muted-foreground">Empresa</label>
-        <select
-          className={`${selectCls} mt-1 w-72`}
+        <EmpresaSelect
+          empresas={clientes}
           value={clienteSeleccionado ?? ""}
-          onChange={(e) => router.push(`/tesoreria/flujo?cliente=${e.target.value}`)}
-        >
-          {clientes.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.razonSocial}
-            </option>
-          ))}
-        </select>
+          onChange={(id) => router.push(`/tesoreria/flujo?cliente=${id}`)}
+        />
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
