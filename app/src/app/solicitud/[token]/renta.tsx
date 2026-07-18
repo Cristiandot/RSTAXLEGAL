@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Landmark, Info, Sprout } from "lucide-react";
 import { cargarRenta, type Renta } from "./reportes-actions";
 import { cargarEstadoResultado, type MesResultado } from "./estado-resultado-actions";
+import { cargarIndicadores } from "./portal-actions";
 
 function clp(n: number): string {
   return (n < 0 ? "-$" : "$") + new Intl.NumberFormat("es-CL").format(Math.abs(Math.round(n)));
@@ -19,9 +20,13 @@ type Proyeccion = {
   impuesto: number;
   ppm: number;
   rentaPagar: number;
-  baseReinv: number;
-  impuestoReinv: number;
-  ahorroReinv: number;
+  // Beneficio de reinversión (50% de la base, tope 5.000 UF).
+  deduccion50: number; // 50% de la base (antes de tope)
+  uf: number | null; // valor UF del indicador Previred
+  topeUf5000: number | null; // 5.000 UF en $
+  topado: boolean; // el 50% supera el tope
+  deduccionMax: number; // rebaja efectiva (min 50% vs tope)
+  ahorroReinv: number; // ahorro de impuesto con la rebaja efectiva
   tasaPct: number;
   mesesReales: number;
   mesesProyectados: number[]; // índices 1..12 proyectados
@@ -32,7 +37,12 @@ type Proyeccion = {
  * los 3 meses inmediatamente anteriores, en cascada (un mes proyectado alimenta
  * el siguiente). Cerrado = mes con remuneraciones cargadas (info completa).
  */
-function proyectar(meses: MesResultado[], ppm: number, tasaPct: number): Proyeccion | null {
+function proyectar(
+  meses: MesResultado[],
+  ppm: number,
+  tasaPct: number,
+  uf: number | null,
+): Proyeccion | null {
   if (meses.length === 0) return null;
   const resultado: (number | null)[] = Array(13).fill(null);
   const ventas: (number | null)[] = Array(13).fill(null);
@@ -77,8 +87,11 @@ function proyectar(meses: MesResultado[], ppm: number, tasaPct: number): Proyecc
   const tasa = tasaPct / 100;
   const impuesto = base * tasa;
   const rentaPagar = impuesto - ppm;
-  const baseReinv = base * 0.5;
-  const impuestoReinv = baseReinv * tasa;
+  // Reinversión: rebaja del 50% de la base, con tope de 5.000 UF.
+  const deduccion50 = base * 0.5;
+  const topeUf5000 = uf ? uf * 5000 : null;
+  const topado = topeUf5000 !== null && deduccion50 > topeUf5000;
+  const deduccionMax = topeUf5000 !== null ? Math.min(deduccion50, topeUf5000) : deduccion50;
   return {
     resultadoAnual,
     ventaAnual,
@@ -87,9 +100,12 @@ function proyectar(meses: MesResultado[], ppm: number, tasaPct: number): Proyecc
     impuesto,
     ppm,
     rentaPagar,
-    baseReinv,
-    impuestoReinv,
-    ahorroReinv: impuesto - impuestoReinv,
+    deduccion50,
+    uf,
+    topeUf5000,
+    topado,
+    deduccionMax,
+    ahorroReinv: deduccionMax * tasa,
     tasaPct,
     mesesReales: ultimoReal,
     mesesProyectados: proyectados,
@@ -103,15 +119,18 @@ export function RentaProyectada({ token, anio = 2026 }: { token: string; anio?: 
   useEffect(() => {
     let vivo = true;
     setCargando(true);
-    Promise.all([cargarRenta(token, anio), cargarEstadoResultado(token, anio)]).then(
-      ([rRenta, rEr]) => {
-        if (!vivo) return;
-        const d: Renta | null = rRenta.ok ? (rRenta.data ?? null) : null;
-        const meses = rEr.ok ? (rEr.meses ?? []) : [];
-        setP(d ? proyectar(meses, Number(d.ppm_acumulado ?? 0), d.tasa_pct ?? 12.5) : null);
-        setCargando(false);
-      },
-    );
+    Promise.all([
+      cargarRenta(token, anio),
+      cargarEstadoResultado(token, anio),
+      cargarIndicadores(token),
+    ]).then(([rRenta, rEr, rInd]) => {
+      if (!vivo) return;
+      const d: Renta | null = rRenta.ok ? (rRenta.data ?? null) : null;
+      const meses = rEr.ok ? (rEr.meses ?? []) : [];
+      const uf = rInd.ok && rInd.ind?.uf ? Number(rInd.ind.uf) : null;
+      setP(d ? proyectar(meses, Number(d.ppm_acumulado ?? 0), d.tasa_pct ?? 12.5, uf) : null);
+      setCargando(false);
+    });
     return () => { vivo = false; };
   }, [token, anio]);
 
@@ -129,6 +148,10 @@ export function RentaProyectada({ token, anio = 2026 }: { token: string; anio?: 
   const proyTxt = p.mesesProyectados.length
     ? p.mesesProyectados.map((m) => MES_ABR[m]).join(", ")
     : null;
+
+  // Equivalente en UF de un monto en $, con la UF del indicador Previred.
+  const enUf = (monto: number) =>
+    p.uf ? `${new Intl.NumberFormat("es-CL", { maximumFractionDigits: 0 }).format(monto / p.uf)} UF` : null;
 
   return (
     <div className="space-y-4">
@@ -157,11 +180,19 @@ export function RentaProyectada({ token, anio = 2026 }: { token: string; anio?: 
         <div className="mt-3 flex items-start gap-2 rounded-md bg-emerald-50 p-3">
           <Sprout className="mt-0.5 size-4 shrink-0 text-emerald-700" aria-hidden="true" />
           <p className="m-0 text-xs text-emerald-800">
-            <strong>Beneficio de reinversión (50%).</strong> Si reinviertes utilidades en la empresa,
-            puedes rebajar de la base afecta el <strong>50% de lo reinvertido, con tope de UF 5.000</strong>{" "}
-            (ProPyme 14D N°3, incentivo al ahorro). En tu caso el tope acota el beneficio, así que el
-            ahorro real es menor al 50% teórico — lo calculamos con el monto exacto a reinvertir antes
-            del cierre.
+            <strong>Beneficio de reinversión (50%).</strong> Si reinviertes utilidades, puedes rebajar
+            de la base el 50% de lo reinvertido, con <strong>tope de 5.000 UF</strong> (ProPyme 14D N°3,
+            incentivo al ahorro). El 50% de tu base es {clp(p.deduccion50)}
+            {enUf(p.deduccion50) ? ` (${enUf(p.deduccion50)})` : ""}.{" "}
+            {p.topado && p.topeUf5000 !== null ? (
+              <>
+                Como supera el tope, la rebaja máxima es <strong>{clp(p.topeUf5000)}</strong> (5.000 UF),
+                con un ahorro de impuesto de hasta {clp(p.ahorroReinv)}.
+              </>
+            ) : (
+              <>Con ese monto, el ahorro de impuesto sería de hasta {clp(p.ahorroReinv)}.</>
+            )}{" "}
+            Lo calculamos con el monto exacto a reinvertir antes del cierre.
           </p>
         </div>
 
