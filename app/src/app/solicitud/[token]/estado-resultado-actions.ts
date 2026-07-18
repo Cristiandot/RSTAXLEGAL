@@ -36,3 +36,11 @@ export async function cargarEstadoResultado(
   const d = data as { meses?: MesResultado[]; corte?: CorteInfo };
   return { ok: true, meses: d.meses ?? [], corte: d.corte };
 }
+
+/** ¿La empresa tiene información financiera cargada (ventas/ingresos)? */
+export async function tieneFinanciera(token: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_tiene_financiera", { p_token: token });
+  if (error) return false;
+  return data === true;
+}
