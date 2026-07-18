@@ -51,6 +51,10 @@ import {
   soloCerrarConX,
 } from "@/components/ui/dialog";
 
+// Conciliación de Compras y Ventas aún no es parte del proceso F29: se oculta
+// el aviso del modal y el filtro de la grilla hasta que se active (flip a true).
+const MOSTRAR_CONCILIACION = false;
+
 const ESTADOS = [
   "Sin iniciar",
   "Pendiente presentación",
@@ -480,16 +484,18 @@ export function F29Client({
           ))}
         </select>
 
-        <select
-          aria-label="Conciliación"
-          className={selectCls}
-          value={concilF}
-          onChange={(e) => setConcilF(e.target.value)}
-        >
-          <option value="">Concil: todos</option>
-          <option value="ok">Concil OK</option>
-          <option value="no">Sin conciliar aún</option>
-        </select>
+        {MOSTRAR_CONCILIACION && (
+          <select
+            aria-label="Conciliación"
+            className={selectCls}
+            value={concilF}
+            onChange={(e) => setConcilF(e.target.value)}
+          >
+            <option value="">Concil: todos</option>
+            <option value="ok">Concil OK</option>
+            <option value="no">Sin conciliar aún</option>
+          </select>
+        )}
 
         <select
           aria-label="Responsable"
@@ -620,18 +626,19 @@ export function F29Client({
               </DialogDescription>
             </DialogHeader>
 
-            {editando.conciliacion_ok ? (
-              <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-sm text-emerald-700">
-                <CheckCircle2 className="size-4 shrink-0" />
-                Conciliación de Compras y Ventas: OK para este período.
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-700">
-                <AlertTriangle className="size-4 shrink-0" />
-                Conciliación pendiente. Verifica con Solange antes de armar el
-                F29.
-              </div>
-            )}
+            {MOSTRAR_CONCILIACION &&
+              (editando.conciliacion_ok ? (
+                <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-sm text-emerald-700">
+                  <CheckCircle2 className="size-4 shrink-0" />
+                  Conciliación de Compras y Ventas: OK para este período.
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-sm text-amber-700">
+                  <AlertTriangle className="size-4 shrink-0" />
+                  Conciliación pendiente. Verifica con Solange antes de armar
+                  el F29.
+                </div>
+              ))}
 
             <form
               id="form-f29"
