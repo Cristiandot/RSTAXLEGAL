@@ -4,13 +4,14 @@ import { useMemo, useState } from "react";
 import { KeyRound, Pin, Search } from "lucide-react";
 import { ClaveCell, RutPreviredCell } from "@/components/credencial-celdas";
 import { RutCopiable } from "@/components/rut-copiable";
+import { ThSort } from "@/components/th-sort";
+import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -36,17 +37,48 @@ export function CredencialesClient({
 }) {
   const [buscar, setBuscar] = useState("");
   const [verInactivas, setVerInactivas] = useState(false);
+  const [orden, setOrden] = useState<Orden>(null);
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return filas.filter((f) => {
+    const out = filas.filter((f) => {
       if (!verInactivas && !f.activo) return false;
       if (!q) return true;
       return `${f.razonSocial} ${f.rut ?? ""} ${f.previredRut ?? ""} ${f.grupo ?? ""}`
         .toLowerCase()
         .includes(q);
     });
-  }, [filas, buscar, verInactivas]);
+    // Orden por defecto: fijadas arriba (claves de la oficina) y, dentro de
+    // cada bloque, prioridad de cartera por el código que abre `grupo`
+    // ("A.4 — Red Barrera" ordena A.1 → D.45 gracias a la collation numérica),
+    // con la razón social como desempate.
+    if (!orden) {
+      return [
+        ...ordenarPorGrupo(out.filter((f) => f.fijada), (f) => f.grupo, (f) => f.razonSocial),
+        ...ordenarPorGrupo(out.filter((f) => !f.fijada), (f) => f.grupo, (f) => f.razonSocial),
+      ];
+    }
+    const val = (f: CredencialRow): unknown => {
+      switch (orden.col) {
+        case "empresa":
+          return f.razonSocial;
+        case "cliente":
+          return f.grupo;
+        case "rutSii":
+          return f.rut;
+        // Las claves nunca viajan al navegador: se ordena por si hay credencial o no.
+        case "claveSii":
+          return f.tieneClaveSii ? 1 : 0;
+        case "rutPrevired":
+          return f.previredRut;
+        case "clavePrevired":
+          return f.tieneClavePrevired ? 1 : 0;
+        default:
+          return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(val(a), val(b), orden.dir));
+  }, [filas, buscar, verInactivas, orden]);
 
   const activas = filas.filter((f) => f.activo);
   const conSii = activas.filter((f) => f.tieneClaveSii).length;
@@ -101,12 +133,24 @@ export function CredencialesClient({
         <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[280px]">Empresa</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead>RUT SII (usuario)</TableHead>
-              <TableHead>Clave SII</TableHead>
-              <TableHead>RUT Previred (usuario)</TableHead>
-              <TableHead>Clave Previred</TableHead>
+              <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[280px]">
+                Empresa
+              </ThSort>
+              <ThSort col="cliente" orden={orden} setOrden={setOrden}>
+                Cliente
+              </ThSort>
+              <ThSort col="rutSii" orden={orden} setOrden={setOrden}>
+                RUT SII (usuario)
+              </ThSort>
+              <ThSort col="claveSii" orden={orden} setOrden={setOrden}>
+                Clave SII
+              </ThSort>
+              <ThSort col="rutPrevired" orden={orden} setOrden={setOrden}>
+                RUT Previred (usuario)
+              </ThSort>
+              <ThSort col="clavePrevired" orden={orden} setOrden={setOrden}>
+                Clave Previred
+              </ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>

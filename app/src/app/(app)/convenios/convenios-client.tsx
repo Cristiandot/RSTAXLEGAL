@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Search, Trash2, CalendarClock } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
+import { ThSort } from "@/components/th-sort";
+import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import type { UsuarioOpcion } from "@/lib/ciclos";
 import {
   type ConvenioRow,
@@ -25,7 +27,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -72,6 +73,7 @@ export function ConveniosClient({
   const [buscar, setBuscar] = useState("");
   const [tipoF, setTipoF] = useState("");
   const [estadoF, setEstadoF] = useState("");
+  const [orden, setOrden] = useState<Orden>(null);
   const [abierto, setAbierto] = useState(false);
   const [editando, setEditando] = useState<ConvenioRow | null>(null);
   const [guardando, startGuardar] = useTransition();
@@ -216,7 +218,7 @@ export function ConveniosClient({
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return convenios.filter((c) => {
+    const out = convenios.filter((c) => {
       if (q) {
         const t = `${c.razon_social} ${c.rut_empresa ?? ""} ${c.folio ?? ""} ${c.concepto ?? ""}`.toLowerCase();
         if (!t.includes(q)) return false;
@@ -225,7 +227,38 @@ export function ConveniosClient({
       if (estadoF && c.estado !== estadoF) return false;
       return true;
     });
-  }, [convenios, buscar, tipoF, estadoF]);
+    // Orden por defecto = prioridad de cartera (A.1 → D.45), con la razón
+    // social como desempate. Sin grupo queda al final.
+    if (!orden)
+      return ordenarPorGrupo(
+        out,
+        (c) => c.grupo_codigo,
+        (c) => c.razon_social,
+      );
+    const val = (c: ConvenioRow): unknown => {
+      switch (orden.col) {
+        case "empresa":
+          return c.razon_social;
+        case "tipo":
+          return TIPO_LABEL[c.tipo];
+        case "organismo":
+          return ORGANISMO_LABEL[c.organismo];
+        case "folio":
+          return c.folio;
+        case "monto":
+          return c.monto_total == null ? null : Number(c.monto_total);
+        case "cuotas":
+          return c.n_cuotas || null;
+        case "vencimiento":
+          return c.proximo_vencimiento;
+        case "estado":
+          return c.estado;
+        default:
+          return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(val(a), val(b), orden.dir));
+  }, [convenios, buscar, tipoF, estadoF, orden]);
 
   const resumen = [
     { label: "Total", valor: convenios.length },
@@ -297,14 +330,14 @@ export function ConveniosClient({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Empresa</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Organismo</TableHead>
-              <TableHead>N°</TableHead>
-              <TableHead className="text-right">Pagado / Total</TableHead>
-              <TableHead>Cuotas</TableHead>
-              <TableHead>Próximo venc.</TableHead>
-              <TableHead>Estado</TableHead>
+              <ThSort col="empresa" orden={orden} setOrden={setOrden}>Empresa</ThSort>
+              <ThSort col="tipo" orden={orden} setOrden={setOrden}>Tipo</ThSort>
+              <ThSort col="organismo" orden={orden} setOrden={setOrden}>Organismo</ThSort>
+              <ThSort col="folio" orden={orden} setOrden={setOrden}>N°</ThSort>
+              <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Pagado / Total</ThSort>
+              <ThSort col="cuotas" orden={orden} setOrden={setOrden}>Cuotas</ThSort>
+              <ThSort col="vencimiento" orden={orden} setOrden={setOrden}>Próximo venc.</ThSort>
+              <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>

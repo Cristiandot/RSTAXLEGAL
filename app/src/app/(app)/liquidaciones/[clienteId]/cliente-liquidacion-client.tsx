@@ -6,6 +6,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Trash2, Calculator, UserPlus, Download, Copy } from "lucide-react";
 import { formatMonto } from "@/lib/format";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import { SelectorPeriodo } from "@/components/selector-periodo";
 import { ClaveCell } from "@/components/credencial-celdas";
 import { Button } from "@/components/ui/button";
@@ -180,6 +182,42 @@ export function ClienteLiquidacionClient({
     [liquidaciones],
   );
 
+  // Orden de las grillas de conceptos y nómina; sin orden queda el del servidor.
+  const [ordenConceptos, setOrdenConceptos] = useState<Orden>(null);
+  const [ordenNomina, setOrdenNomina] = useState<Orden>(null);
+
+  const conceptosOrdenados = useMemo(() => {
+    // Valor por columna (booleanos como 1/0 para que "✓" quede junto).
+    const valores: Record<string, (c: Concepto) => unknown> = {
+      mes: (c) => (considerado[c.id] !== false ? 1 : 0),
+      nombre: (c) => c.nombre,
+      naturaleza: (c) => NATURALEZAS_CONCEPTO.find((n) => n.value === c.naturaleza)?.label ?? c.naturaleza,
+      lre: (c) => c.columna_lre,
+      copia: (c) => (c.copia_mensual ? 1 : 0),
+      proporcional: (c) => (c.proporcional ? 1 : 0),
+    };
+    if (!ordenConceptos || !valores[ordenConceptos.col]) return conceptos;
+    const valor = valores[ordenConceptos.col];
+    return [...conceptos].sort((a, b) => comparar(valor(a), valor(b), ordenConceptos.dir));
+  }, [conceptos, considerado, ordenConceptos]);
+
+  const trabajadoresOrdenados = useMemo(() => {
+    // Valor por columna (líquido y cuadratura vienen de la liquidación del período).
+    const valores: Record<string, (t: Trabajador) => unknown> = {
+      trabajador: (t) => `${str(t.apellidos)}, ${str(t.nombres)}`,
+      rut: (t) => str(t.rut) || null,
+      cargo: (t) => str(t.cargo) || null,
+      liquido: (t) => liqPorTrab.get(t.id)?.liquido ?? null,
+      kame: (t) => {
+        const k = liqPorTrab.get(t.id)?.kame_cuadra;
+        return k === true ? 1 : k === false ? 0 : null;
+      },
+    };
+    if (!ordenNomina || !valores[ordenNomina.col]) return trabajadores;
+    const valor = valores[ordenNomina.col];
+    return [...trabajadores].sort((a, b) => comparar(valor(a), valor(b), ordenNomina.dir));
+  }, [trabajadores, liqPorTrab, ordenNomina]);
+
   // ---------- Config empresa ----------
   const [mutInst, setMutInst] = useState(cliente.mutual_institucion ?? "");
   const [mutTasa, setMutTasa] = useState(str(cliente.mutual_tasa));
@@ -322,17 +360,29 @@ export function ClienteLiquidacionClient({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-center">Este mes</TableHead>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Naturaleza</TableHead>
-                <TableHead>Columna LRE</TableHead>
-                <TableHead className="text-center">Copia mensual</TableHead>
-                <TableHead className="text-center">Proporcional</TableHead>
+                <ThSort col="mes" orden={ordenConceptos} setOrden={setOrdenConceptos} className="text-center">
+                  Este mes
+                </ThSort>
+                <ThSort col="nombre" orden={ordenConceptos} setOrden={setOrdenConceptos}>
+                  Nombre
+                </ThSort>
+                <ThSort col="naturaleza" orden={ordenConceptos} setOrden={setOrdenConceptos}>
+                  Naturaleza
+                </ThSort>
+                <ThSort col="lre" orden={ordenConceptos} setOrden={setOrdenConceptos}>
+                  Columna LRE
+                </ThSort>
+                <ThSort col="copia" orden={ordenConceptos} setOrden={setOrdenConceptos} className="text-center">
+                  Copia mensual
+                </ThSort>
+                <ThSort col="proporcional" orden={ordenConceptos} setOrden={setOrdenConceptos} className="text-center">
+                  Proporcional
+                </ThSort>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {conceptos.map((c) => (
+              {conceptosOrdenados.map((c) => (
                 <TableRow key={c.id} className="cursor-pointer" onClick={() => setConceptoAbierto(c)}>
                   <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                     <Checkbox
@@ -400,16 +450,26 @@ export function ClienteLiquidacionClient({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Trabajador</TableHead>
-                <TableHead>RUT</TableHead>
-                <TableHead>Cargo</TableHead>
-                <TableHead className="text-right">Líquido calculado</TableHead>
-                <TableHead className="text-center">vs KAME</TableHead>
+                <ThSort col="trabajador" orden={ordenNomina} setOrden={setOrdenNomina}>
+                  Trabajador
+                </ThSort>
+                <ThSort col="rut" orden={ordenNomina} setOrden={setOrdenNomina}>
+                  RUT
+                </ThSort>
+                <ThSort col="cargo" orden={ordenNomina} setOrden={setOrdenNomina}>
+                  Cargo
+                </ThSort>
+                <ThSort col="liquido" orden={ordenNomina} setOrden={setOrdenNomina} className="text-right">
+                  Líquido calculado
+                </ThSort>
+                <ThSort col="kame" orden={ordenNomina} setOrden={setOrdenNomina} className="text-center">
+                  vs KAME
+                </ThSort>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {trabajadores.map((t) => {
+              {trabajadoresOrdenados.map((t) => {
                 const liq = liqPorTrab.get(t.id);
                 return (
                   <TableRow key={t.id}>

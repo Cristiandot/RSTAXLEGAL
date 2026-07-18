@@ -6,6 +6,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { AlertTriangle, Download, FilePlus2, Pencil, Receipt, Search, Send, Trash2 } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import { CLASE_FILA_DESTACADA, useGestionUrl } from "@/hooks/use-gestion-url";
 import {
   calcularLiquidacionEjemplo,
@@ -38,7 +40,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -117,18 +118,39 @@ export function ContratosClient({
   const router = useRouter();
   const [buscar, setBuscar] = useState("");
   const [estadoF, setEstadoF] = useState("");
+  const [orden, setOrden] = useState<Orden>(null);
   const [ocupado, startAccion] = useTransition();
   // Deep-link desde Inicio y requerimientos: destaca la fila y hace scroll.
   const gestionDestacada = useGestionUrl(filas);
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return filas.filter((f) => {
+    const out = filas.filter((f) => {
       if (q && !`${f.trabajador} ${f.rutTrabajador} ${f.empresa}`.toLowerCase().includes(q)) return false;
       if (estadoF && f.estado !== estadoF) return false;
       return true;
     });
-  }, [filas, buscar, estadoF]);
+    // Sin orden manual se conserva el del servidor: más recientes primero.
+    if (!orden) return out;
+    const valor = (f: ContratoRow): unknown => {
+      switch (orden.col) {
+        case "trabajador": return f.trabajador;
+        case "rut": return f.rutTrabajador;
+        case "empresa": return f.empresa;
+        case "cargo": return f.cargo;
+        // anexos agrupados entre sí; contratos por tipo (plazo fijo/indefinido)
+        case "tipo": return f.tipoDocumento === "anexo" ? `anexo ${f.anexoTipo ?? ""}` : f.tipoContrato;
+        case "inicio": return f.fechaInicio;
+        case "vence": return f.fechaVencimiento;
+        case "estado": return f.estado;
+        case "creado_por": return f.creadoPor;
+        // las acciones disponibles dependen del estado
+        case "acciones": return f.estado;
+        default: return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
+  }, [filas, buscar, estadoF, orden]);
 
   function avanzar(id: string, nuevo: string) {
     startAccion(async () => {
@@ -301,16 +323,16 @@ export function ContratosClient({
         <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[200px]">Trabajador</TableHead>
-              <TableHead>RUT</TableHead>
-              <TableHead className="w-[200px]">Empresa</TableHead>
-              <TableHead>Cargo</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Inicio</TableHead>
-              <TableHead>Vence</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Creado por</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
+              <ThSort col="trabajador" orden={orden} setOrden={setOrden} className="w-[200px]">Trabajador</ThSort>
+              <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT</ThSort>
+              <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[200px]">Empresa</ThSort>
+              <ThSort col="cargo" orden={orden} setOrden={setOrden}>Cargo</ThSort>
+              <ThSort col="tipo" orden={orden} setOrden={setOrden}>Tipo</ThSort>
+              <ThSort col="inicio" orden={orden} setOrden={setOrden}>Inicio</ThSort>
+              <ThSort col="vence" orden={orden} setOrden={setOrden}>Vence</ThSort>
+              <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
+              <ThSort col="creado_por" orden={orden} setOrden={setOrden}>Creado por</ThSort>
+              <ThSort col="acciones" orden={orden} setOrden={setOrden} className="text-right">Acciones</ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>

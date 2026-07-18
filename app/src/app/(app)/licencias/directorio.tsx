@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Mail, Pencil, Phone, Plus, Trash2 } from "lucide-react";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import {
   guardarContactoInstitucion,
   eliminarContactoInstitucion,
@@ -38,6 +40,14 @@ export type ContactoInstitucion = {
 
 const VACIO = { id: null as string | null, institucion: "", area: "", telefono: "", correo: "", notas: "" };
 
+/** Valor por columna para el ordenamiento del directorio. */
+const VALOR_COL: Record<string, (c: ContactoInstitucion) => unknown> = {
+  institucion: (c) => c.institucion,
+  area: (c) => c.area,
+  telefono: (c) => c.telefono,
+  correo: (c) => c.correo,
+};
+
 /**
  * Directorio de teléfonos y correos de instituciones (ACHS, IMED, COMPIN,
  * isapres…) para cuando el equipo necesita llamar durante una tramitación.
@@ -50,7 +60,15 @@ export function DirectorioInstituciones({
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [form, setForm] = useState(VACIO);
+  const [orden, setOrden] = useState<Orden>(null);
   const [ocupado, startAccion] = useTransition();
+
+  // Sin orden elegido queda el del servidor (institución, área).
+  const ordenados = useMemo(() => {
+    if (!orden || !VALOR_COL[orden.col]) return contactos;
+    const valor = VALOR_COL[orden.col];
+    return [...contactos].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
+  }, [contactos, orden]);
 
   function editar(c: ContactoInstitucion) {
     setForm({
@@ -108,10 +126,18 @@ export function DirectorioInstituciones({
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Institución</TableHead>
-                  <TableHead>Área</TableHead>
-                  <TableHead>Teléfono</TableHead>
-                  <TableHead>Correo</TableHead>
+                  <ThSort col="institucion" orden={orden} setOrden={setOrden}>
+                    Institución
+                  </ThSort>
+                  <ThSort col="area" orden={orden} setOrden={setOrden}>
+                    Área
+                  </ThSort>
+                  <ThSort col="telefono" orden={orden} setOrden={setOrden}>
+                    Teléfono
+                  </ThSort>
+                  <ThSort col="correo" orden={orden} setOrden={setOrden}>
+                    Correo
+                  </ThSort>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -123,7 +149,7 @@ export function DirectorioInstituciones({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  contactos.map((c) => (
+                  ordenados.map((c) => (
                     <TableRow key={c.id} title={c.notas ?? undefined}>
                       <TableCell className="font-medium">{c.institucion}</TableCell>
                       <TableCell>{c.area ?? "—"}</TableCell>

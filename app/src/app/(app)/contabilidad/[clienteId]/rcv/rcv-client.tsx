@@ -102,6 +102,47 @@ const thCls =
 const tdNum = "px-2 py-1 text-right tabular-nums whitespace-nowrap";
 const ES_NC = new Set([60, 61, 112]);
 
+type FiltrosCol = {
+  tipo: string;
+  folio: string;
+  fecha: string;
+  rut: string;
+  razon: string;
+  cuenta: string;
+};
+
+const FILTROS_VACIOS: FiltrosCol = {
+  tipo: "",
+  folio: "",
+  fecha: "",
+  rut: "",
+  razon: "",
+  cuenta: "",
+};
+
+const norm = (s: string | null | undefined) => (s ?? "").toLowerCase();
+
+/** Celda de filtro en el encabezado de la tabla. */
+function FiltroTh({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <th className="px-2 pb-1.5">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Filtrar…"
+        className="h-6 w-full min-w-14 rounded-md border border-input bg-card px-1.5 text-xs font-normal text-foreground outline-none placeholder:text-muted-foreground/50 focus-visible:ring-2 focus-visible:ring-ring"
+      />
+    </th>
+  );
+}
+
 function BadgeTipoDoc({ tipo }: { tipo: number }) {
   return (
     <Badge
@@ -388,6 +429,7 @@ export function RcvClient({
   const router = useRouter();
   const [tab, setTab] = useState<"compra" | "venta" | "honorario">("compra");
   const [filtroTipo, setFiltroTipo] = useState<number | null>(null);
+  const [filtrosCol, setFiltrosCol] = useState<FiltrosCol>(FILTROS_VACIOS);
   const [importando, startImportar] = useTransition();
   const [ocupado, startOcupado] = useTransition();
   const inputArchivo = useRef<HTMLInputElement>(null);
@@ -533,13 +575,65 @@ export function RcvClient({
 
   const docs = tab === "compra" ? compras : tab === "venta" ? ventas : honorarios;
 
-  // Filtrado por tipo de documento (al hacer clic en el resumen por tipo).
-  const comprasVis = filtroTipo
-    ? compras.filter((d) => d.tipo_doc === filtroTipo)
-    : compras;
-  const ventasVis = filtroTipo
-    ? ventas.filter((d) => d.tipo_doc === filtroTipo)
-    : ventas;
+  const setF = (k: keyof FiltrosCol) => (v: string) =>
+    setFiltrosCol((p) => ({ ...p, [k]: v }));
+  const hayFiltrosCol = Object.values(filtrosCol).some((v) => v.trim() !== "");
+
+  const nombreCuenta = (cuentaId: string | null) => {
+    const c = cuentas.find((x) => x.id === cuentaId);
+    return c ? `${c.codigo} ${c.nombre}` : "sin asignar";
+  };
+
+  function pasaFiltrosDoc(d: DocCompra | DocVenta, esCompra: boolean) {
+    const f = filtrosCol;
+    if (
+      f.tipo &&
+      !String(d.tipo_doc).includes(f.tipo.trim()) &&
+      !norm(nombreTipoDoc(d.tipo_doc)).includes(norm(f.tipo))
+    )
+      return false;
+    if (f.folio && !norm(d.folio).includes(norm(f.folio))) return false;
+    if (f.fecha && !norm(formatFecha(d.fecha_docto)).includes(norm(f.fecha)))
+      return false;
+    const rut = esCompra
+      ? (d as DocCompra).rut_proveedor
+      : (d as DocVenta).rut_cliente;
+    if (f.rut && !norm(rut).includes(norm(f.rut))) return false;
+    if (f.razon && !norm(d.razon_social).includes(norm(f.razon))) return false;
+    if (esCompra && f.cuenta) {
+      if (!norm(nombreCuenta((d as DocCompra).cuenta_id)).includes(norm(f.cuenta)))
+        return false;
+    }
+    return true;
+  }
+
+  function pasaFiltrosHon(h: DocHonorario) {
+    const f = filtrosCol;
+    if (f.folio && !norm(h.numero).includes(norm(f.folio))) return false;
+    if (f.fecha && !norm(formatFecha(h.fecha)).includes(norm(f.fecha)))
+      return false;
+    if (f.rut && !norm(h.rut_emisor).includes(norm(f.rut))) return false;
+    if (f.razon && !norm(h.nombre_emisor).includes(norm(f.razon))) return false;
+    if (f.cuenta && !norm(nombreCuenta(h.cuenta_id)).includes(norm(f.cuenta)))
+      return false;
+    return true;
+  }
+
+  // Filtrado por tipo de documento (resumen por tipo) + filtros de columna.
+  const comprasVis = compras.filter(
+    (d) =>
+      (!filtroTipo || d.tipo_doc === filtroTipo) && pasaFiltrosDoc(d, true),
+  );
+  const ventasVis = ventas.filter(
+    (d) =>
+      (!filtroTipo || d.tipo_doc === filtroTipo) && pasaFiltrosDoc(d, false),
+  );
+  const honorariosVis = honorarios.filter(pasaFiltrosHon);
+  const honTotVis = {
+    brutos: honorariosVis.reduce((a, h) => a + h.brutos, 0),
+    retencion: honorariosVis.reduce((a, h) => a + h.retencion, 0),
+    liquido: honorariosVis.reduce((a, h) => a + h.liquido, 0),
+  };
   const visList = tab === "compra" ? comprasVis : ventasVis;
   const visTot = {
     exento: visList.reduce((a, d) => a + d.monto_exento, 0),
@@ -703,6 +797,7 @@ export function RcvClient({
                 onClick={() => {
                   setTab(t.v);
                   setFiltroTipo(null);
+                  setFiltrosCol(FILTROS_VACIOS);
                 }}
                 className={`rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                   tab === t.v
@@ -817,9 +912,27 @@ export function RcvClient({
                     <th className={`${thCls} text-right`}>% Pagado</th>
                     <th className={thCls}>Cuenta gasto</th>
                   </tr>
+                  <tr>
+                    <FiltroTh value={filtrosCol.folio} onChange={setF("folio")} />
+                    <FiltroTh value={filtrosCol.fecha} onChange={setF("fecha")} />
+                    <FiltroTh value={filtrosCol.rut} onChange={setF("rut")} />
+                    <FiltroTh value={filtrosCol.razon} onChange={setF("razon")} />
+                    <th colSpan={5} className="px-2 pb-1.5 text-right">
+                      {hayFiltrosCol ? (
+                        <button
+                          type="button"
+                          onClick={() => setFiltrosCol(FILTROS_VACIOS)}
+                          className="text-xs font-medium text-primary hover:underline"
+                        >
+                          Limpiar filtros
+                        </button>
+                      ) : null}
+                    </th>
+                    <FiltroTh value={filtrosCol.cuenta} onChange={setF("cuenta")} />
+                  </tr>
                 </thead>
                 <tbody>
-                  {honorarios.map((h) => (
+                  {honorariosVis.map((h) => (
                     <tr
                       key={h.id}
                       className={`border-t border-border/40 hover:bg-muted/30 ${
@@ -880,11 +993,12 @@ export function RcvClient({
                 <tfoot className="sticky bottom-0 bg-card shadow-[0_-1px_0_0_var(--border)]">
                   <tr className="border-t border-border font-semibold">
                     <td className="px-2 py-1.5" colSpan={5}>
-                      Totales ({honorarios.length} boletas)
+                      Totales ({honorariosVis.length} boletas
+                      {hayFiltrosCol ? ` de ${honorarios.length} · filtradas` : ""})
                     </td>
-                    <td className={tdNum}>{formatMonto(tot.honBrutos)}</td>
-                    <td className={tdNum}>{formatMonto(tot.honRetencion)}</td>
-                    <td className={tdNum}>{formatMonto(tot.honLiquido)}</td>
+                    <td className={tdNum}>{formatMonto(honTotVis.brutos)}</td>
+                    <td className={tdNum}>{formatMonto(honTotVis.retencion)}</td>
+                    <td className={tdNum}>{formatMonto(honTotVis.liquido)}</td>
                     <td colSpan={2} />
                   </tr>
                 </tfoot>
@@ -915,6 +1029,27 @@ export function RcvClient({
                   <th className={`${thCls} text-right`}>Total</th>
                   <th className={`${thCls} text-right`}>% Pagado</th>
                   {tab === "compra" ? <th className={thCls}>Cuenta gasto</th> : null}
+                </tr>
+                <tr>
+                  <FiltroTh value={filtrosCol.tipo} onChange={setF("tipo")} />
+                  <FiltroTh value={filtrosCol.folio} onChange={setF("folio")} />
+                  <FiltroTh value={filtrosCol.fecha} onChange={setF("fecha")} />
+                  <FiltroTh value={filtrosCol.rut} onChange={setF("rut")} />
+                  <FiltroTh value={filtrosCol.razon} onChange={setF("razon")} />
+                  <th colSpan={5} className="px-2 pb-1.5 text-right">
+                    {hayFiltrosCol ? (
+                      <button
+                        type="button"
+                        onClick={() => setFiltrosCol(FILTROS_VACIOS)}
+                        className="text-xs font-medium text-primary hover:underline"
+                      >
+                        Limpiar filtros
+                      </button>
+                    ) : null}
+                  </th>
+                  {tab === "compra" ? (
+                    <FiltroTh value={filtrosCol.cuenta} onChange={setF("cuenta")} />
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -1000,7 +1135,10 @@ export function RcvClient({
                 <tr className="border-t border-border font-semibold">
                   <td className="px-2 py-1.5" colSpan={5}>
                     Totales ({visList.length} documentos
-                    {filtroTipo ? ` · filtrado: ${nombreTipoDoc(filtroTipo)}` : ""})
+                    {filtroTipo || hayFiltrosCol
+                      ? ` de ${tab === "compra" ? compras.length : ventas.length} · filtrados`
+                      : ""}
+                    {filtroTipo ? ` · tipo: ${nombreTipoDoc(filtroTipo)}` : ""})
                   </td>
                   <td className={tdNum}>{formatMonto(visTot.exento)}</td>
                   <td className={tdNum}>{formatMonto(visTot.neto)}</td>

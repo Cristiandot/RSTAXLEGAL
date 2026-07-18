@@ -16,7 +16,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { formatFecha } from "@/lib/format";
-import { comparar, type Orden } from "@/lib/ordenar";
+import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
 import {
   CANAL_LABEL,
@@ -140,6 +140,21 @@ function fechaLocal(iso: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Valor de una columna de las tablas de requerimientos (bandeja e historial). */
+function valorRequerimiento(g: GestionRow, col: string): unknown {
+  switch (col) {
+    case "tipo": return TIPO_GESTION_LABEL[g.tipo] ?? g.tipo;
+    case "cliente": return g.cliente;
+    case "empresa": return g.razon_social;
+    case "detalle": return g.trabajador ?? g.detalle;
+    case "canal": return g.canal;
+    case "recibida": return g.created_at;
+    case "estado": return g.estado;
+    case "responsable": return g.responsable;
+    default: return null;
+  }
+}
+
 
 
 export function InicioClient({
@@ -249,30 +264,73 @@ export function InicioClient({
       }
       return true;
     });
-    // Orden por defecto (sin orden manual): por urgencia SLA — lo más pasado de
-    // su plazo, arriba. Requerimientos sin categoría (p.ej. W) van al final.
+    // Orden por defecto (sin orden manual): prioridad de cartera por código de
+    // grupo (A.1 → D.45, natural por la collation numérica; sin código, al
+    // final) y, dentro del mismo grupo, por urgencia SLA — lo más pasado de su
+    // plazo, arriba.
     if (!orden) {
       return [...out].sort(
         (a, b) =>
+          comparar(a.cliente_codigo, b.cliente_codigo, "asc") ||
           urgenciaSla(b.created_at, b.cliente_codigo) -
-          urgenciaSla(a.created_at, a.cliente_codigo),
+            urgenciaSla(a.created_at, a.cliente_codigo),
       );
     }
-    const valor = (g: GestionRow): unknown => {
-      switch (orden.col) {
-        case "tipo": return TIPO_GESTION_LABEL[g.tipo] ?? g.tipo;
-        case "cliente": return g.cliente;
-        case "empresa": return g.razon_social;
-        case "detalle": return g.trabajador ?? g.detalle;
-        case "canal": return g.canal;
-        case "recibida": return g.created_at;
-        case "estado": return g.estado;
-        case "responsable": return g.responsable;
+    return [...out].sort((a, b) =>
+      comparar(valorRequerimiento(a, orden.col), valorRequerimiento(b, orden.col), orden.dir),
+    );
+  }, [pendientes, buscar, tipoF, respF, orden]);
+
+  // Orden manual del historial de requerimientos (por defecto, el del servidor:
+  // más recientes primero).
+  const [ordenHist, setOrdenHist] = useState<Orden>(null);
+  const historialOrdenado = useMemo(() => {
+    if (!ordenHist) return historial;
+    return [...historial].sort((a, b) =>
+      comparar(valorRequerimiento(a, ordenHist.col), valorRequerimiento(b, ordenHist.col), ordenHist.dir),
+    );
+  }, [historial, ordenHist]);
+
+  // Orden manual de la tabla de cumplimiento por encargado (por defecto, el del
+  // servidor).
+  const [ordenCumpl, setOrdenCumpl] = useState<Orden>(null);
+  const cumplimientoOrdenado = useMemo(() => {
+    if (!ordenCumpl) return cumplimiento;
+    const valor = (c: (typeof cumplimiento)[number]): unknown => {
+      switch (ordenCumpl.col) {
+        case "encargado": return c.responsable;
+        case "resueltos": return c.resueltos;
+        case "a_tiempo": return c.a_tiempo;
+        case "atrasados": return c.atrasados;
+        case "justificados": return c.justificados;
+        case "pct": return c.pct_a_tiempo;
         default: return null;
       }
     };
-    return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
-  }, [pendientes, buscar, tipoF, respF, orden]);
+    return [...cumplimiento].sort((a, b) => comparar(valor(a), valor(b), ordenCumpl.dir));
+  }, [cumplimiento, ordenCumpl]);
+
+  // Orden del ranking por empresa: por defecto, prioridad de cartera (código de
+  // grupo A.1 → D.45) con la empresa como desempate.
+  const [ordenEmp, setOrdenEmp] = useState<Orden>(null);
+  const porEmpresaOrdenado = useMemo(() => {
+    if (!ordenEmp) {
+      return ordenarPorGrupo(porEmpresa, (e) => e.cliente_codigo, (e) => e.empresa);
+    }
+    const valor = (e: (typeof porEmpresa)[number]): unknown => {
+      switch (ordenEmp.col) {
+        case "empresa": return e.empresa;
+        case "cliente": return e.cliente_codigo ?? e.cliente_grupo;
+        case "total": return e.total;
+        case "pendientes": return e.pendientes;
+        case "a_tiempo": return e.a_tiempo;
+        case "atrasados": return e.atrasados;
+        case "pct": return e.pct_cumplimiento;
+        default: return null;
+      }
+    };
+    return [...porEmpresa].sort((a, b) => comparar(valor(a), valor(b), ordenEmp.dir));
+  }, [porEmpresa, ordenEmp]);
 
   const sinAsignar = pendientes.filter((g) => g.responsable_id === null).length;
   const atrasadas = pendientes.filter((g) => diasDesde(g.created_at) > 3).length;
@@ -812,14 +870,14 @@ export function InicioClient({
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Empresa</TableHead>
-                      <TableHead>Trabajador / detalle</TableHead>
-                      <TableHead>Canal</TableHead>
-                      <TableHead>Recibida</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead>Responsable</TableHead>
+                      <ThSort col="tipo" orden={ordenHist} setOrden={setOrdenHist}>Tipo</ThSort>
+                      <ThSort col="cliente" orden={ordenHist} setOrden={setOrdenHist}>Cliente</ThSort>
+                      <ThSort col="empresa" orden={ordenHist} setOrden={setOrdenHist}>Empresa</ThSort>
+                      <ThSort col="detalle" orden={ordenHist} setOrden={setOrdenHist}>Trabajador / detalle</ThSort>
+                      <ThSort col="canal" orden={ordenHist} setOrden={setOrdenHist}>Canal</ThSort>
+                      <ThSort col="recibida" orden={ordenHist} setOrden={setOrdenHist}>Recibida</ThSort>
+                      <ThSort col="estado" orden={ordenHist} setOrden={setOrdenHist}>Estado</ThSort>
+                      <ThSort col="responsable" orden={ordenHist} setOrden={setOrdenHist}>Responsable</ThSort>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
@@ -834,7 +892,7 @@ export function InicioClient({
                         </TableCell>
                       </TableRow>
                     ) : (
-                      historial.map((g) => filaGestion(g, true))
+                      historialOrdenado.map((g) => filaGestion(g, true))
                     )}
                   </TableBody>
                 </Table>
@@ -864,12 +922,12 @@ export function InicioClient({
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead>Encargado</TableHead>
-                      <TableHead>Resueltos</TableHead>
-                      <TableHead>A tiempo</TableHead>
-                      <TableHead>Atrasados</TableHead>
-                      <TableHead>Justificados</TableHead>
-                      <TableHead>% a tiempo</TableHead>
+                      <ThSort col="encargado" orden={ordenCumpl} setOrden={setOrdenCumpl}>Encargado</ThSort>
+                      <ThSort col="resueltos" orden={ordenCumpl} setOrden={setOrdenCumpl}>Resueltos</ThSort>
+                      <ThSort col="a_tiempo" orden={ordenCumpl} setOrden={setOrdenCumpl}>A tiempo</ThSort>
+                      <ThSort col="atrasados" orden={ordenCumpl} setOrden={setOrdenCumpl}>Atrasados</ThSort>
+                      <ThSort col="justificados" orden={ordenCumpl} setOrden={setOrdenCumpl}>Justificados</ThSort>
+                      <ThSort col="pct" orden={ordenCumpl} setOrden={setOrdenCumpl}>% a tiempo</ThSort>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -883,7 +941,7 @@ export function InicioClient({
                         </TableCell>
                       </TableRow>
                     ) : (
-                      cumplimiento.map((c) => (
+                      cumplimientoOrdenado.map((c) => (
                         <TableRow key={c.responsable_id ?? "sin"}>
                           <TableCell className="font-medium">{c.responsable}</TableCell>
                           <TableCell className="tabular-nums">{c.resueltos}</TableCell>
@@ -936,13 +994,13 @@ export function InicioClient({
                 <Table stickyHeader>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead>Empresa</TableHead>
-                      <TableHead>Cliente</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Pendientes</TableHead>
-                      <TableHead>A tiempo</TableHead>
-                      <TableHead>Atrasados</TableHead>
-                      <TableHead>% cumpl.</TableHead>
+                      <ThSort col="empresa" orden={ordenEmp} setOrden={setOrdenEmp}>Empresa</ThSort>
+                      <ThSort col="cliente" orden={ordenEmp} setOrden={setOrdenEmp}>Cliente</ThSort>
+                      <ThSort col="total" orden={ordenEmp} setOrden={setOrdenEmp}>Total</ThSort>
+                      <ThSort col="pendientes" orden={ordenEmp} setOrden={setOrdenEmp}>Pendientes</ThSort>
+                      <ThSort col="a_tiempo" orden={ordenEmp} setOrden={setOrdenEmp}>A tiempo</ThSort>
+                      <ThSort col="atrasados" orden={ordenEmp} setOrden={setOrdenEmp}>Atrasados</ThSort>
+                      <ThSort col="pct" orden={ordenEmp} setOrden={setOrdenEmp}>% cumpl.</ThSort>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -956,7 +1014,7 @@ export function InicioClient({
                         </TableCell>
                       </TableRow>
                     ) : (
-                      porEmpresa.map((e) => (
+                      porEmpresaOrdenado.map((e) => (
                         <TableRow key={e.cliente_id ?? e.empresa}>
                           <TableCell className="font-medium">
                             <span className="block max-w-[260px] truncate" title={e.empresa}>

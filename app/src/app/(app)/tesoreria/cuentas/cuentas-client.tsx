@@ -4,6 +4,8 @@ import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Search, HandCoins, Receipt, Mail, Loader2 } from "lucide-react";
 import { formatMonto, formatFecha } from "@/lib/format";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -58,6 +60,16 @@ const BUCKET_LABEL: Record<keyof Aging, string> = {
   d91: "+91 días",
 };
 
+/** Valor por columna para ordenar los documentos (antigüedad = días de mora). */
+const VALOR_COL: Record<string, (f: FilaCuenta) => unknown> = {
+  contraparte: (f) => f.contraparte,
+  folio: (f) => f.folio,
+  fecha: (f) => f.fecha,
+  vencimiento: (f) => f.vencimiento,
+  antiguedad: (f) => f.diasMora,
+  pendiente: (f) => f.pendiente,
+};
+
 function BucketBadge({ bucket }: { bucket: keyof Aging }) {
   const cls: Record<keyof Aging, string> = {
     vigente: "border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -96,6 +108,7 @@ export function CuentasClient({
 }) {
   const router = useRouter();
   const [buscar, setBuscar] = useState("");
+  const [orden, setOrden] = useState<Orden>(null);
   const [plazoEdit, setPlazoEdit] = useState(String(plazo));
   const [desdeEdit, setDesdeEdit] = useState(conciliacionDesde ?? "");
   const [pending, startTransition] = useTransition();
@@ -153,11 +166,16 @@ export function CuentasClient({
 
   const filtrados = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    if (!q) return filas;
-    return filas.filter((f) =>
-      `${f.contraparte} ${f.rut ?? ""} ${f.folio ?? ""}`.toLowerCase().includes(q),
+    const lista = filas.filter(
+      (f) => !q || `${f.contraparte} ${f.rut ?? ""} ${f.folio ?? ""}`.toLowerCase().includes(q),
     );
-  }, [filas, buscar]);
+    // sin orden elegido queda el orden actual (como viene del servidor)
+    if (orden && VALOR_COL[orden.col]) {
+      const valor = VALOR_COL[orden.col];
+      lista.sort((a, b) => comparar(valor(a), valor(b), orden.dir));
+    }
+    return lista;
+  }, [filas, buscar, orden]);
 
   function irA(next: { tipo?: string; cliente?: string }) {
     const t = next.tipo ?? tipo;
@@ -295,12 +313,24 @@ export function CuentasClient({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{esCobrar ? "Cliente" : "Proveedor"}</TableHead>
-              <TableHead className="w-[110px]">Folio</TableHead>
-              <TableHead className="w-[110px]">Fecha</TableHead>
-              <TableHead className="w-[120px]">Vence</TableHead>
-              <TableHead className="w-[130px]">Antigüedad</TableHead>
-              <TableHead className="w-[140px] text-right">Pendiente</TableHead>
+              <ThSort col="contraparte" orden={orden} setOrden={setOrden}>
+                {esCobrar ? "Cliente" : "Proveedor"}
+              </ThSort>
+              <ThSort col="folio" orden={orden} setOrden={setOrden} className="w-[110px]">
+                Folio
+              </ThSort>
+              <ThSort col="fecha" orden={orden} setOrden={setOrden} className="w-[110px]">
+                Fecha
+              </ThSort>
+              <ThSort col="vencimiento" orden={orden} setOrden={setOrden} className="w-[120px]">
+                Vence
+              </ThSort>
+              <ThSort col="antiguedad" orden={orden} setOrden={setOrden} className="w-[130px]">
+                Antigüedad
+              </ThSort>
+              <ThSort col="pendiente" orden={orden} setOrden={setOrden} className="w-[140px] text-right">
+                Pendiente
+              </ThSort>
               {esCobrar && <TableHead className="w-[110px] text-right">Cobranza</TableHead>}
             </TableRow>
           </TableHeader>

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Search, Send } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { SelectorPeriodo } from "@/components/selector-periodo";
-import { comparar, type Orden } from "@/lib/ordenar";
+import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
 import { RutCopiable } from "@/components/rut-copiable";
 import { ClaveCell } from "@/components/credencial-celdas";
@@ -38,7 +38,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -160,22 +159,39 @@ export function LiquidacionesClient({
       if (respF && c.responsable !== respF) return false;
       return true;
     });
-    if (!orden) return out;
+    // Orden por defecto = prioridad de cartera por código de grupo (A.1 → D.45),
+    // con la razón social como desempate. Los clientes sin grupo quedan al final.
+    if (!orden) {
+      return ordenarPorGrupo(out, (c) => c.grupo_codigo, (c) => c.razon_social);
+    }
     const valor = (c: LiquidacionRow): unknown => {
       switch (orden.col) {
         case "cliente": return c.razon_social;
+        case "rut": return c.previred_rut;
         case "modalidad": return c.modalidad_previred;
         case "estado": return c.estado;
         case "responsable": return c.responsable;
         case "plazo": return c.plazo_previred;
         case "dias": return c.dias_restantes_previred;
+        case "liq": return c.fecha_liquidaciones_enviadas;
+        case "fecha_dnp_declarado": return c.fecha_dnp_declarado;
         case "pagado": return c.fecha_previred_pagado ?? c.fecha_dnp_pagado ?? c.fecha_dnp_declarado;
+        // Columna "Previred": fecha más avanzada del flujo hacia el cliente
+        // (colilla enviada → pagado → detalle enviado), igual que el chip.
+        case "previred":
+          return (
+            c.fecha_correo_previred_enviado ??
+            c.fecha_previred_pagado ??
+            c.fecha_dnp_pagado ??
+            comunicacion[c.cliente_id] ??
+            null
+          );
         case "monto": return c.monto_previred_total !== null ? Number(c.monto_previred_total) : null;
         default: return null;
       }
     };
     return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
-  }, [filas, buscar, estadoF, modF, respF, orden]);
+  }, [filas, buscar, estadoF, modF, respF, orden, comunicacion]);
 
   const resumen = [
     { label: "Total", valor: filas.length },
@@ -416,21 +432,21 @@ export function LiquidacionesClient({
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[220px]">Cliente</ThSort>
-              <TableHead>RUT Previred</TableHead>
+              <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT Previred</ThSort>
               <ThSort col="modalidad" orden={orden} setOrden={setOrden}>Modalidad</ThSort>
               <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
               <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
               <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>
               <ThSort col="dias" orden={orden} setOrden={setOrden} className="text-center">Días</ThSort>
-              <TableHead className="text-center">Liq. enviadas</TableHead>
+              <ThSort col="liq" orden={orden} setOrden={setOrden} className="text-center">Liq. enviadas</ThSort>
               {PASOS.map((p) => (
-                <TableHead key={p.columna} className="text-center">
+                <ThSort key={p.columna} col={p.columna} orden={orden} setOrden={setOrden} className="text-center">
                   {p.label}
-                </TableHead>
+                </ThSort>
               ))}
-              <TableHead className="text-center" title="Envío del resumen de pagos en Comunicación mensual">
-                Previred
-              </TableHead>
+              <ThSort col="previred" orden={orden} setOrden={setOrden} className="text-center">
+                <span title="Envío del resumen de pagos en Comunicación mensual">Previred</span>
+              </ThSort>
               <ThSort col="monto" orden={orden} setOrden={setOrden} className="text-right">Monto Previred</ThSort>
             </TableRow>
           </TableHeader>

@@ -3,6 +3,12 @@ import { LibroMayorGrid, type FilaLibroMayor } from "./libro-mayor-grid";
 
 export const metadata = { title: "Libro Mayor — RS Tax & Legal" };
 
+/** El join `grupo:grupos_cliente(codigo)` puede venir como objeto o arreglo. */
+function codigoDelGrupo(g: unknown): string | null {
+  const fila = Array.isArray(g) ? g[0] : g;
+  return (fila as { codigo?: string | null } | null | undefined)?.codigo ?? null;
+}
+
 export default async function LibroMayorGridPage({
   searchParams,
 }: {
@@ -15,7 +21,9 @@ export default async function LibroMayorGridPage({
   const [clientesRes, librosRes] = await Promise.all([
     supabase
       .from("clientes")
-      .select("id, razon_social, rut_empresa, activo, fecha_termino_servicio")
+      .select(
+        "id, razon_social, rut_empresa, activo, fecha_termino_servicio, grupo:grupos_cliente(codigo)",
+      )
       .order("razon_social"),
     supabase
       .from("libro_mayor")
@@ -52,6 +60,7 @@ export default async function LibroMayorGridPage({
       clienteId: c.id,
       razonSocial: c.razon_social,
       rutEmpresa: c.rut_empresa,
+      grupoCodigo: codigoDelGrupo(c.grupo),
       activo: c.activo,
       terminado: !c.activo || c.fecha_termino_servicio != null,
       cargado: !!l,

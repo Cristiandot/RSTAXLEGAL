@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, ChevronRight } from "lucide-react";
 import { formatMonto } from "@/lib/format";
+import { ThSort } from "@/components/th-sort";
+import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,6 +21,8 @@ export type FilaLibroMayor = {
   clienteId: string;
   razonSocial: string;
   rutEmpresa: string | null;
+  /** Código de grupo del cliente (A.1 → D.45) para el orden por prioridad. */
+  grupoCodigo: string | null;
   activo: boolean;
   terminado: boolean;
   cargado: boolean;
@@ -88,10 +92,11 @@ export function LibroMayorGrid({
   const [buscar, setBuscar] = useState("");
   const [estadoF, setEstadoF] = useState("");
   const [servicioF, setServicioF] = useState("activas");
+  const [orden, setOrden] = useState<Orden>(null);
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return filas.filter((f) => {
+    const out = filas.filter((f) => {
       if (q) {
         const t = `${f.razonSocial} ${f.rutEmpresa ?? ""}`.toLowerCase();
         if (!t.includes(q)) return false;
@@ -106,7 +111,37 @@ export function LibroMayorGrid({
         return false;
       return true;
     });
-  }, [filas, buscar, estadoF, servicioF]);
+    // Orden por defecto = prioridad de cartera (A.1 → D.45), con la razón
+    // social como desempate. Sin grupo queda al final.
+    if (!orden)
+      return ordenarPorGrupo(
+        out,
+        (f) => f.grupoCodigo,
+        (f) => f.razonSocial,
+      );
+    const val = (f: FilaLibroMayor): unknown => {
+      switch (orden.col) {
+        case "cliente":
+          return f.razonSocial;
+        case "rut":
+          return f.rutEmpresa;
+        case "estado":
+          // Descuadre → cargado → sin información (asc muestra los problemas primero).
+          return f.cargado ? (f.cuadra === false ? 0 : 1) : 2;
+        case "revision":
+          return f.cargado && f.preguntasTotal > 0 ? f.preguntasPendientes : null;
+        case "cuentas":
+          return f.cargado ? f.nCuentas : null;
+        case "movimientos":
+          return f.cargado ? f.nMovimientos : null;
+        case "debe":
+          return f.cargado ? f.totalDebe : null;
+        default:
+          return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(val(a), val(b), orden.dir));
+  }, [filas, buscar, estadoF, servicioF, orden]);
 
   const universo = filas.filter((f) =>
     servicioF === "activas" ? !f.terminado : servicioF === "terminadas" ? f.terminado : true,
@@ -209,13 +244,13 @@ export function LibroMayorGrid({
         <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[300px]">Cliente</TableHead>
-              <TableHead>RUT</TableHead>
-              <TableHead>Estado {anio}</TableHead>
-              <TableHead>Revisión</TableHead>
-              <TableHead className="text-right">Cuentas</TableHead>
-              <TableHead className="text-right">Movimientos</TableHead>
-              <TableHead className="text-right">Total Debe</TableHead>
+              <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[300px]">Cliente</ThSort>
+              <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT</ThSort>
+              <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado {anio}</ThSort>
+              <ThSort col="revision" orden={orden} setOrden={setOrden}>Revisión</ThSort>
+              <ThSort col="cuentas" orden={orden} setOrden={setOrden} className="text-right">Cuentas</ThSort>
+              <ThSort col="movimientos" orden={orden} setOrden={setOrden} className="text-right">Movimientos</ThSort>
+              <ThSort col="debe" orden={orden} setOrden={setOrden} className="text-right">Total Debe</ThSort>
               <TableHead className="w-8" />
             </TableRow>
           </TableHeader>

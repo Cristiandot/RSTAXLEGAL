@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Search, Send, Plus, Trash2, Receipt } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { SelectorPeriodo } from "@/components/selector-periodo";
-import { comparar, type Orden } from "@/lib/ordenar";
+import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
 import { RutCopiable } from "@/components/rut-copiable";
 import {
@@ -32,7 +32,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -178,10 +177,16 @@ export function ComunicacionClient({
       if (estadoF && c.estado !== estadoF) return false;
       return true;
     });
-    if (!orden) return out;
+    // Orden por defecto = prioridad de cartera por código de grupo (A.1 → D.45),
+    // con la razón social como desempate. Los clientes sin grupo quedan al final.
+    if (!orden) {
+      return ordenarPorGrupo(out, (c) => c.grupo_codigo, (c) => c.razon_social);
+    }
     const valor = (c: ComunicacionRow): unknown => {
       switch (orden.col) {
         case "cliente": return c.razon_social;
+        case "rut": return c.rut_empresa;
+        case "centros": return c.previred_centros;
         case "previred": return c.monto_previred !== null ? Number(c.monto_previred) : null;
         case "f29": return c.monto_f29 !== null ? Number(c.monto_f29) : null;
         case "facturas": return c.facturas_pendientes_monto !== null ? Number(c.facturas_pendientes_monto) : null;
@@ -314,9 +319,9 @@ export function ComunicacionClient({
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[240px]">Cliente</ThSort>
-              <TableHead>RUT</TableHead>
+              <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT</ThSort>
               <ThSort col="previred" orden={orden} setOrden={setOrden} className="text-right">Previred</ThSort>
-              <TableHead className="text-center">Centros</TableHead>
+              <ThSort col="centros" orden={orden} setOrden={setOrden} className="text-center">Centros</ThSort>
               <ThSort col="f29" orden={orden} setOrden={setOrden} className="text-right">F29</ThSort>
               <ThSort col="facturas" orden={orden} setOrden={setOrden} className="text-right">Facturas RS</ThSort>
               <ThSort col="total" orden={orden} setOrden={setOrden} className="text-right">Total</ThSort>

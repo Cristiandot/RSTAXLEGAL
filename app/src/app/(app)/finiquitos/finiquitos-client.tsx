@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle, Calculator, CheckCircle2, Download, FileSpreadsheet, FileText, Landmark, Mail, Search, Send, Trash2 } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import { CLASE_FILA_DESTACADA, useGestionUrl } from "@/hooks/use-gestion-url";
 import {
   diasParaLimite,
@@ -138,6 +140,7 @@ export function FiniquitosClient({
   const gestionDestacada = useGestionUrl(filas);
   const [buscar, setBuscar] = useState("");
   const [estadoF, setEstadoF] = useState("");
+  const [orden, setOrden] = useState<Orden>(null);
   const [borrando, setBorrando] = useState<FiniquitoRow | null>(null);
   const [confirmacion, setConfirmacion] = useState("");
   const [ocupado, startBorrar] = useTransition();
@@ -278,12 +281,31 @@ export function FiniquitosClient({
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return filas.filter((f) => {
+    const out = filas.filter((f) => {
       if (q && !`${f.trabajador} ${f.rut} ${f.empresa}`.toLowerCase().includes(q)) return false;
       if (estadoF && f.estado !== estadoF) return false;
       return true;
     });
-  }, [filas, buscar, estadoF]);
+    // Sin orden manual se conserva el del servidor: más recientes primero.
+    if (!orden) return out;
+    const valor = (f: FiniquitoRow): unknown => {
+      switch (orden.col) {
+        case "trabajador": return f.trabajador;
+        case "rut": return f.rut;
+        case "empresa": return f.empresa;
+        case "causal": return CAUSAL_PORTAL_LABEL[f.causal] ?? f.causal;
+        case "termino": return f.fechaTermino;
+        // plazo Art. 177 = fecha límite (10 días hábiles desde la separación)
+        case "plazo": return f.fechaTermino ? plazoArt177(f.fechaTermino)?.fechaLimite ?? null : null;
+        case "estado": return f.estado;
+        case "total": return f.totalCalculado;
+        // las acciones disponibles dependen del estado
+        case "acciones": return f.estado;
+        default: return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
+  }, [filas, buscar, estadoF, orden]);
 
   const pendientes = filas.filter((f) => f.estado === "solicitada").length;
 
@@ -346,15 +368,15 @@ export function FiniquitosClient({
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead className="w-8" title="Seleccionar para el CSV DT (requiere cálculo guardado)" />
-              <TableHead className="w-[200px]">Trabajador</TableHead>
-              <TableHead>RUT</TableHead>
-              <TableHead className="w-[200px]">Empresa</TableHead>
-              <TableHead>Causal</TableHead>
-              <TableHead>Término</TableHead>
-              <TableHead>Plazo Art. 177</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Total calculado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
+              <ThSort col="trabajador" orden={orden} setOrden={setOrden} className="w-[200px]">Trabajador</ThSort>
+              <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT</ThSort>
+              <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[200px]">Empresa</ThSort>
+              <ThSort col="causal" orden={orden} setOrden={setOrden}>Causal</ThSort>
+              <ThSort col="termino" orden={orden} setOrden={setOrden}>Término</ThSort>
+              <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo Art. 177</ThSort>
+              <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
+              <ThSort col="total" orden={orden} setOrden={setOrden} className="text-right">Total calculado</ThSort>
+              <ThSort col="acciones" orden={orden} setOrden={setOrden} className="text-right">Acciones</ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>

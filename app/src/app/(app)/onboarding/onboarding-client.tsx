@@ -7,7 +7,7 @@ import { Search, Check, Undo2, Plus, UserPlus, FolderCheck, FolderClock } from "
 import { RutCopiable } from "@/components/rut-copiable";
 import { TextoCopiable } from "@/components/texto-copiable";
 import { ThSort } from "@/components/th-sort";
-import { comparar, type Orden } from "@/lib/ordenar";
+import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -108,7 +108,8 @@ export function OnboardingClient({
   const [tab, setTab] = useState<Tab>("altas");
   const [buscar, setBuscar] = useState("");
   const [clienteF, setClienteF] = useState("");
-  const [orden, setOrden] = useState<Orden>(null);
+  const [orden, setOrden] = useState<Orden>(null); // tabla Altas
+  const [ordenVal, setOrdenVal] = useState<Orden>(null); // tabla Validación
   const [accionando, startAccion] = useTransition();
 
   // Devolver cambio
@@ -163,7 +164,14 @@ export function OnboardingClient({
         return false;
       return true;
     });
-    if (!orden) return filtradas; // orden del servidor: alta más reciente primero
+    // Orden por defecto = prioridad de cartera (A.1 → D.45), con la razón
+    // social como desempate. Las empresas sin cliente quedan al final.
+    if (!orden)
+      return ordenarPorGrupo(
+        filtradas,
+        (e) => e.grupo_codigo,
+        (e) => e.razon_social,
+      );
     const val = (e: AltaEmpresaRow): unknown => {
       switch (orden.col) {
         case "cliente":
@@ -172,12 +180,41 @@ export function OnboardingClient({
             : (e.grupo_nombre ?? null);
         case "empresa":
           return e.razon_social;
+        case "rut":
+          return e.rut_empresa;
+        case "carpeta":
+          return e.carpeta_onedrive ?? e.grupo_carpeta;
+        case "correo":
+          return e.correo;
         default:
           return null;
       }
     };
     return [...filtradas].sort((a, b) => comparar(val(a), val(b), orden.dir));
   }, [empresas, buscar, clienteF, orden]);
+
+  // Cambios de la cola de validación: por defecto el orden del servidor
+  // (created_at ascendente); con orden activo, por la columna elegida.
+  const cambiosOrdenados = useMemo(() => {
+    if (!ordenVal) return cambios;
+    const val = (c: CambioPropuestoRow): unknown => {
+      switch (ordenVal.col) {
+        case "empresa":
+          return c.razon_social;
+        case "campo":
+          return c.etiqueta ?? c.campo;
+        case "actual":
+          return c.valor_actual;
+        case "propuesto":
+          return c.valor_propuesto;
+        case "origen":
+          return c.origen;
+        default:
+          return null;
+      }
+    };
+    return [...cambios].sort((a, b) => comparar(val(a), val(b), ordenVal.dir));
+  }, [cambios, ordenVal]);
 
   function crear() {
     startCrear(async () => {
@@ -363,9 +400,9 @@ export function OnboardingClient({
                   <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[260px]">
                     Empresa
                   </ThSort>
-                  <TableHead>RUT</TableHead>
-                  <TableHead>Carpeta OneDrive</TableHead>
-                  <TableHead>Correo contacto</TableHead>
+                  <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT</ThSort>
+                  <ThSort col="carpeta" orden={orden} setOrden={setOrden}>Carpeta OneDrive</ThSort>
+                  <ThSort col="correo" orden={orden} setOrden={setOrden}>Correo contacto</ThSort>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -449,16 +486,16 @@ export function OnboardingClient({
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Empresa</TableHead>
-                    <TableHead>Campo</TableHead>
-                    <TableHead>Actual</TableHead>
-                    <TableHead>Propuesto</TableHead>
-                    <TableHead>Origen</TableHead>
+                    <ThSort col="empresa" orden={ordenVal} setOrden={setOrdenVal}>Empresa</ThSort>
+                    <ThSort col="campo" orden={ordenVal} setOrden={setOrdenVal}>Campo</ThSort>
+                    <ThSort col="actual" orden={ordenVal} setOrden={setOrdenVal}>Actual</ThSort>
+                    <ThSort col="propuesto" orden={ordenVal} setOrden={setOrdenVal}>Propuesto</ThSort>
+                    <ThSort col="origen" orden={ordenVal} setOrden={setOrdenVal}>Origen</ThSort>
                     <TableHead className="text-right">Acción</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {cambios.map((c) => (
+                  {cambiosOrdenados.map((c) => (
                     <TableRow key={c.id} className="hover:bg-transparent">
                       <TableCell className="font-medium">
                         {c.razon_social ?? "—"}

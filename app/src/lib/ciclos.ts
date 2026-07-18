@@ -38,6 +38,7 @@ export type LiquidacionRow = {
   correos_adicionales: string[] | null;
   /** Correo a nivel de cliente (grupos_cliente) — último fallback del destino. */
   grupo_correo: string | null;
+  grupo_codigo: string | null; // código del grupo (A.1, B.2, C.10…) para el orden por prioridad
 };
 
 /** Fila de `v_checklist_conciliacion` (ciclo Conciliación SII/KAME). */
@@ -62,6 +63,7 @@ export type ConciliacionRow = {
   estado: string;
   iva_salud_ejecuciones: number;
   ultima_ejecucion_iva: string | null;
+  grupo_codigo: string | null; // código del grupo (A.1, B.2, C.10…) para el orden por prioridad
 };
 
 /** Ejecución de cambio IVA recuperable → no recuperable (clientes salud). */
@@ -150,6 +152,7 @@ export type ComunicacionRow = {
   f29_retenciones: number | string | null;
   f29_ppm: number | string | null;
   f29_otros: number | string | null;
+  grupo_codigo: string | null; // código del grupo (A.1, B.2, C.10…) para el orden por prioridad
 };
 
 /**

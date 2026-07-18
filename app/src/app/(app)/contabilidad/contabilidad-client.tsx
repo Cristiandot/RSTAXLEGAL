@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Search } from "lucide-react";
 import { activarContabilidadCompleta } from "./actions";
 import { SelectorPeriodo } from "@/components/selector-periodo";
-import { comparar, type Orden } from "@/lib/ordenar";
+import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
 import {
   claseEstado,
@@ -24,7 +24,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -324,10 +323,21 @@ export function ContabilidadClient({
       } else if (respF && c.responsable !== respF) return false;
       return true;
     });
-    if (!orden) return out;
+    // Orden por defecto = prioridad de cartera por código de grupo (A.1 → D.45),
+    // con la razón social como desempate. Los clientes sin grupo quedan al final.
+    if (!orden) {
+      return ordenarPorGrupo(out, (c) => c.grupo_codigo, (c) => c.razon_social);
+    }
     const valor = (c: ConciliacionRow): unknown => {
       switch (orden.col) {
         case "cliente": return c.razon_social;
+        case "rut": return c.rut_empresa;
+        case "rcv": {
+          // Empresas activadas primero, ordenadas por documentos importados;
+          // las en standby quedan al final (vacío).
+          const r = rcvPorCliente.get(c.cliente_id);
+          return r ? r.docs_compras + r.docs_ventas : null;
+        }
         case "kame": return c.kame_cert_estado;
         case "salud": return c.es_profesional_salud ? 0 : 1;
         case "estado": return c.estado;
@@ -506,9 +516,9 @@ export function ContabilidadClient({
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[240px]">Cliente</ThSort>
-              <TableHead>RUT</TableHead>
+              <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT</ThSort>
               <ThSort col="docs" orden={orden} setOrden={setOrden}>Documentos del mes</ThSort>
-              <TableHead>Libros RCV</TableHead>
+              <ThSort col="rcv" orden={orden} setOrden={setOrden}>Libros RCV</ThSort>
               <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
               <ThSort col="kame" orden={orden} setOrden={setOrden}>KAME</ThSort>
               <ThSort col="salud" orden={orden} setOrden={setOrden}>Salud</ThSort>

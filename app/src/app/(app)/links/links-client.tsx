@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ClipboardCopy, ExternalLink, Link2, Plus, Search, Users } from "lucide-react";
 import { asignarGrupoCliente, crearGrupoCliente, generarLinkCliente } from "./actions";
+import { ThSort } from "@/components/th-sort";
+import { comparar, type Orden } from "@/lib/ordenar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,21 +56,59 @@ function TablaEmpresas({
   onGenerar: (f: LinkClienteRow) => void;
   onAsignar: (clienteId: string, grupoId: string | null) => void;
 }) {
+  // Orden local de la sección: por defecto se respeta el orden del servidor
+  // (razón social); cada tabla de cliente ordena de forma independiente.
+  const [orden, setOrden] = useState<Orden>(null);
+
+  const filasOrdenadas = useMemo(() => {
+    if (!orden) return filas;
+    const val = (f: LinkClienteRow): unknown => {
+      switch (orden.col) {
+        case "empresa":
+          return f.razonSocial;
+        case "rut":
+          return f.rut;
+        case "correo":
+          return f.correo;
+        case "cliente": {
+          const g = grupos.find((x) => x.id === f.grupoId);
+          return g ? `${g.codigo} ${g.nombre}` : null;
+        }
+        // El link no tiene valor visible: se ordena por si está activo o no.
+        case "link":
+          return f.token ? 1 : 0;
+        default:
+          return null;
+      }
+    };
+    return [...filas].sort((a, b) => comparar(val(a), val(b), orden.dir));
+  }, [filas, grupos, orden]);
+
   return (
     <div className="card-soft rounded-xl bg-card">
       <Table stickyHeader>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            <TableHead className="w-[300px]">Empresa</TableHead>
-            <TableHead>RUT</TableHead>
-            <TableHead>Correo de envíos</TableHead>
-            <TableHead>Cliente</TableHead>
-            <TableHead>Link</TableHead>
+            <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[300px]">
+              Empresa
+            </ThSort>
+            <ThSort col="rut" orden={orden} setOrden={setOrden}>
+              RUT
+            </ThSort>
+            <ThSort col="correo" orden={orden} setOrden={setOrden}>
+              Correo de envíos
+            </ThSort>
+            <ThSort col="cliente" orden={orden} setOrden={setOrden}>
+              Cliente
+            </ThSort>
+            <ThSort col="link" orden={orden} setOrden={setOrden}>
+              Link
+            </ThSort>
             <TableHead className="text-right">Acciones</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filas.map((f) => (
+          {filasOrdenadas.map((f) => (
             <TableRow key={f.id}>
               <TableCell className="font-medium">
                 <span className="block max-w-[300px] truncate" title={f.razonSocial}>

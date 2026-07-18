@@ -6,7 +6,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -14,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { ThSort } from "@/components/th-sort";
+import { comparar, type Orden } from "@/lib/ordenar";
 
 export type EmpresaControl = {
   id: string;
@@ -62,6 +63,16 @@ function estadoDeCelda(d: DescargaRcv | null, tieneClave: boolean): EstadoCelda 
   return d.ventas_docs === d.ventas_docs_sii && d.compras_docs === d.compras_docs_sii ? "cuadra" : "revisar";
 }
 
+/** Rango para ordenar por el estado de un mes: de mejor (cuadra) a peor (sin clave). */
+const RANGO_ESTADO_CELDA: Record<EstadoCelda, number> = {
+  "cuadra": 0,
+  "sin-verificar": 1,
+  "parcial": 2,
+  "revisar": 3,
+  "falta": 4,
+  "sin-clave": 5,
+};
+
 const ESTILO_CELDA: Record<EstadoCelda, { clase: string; glifo: string }> = {
   "cuadra": { clase: "border-emerald-200 bg-emerald-50 text-emerald-700", glifo: "✓" },
   "revisar": { clase: "border-amber-200 bg-amber-50 text-amber-700", glifo: "≠" },
@@ -83,6 +94,7 @@ function ResumenCard({ label, valor, tono }: { label: string; valor: number; ton
 export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, errorCarga }: Props) {
   const [buscar, setBuscar] = useState("");
   const [soloPendientes, setSoloPendientes] = useState(false);
+  const [orden, setOrden] = useState<Orden>(null);
 
   const mapa = useMemo(() => {
     const m = new Map<string, DescargaRcv>();
@@ -114,12 +126,33 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return filas.filter((f) => {
+    const out = filas.filter((f) => {
       if (q && !`${f.empresa.razon_social} ${f.empresa.rut_empresa}`.toLowerCase().includes(q)) return false;
       if (soloPendientes && f.alDia) return false;
       return true;
     });
-  }, [filas, buscar, soloPendientes]);
+    // Sin orden activo se mantiene el orden por defecto A → D (claveOrdenGrupo).
+    if (!orden) return out;
+    const val = (f: (typeof filas)[number]): unknown => {
+      // Columnas de mes: se ordena por el estado del mes (de mejor a peor).
+      const iMes = periodos.indexOf(orden.col);
+      if (iMes >= 0) return RANGO_ESTADO_CELDA[f.celdas[iMes].estado];
+      switch (orden.col) {
+        case "empresa":
+          return f.empresa.razon_social;
+        case "estado":
+          // Estado global: al día → sin verificar → revisar → faltan → sin clave.
+          if (!f.empresa.tieneClave) return 4;
+          if (f.faltanMeses) return 3;
+          if (f.hayRevisar) return 2;
+          if (f.haySinVerificar) return 1;
+          return 0;
+        default:
+          return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(val(a), val(b), orden.dir));
+  }, [filas, buscar, soloPendientes, orden, periodos]);
 
   const resumen = useMemo(() => {
     let alDia = 0, porRevisar = 0, conFaltantes = 0, sinClave = 0;
@@ -181,11 +214,17 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
         <Table stickyHeader>
           <TableHeader>
             <TableRow>
-              <TableHead className="min-w-[240px]">Empresa</TableHead>
+              <ThSort col="empresa" orden={orden} setOrden={setOrden} className="min-w-[240px]">
+                Empresa
+              </ThSort>
               {etiquetas.map((et, i) => (
-                <TableHead key={periodos[i]} className="text-center">{et}</TableHead>
+                <ThSort key={periodos[i]} col={periodos[i]} orden={orden} setOrden={setOrden} className="text-center">
+                  {et}
+                </ThSort>
               ))}
-              <TableHead className="text-center">Estado</TableHead>
+              <ThSort col="estado" orden={orden} setOrden={setOrden} className="text-center">
+                Estado
+              </ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>

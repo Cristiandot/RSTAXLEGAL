@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { RutCopiable } from "@/components/rut-copiable";
 import { ThSort } from "@/components/th-sort";
 import { Progreso } from "@/components/progreso";
-import { comparar, type Orden } from "@/lib/ordenar";
+import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -88,7 +88,10 @@ export function NominasClient({
       if (clienteF && e.grupo_id !== clienteF) return false;
       return true;
     });
-    if (!orden) return out;
+    // Orden por defecto = prioridad de cartera por código de grupo (A.1 → D.45),
+    // con la razón social como desempate; las empresas sin cliente al final.
+    if (!orden)
+      return ordenarPorGrupo(out, (e) => e.grupo_codigo, (e) => e.razon_social);
     const val = (e: NominaEmpresaRow): unknown => {
       switch (orden.col) {
         case "cliente":
@@ -97,6 +100,8 @@ export function NominasClient({
             : (e.grupo_nombre ?? null);
         case "empresa":
           return e.razon_social;
+        case "rut":
+          return e.rut_empresa;
         case "activos":
           return e.n_trab_activos;
         case "pct":
@@ -187,7 +192,9 @@ export function NominasClient({
               <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[280px]">
                 Empresa
               </ThSort>
-              <TableHead>RUT</TableHead>
+              <ThSort col="rut" orden={orden} setOrden={setOrden}>
+                RUT
+              </ThSort>
               <ThSort col="activos" orden={orden} setOrden={setOrden} className="text-center">
                 Activos / Declarados
               </ThSort>

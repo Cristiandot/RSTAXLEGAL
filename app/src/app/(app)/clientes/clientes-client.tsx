@@ -89,6 +89,8 @@ export function ClientesClient({
   const [buscar, setBuscar] = useState("");
   const [orden, setOrden] = useState<Orden>(null);
   const [entidadF, setEntidadF] = useState("");
+  // Orden de la tabla "Por campo" (independiente del de la tabla de clientes).
+  const [ordenCampo, setOrdenCampo] = useState<Orden>(null);
 
   // Detalle de cliente (empresas básicas)
   const [cliSel, setCliSel] = useState<ClienteResumenRow | null>(null);
@@ -120,6 +122,8 @@ export function ClientesClient({
           return c.codigo;
         case "nombre":
           return c.nombre;
+        case "correo":
+          return c.correo;
         case "empresas":
           return c.n_empresas;
         case "pct":
@@ -135,8 +139,28 @@ export function ClientesClient({
 
   const camposFiltrados = useMemo(() => {
     const out = porCampo.filter((c) => !entidadF || c.entidad === entidadF);
-    return [...out].sort((a, b) => b.faltan - a.faltan);
-  }, [porCampo, entidadF]);
+    // Orden por defecto: mayor cantidad de faltantes primero (atacar en lotes).
+    if (!ordenCampo) return [...out].sort((a, b) => b.faltan - a.faltan);
+    const val = (c: PorCampoRow): unknown => {
+      switch (ordenCampo.col) {
+        case "entidad":
+          return c.entidad;
+        case "grupo":
+          return c.grupo;
+        case "campo":
+          return c.etiqueta;
+        case "fuente":
+          return c.fuente;
+        case "faltan":
+          return c.faltan;
+        case "requeridos":
+          return c.requeridos;
+        default:
+          return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(val(a), val(b), ordenCampo.dir));
+  }, [porCampo, entidadF, ordenCampo]);
 
   const pctProm = useMemo(() => {
     const vals = clientes
@@ -256,7 +280,9 @@ export function ClientesClient({
                   <ThSort col="nombre" orden={orden} setOrden={setOrden} className="w-[220px]">
                     Cliente
                   </ThSort>
-                  <TableHead>Correo</TableHead>
+                  <ThSort col="correo" orden={orden} setOrden={setOrden}>
+                    Correo
+                  </ThSort>
                   <ThSort col="empresas" orden={orden} setOrden={setOrden} className="text-center">
                     Empresas
                   </ThSort>
@@ -362,12 +388,24 @@ export function ClientesClient({
             <Table stickyHeader>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Entidad</TableHead>
-                  <TableHead>Grupo</TableHead>
-                  <TableHead>Campo</TableHead>
-                  <TableHead>Fuente</TableHead>
-                  <TableHead className="text-center">Faltan</TableHead>
-                  <TableHead className="text-center">Requeridos</TableHead>
+                  <ThSort col="entidad" orden={ordenCampo} setOrden={setOrdenCampo}>
+                    Entidad
+                  </ThSort>
+                  <ThSort col="grupo" orden={ordenCampo} setOrden={setOrdenCampo}>
+                    Grupo
+                  </ThSort>
+                  <ThSort col="campo" orden={ordenCampo} setOrden={setOrdenCampo}>
+                    Campo
+                  </ThSort>
+                  <ThSort col="fuente" orden={ordenCampo} setOrden={setOrdenCampo}>
+                    Fuente
+                  </ThSort>
+                  <ThSort col="faltan" orden={ordenCampo} setOrden={setOrdenCampo} className="text-center">
+                    Faltan
+                  </ThSort>
+                  <ThSort col="requeridos" orden={ordenCampo} setOrden={setOrdenCampo} className="text-center">
+                    Requeridos
+                  </ThSort>
                   <TableHead className="w-8" />
                 </TableRow>
               </TableHeader>

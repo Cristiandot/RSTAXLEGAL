@@ -24,6 +24,24 @@ export function comparar(a: unknown, b: unknown, dir: DirOrden): number {
   return dir === "asc" ? r : -r;
 }
 
+/**
+ * Orden por defecto de la cartera: prioridad del código de grupo (A.1 → D.45,
+ * natural gracias a la collation numérica: C.2 antes que C.10), con la razón
+ * social como desempate. Los clientes sin grupo quedan al final. Devuelve una
+ * copia; no muta el arreglo original.
+ */
+export function ordenarPorGrupo<T>(
+  filas: readonly T[],
+  grupoDe: (f: T) => unknown,
+  nombreDe?: (f: T) => unknown,
+): T[] {
+  return [...filas].sort(
+    (a, b) =>
+      comparar(grupoDe(a), grupoDe(b), "asc") ||
+      (nombreDe ? comparar(nombreDe(a), nombreDe(b), "asc") : 0),
+  );
+}
+
 /** Siguiente estado al hacer clic: asc → desc → sin orden. */
 export function siguienteOrden(actual: Orden, col: string): Orden {
   if (actual?.col !== col) return { col, dir: "asc" };

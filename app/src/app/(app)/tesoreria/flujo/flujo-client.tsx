@@ -1,8 +1,11 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TrendingUp } from "lucide-react";
 import { formatMonto, formatFecha } from "@/lib/format";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import {
   Table,
   TableBody,
@@ -21,6 +24,14 @@ export type FilaFlujo = {
   salidas: number;
   neto: number;
   saldoProyectado: number;
+};
+
+/** Valor por columna para ordenar el desglose de vencido (mes ISO ordena cronológico). */
+const VALOR_VENCIDAS: Record<string, (f: FilaFlujo) => unknown> = {
+  mes: (f) => f.mes,
+  entradas: (f) => f.entradas,
+  salidas: (f) => f.salidas,
+  neto: (f) => f.neto,
 };
 
 function KpiCard({ label, valor, tono, sub }: { label: string; valor: string; tono?: "ok" | "alerta"; sub?: string }) {
@@ -58,6 +69,15 @@ export function FlujoClient({
   const router = useRouter();
   const saldoFinal = filas.length ? filas[filas.length - 1].saldoProyectado : saldoInicial;
   const maxAbs = Math.max(1, ...filas.map((f) => Math.abs(f.saldoProyectado)));
+
+  // Orden del desglose de vencido; sin orden queda el cronológico del servidor.
+  // (La proyección principal NO se ordena: su saldo es acumulado fila a fila.)
+  const [ordenVencidas, setOrdenVencidas] = useState<Orden>(null);
+  const vencidasOrdenadas = useMemo(() => {
+    if (!ordenVencidas || !VALOR_VENCIDAS[ordenVencidas.col]) return vencidas;
+    const valor = VALOR_VENCIDAS[ordenVencidas.col];
+    return [...vencidas].sort((a, b) => comparar(valor(a), valor(b), ordenVencidas.dir));
+  }, [vencidas, ordenVencidas]);
 
   return (
     <div className="mt-4">
@@ -112,14 +132,22 @@ export function FlujoClient({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[120px]">Venció en</TableHead>
-                  <TableHead className="text-right">Por cobrar</TableHead>
-                  <TableHead className="text-right">Por pagar</TableHead>
-                  <TableHead className="text-right">Neto</TableHead>
+                  <ThSort col="mes" orden={ordenVencidas} setOrden={setOrdenVencidas} className="w-[120px]">
+                    Venció en
+                  </ThSort>
+                  <ThSort col="entradas" orden={ordenVencidas} setOrden={setOrdenVencidas} className="text-right">
+                    Por cobrar
+                  </ThSort>
+                  <ThSort col="salidas" orden={ordenVencidas} setOrden={setOrdenVencidas} className="text-right">
+                    Por pagar
+                  </ThSort>
+                  <ThSort col="neto" orden={ordenVencidas} setOrden={setOrdenVencidas} className="text-right">
+                    Neto
+                  </ThSort>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {vencidas.map((f) => (
+                {vencidasOrdenadas.map((f) => (
                   <TableRow key={f.mes} className="text-sm">
                     <TableCell className="font-medium capitalize">
                       {f.label} <span className="ml-1 rounded border border-red-200 bg-red-50 px-1 py-0.5 text-[10px] text-red-700">vencido</span>

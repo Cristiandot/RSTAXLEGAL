@@ -37,7 +37,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -266,6 +265,7 @@ export function F29Client({
       switch (orden.col) {
         case "grupo": return c.grupo_codigo;
         case "cliente": return c.razon_social;
+        case "rut": return c.rut_empresa;
         case "estado": return c.estado;
         case "responsable": return c.responsable;
         case "plazo": return c.plazo_f29;
@@ -521,7 +521,7 @@ export function F29Client({
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[260px]">Cliente</ThSort>
-              <TableHead>RUT</TableHead>
+              <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT</ThSort>
               <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
               <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
               <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>

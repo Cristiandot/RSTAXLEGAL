@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Eye, FileText, Search } from "lucide-react";
 import { CLASE_FILA_DESTACADA, useGestionUrl } from "@/hooks/use-gestion-url";
 import { formatFecha, formatMonto } from "@/lib/format";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import { MOTIVO_AMONESTACION_LABEL } from "@/lib/amonestaciones";
 import { TIPO_PERMISO_LABEL } from "@/lib/permisos";
 import { cambiarEstadoGestion, generarCartaAmonestacion } from "./actions";
@@ -16,7 +18,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -195,6 +196,7 @@ export function GestionesClient({
   const [tipoF, setTipoF] = useState("");
   const [estadoF, setEstadoF] = useState("");
   const [viendo, setViendo] = useState<GestionRow | null>(null);
+  const [orden, setOrden] = useState<Orden>(null);
   const [ocupado, startAccion] = useTransition();
   // Deep-link desde Inicio y requerimientos: abre el detalle y destaca la fila.
   const gestionDestacada = useGestionUrl(filas, setViendo);
@@ -204,13 +206,30 @@ export function GestionesClient({
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return filas.filter((f) => {
+    const out = filas.filter((f) => {
       if (q && !`${f.trabajador} ${f.rut} ${f.empresa}`.toLowerCase().includes(q)) return false;
       if (tipoF && f.tipo !== tipoF) return false;
       if (estadoF && f.estado !== estadoF) return false;
       return true;
     });
-  }, [filas, buscar, tipoF, estadoF]);
+    // Sin orden manual se conserva el del servidor: más recientes primero.
+    if (!orden) return out;
+    const valor = (f: GestionRow): unknown => {
+      switch (orden.col) {
+        case "tipo": return TIPO_LABEL[f.tipo] ?? f.tipo;
+        case "trabajador": return f.trabajador;
+        case "rut": return f.rut;
+        case "empresa": return f.empresa;
+        case "recibida": return f.creada;
+        case "correo": return f.correo;
+        case "estado": return f.estado;
+        // las acciones disponibles dependen del estado
+        case "acciones": return f.estado;
+        default: return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
+  }, [filas, buscar, tipoF, estadoF, orden]);
 
   const pendientes = filas.filter((f) => f.estado === "solicitada").length;
 
@@ -287,14 +306,14 @@ export function GestionesClient({
         <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead>Tipo</TableHead>
-              <TableHead className="w-[200px]">Trabajador</TableHead>
-              <TableHead>RUT</TableHead>
-              <TableHead className="w-[200px]">Empresa</TableHead>
-              <TableHead>Recibida</TableHead>
-              <TableHead>Correo contacto</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
+              <ThSort col="tipo" orden={orden} setOrden={setOrden}>Tipo</ThSort>
+              <ThSort col="trabajador" orden={orden} setOrden={setOrden} className="w-[200px]">Trabajador</ThSort>
+              <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT</ThSort>
+              <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[200px]">Empresa</ThSort>
+              <ThSort col="recibida" orden={orden} setOrden={setOrden}>Recibida</ThSort>
+              <ThSort col="correo" orden={orden} setOrden={setOrden}>Correo contacto</ThSort>
+              <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
+              <ThSort col="acciones" orden={orden} setOrden={setOrden} className="text-right">Acciones</ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>

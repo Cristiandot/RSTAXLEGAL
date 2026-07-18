@@ -9,7 +9,7 @@ import { ClaveCell, RutPreviredCell } from "@/components/credencial-celdas";
 import { ThSort } from "@/components/th-sort";
 import { Progreso } from "@/components/progreso";
 import { CampoConValor } from "@/components/campos-editables";
-import { comparar, type Orden } from "@/lib/ordenar";
+import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -614,7 +614,10 @@ export function EmpresasClient({
         return false;
       return true;
     });
-    if (!orden) return out;
+    // Orden por defecto = prioridad de cartera por código de grupo (A.1 → D.45),
+    // con la razón social como desempate; las empresas sin cliente al final.
+    if (!orden)
+      return ordenarPorGrupo(out, (e) => e.grupo_codigo, (e) => e.razon_social);
     const val = (e: EmpresaFichaRow): unknown => {
       switch (orden.col) {
         case "cliente":
@@ -623,6 +626,8 @@ export function EmpresasClient({
             : (e.grupo_nombre ?? null);
         case "empresa":
           return e.razon_social;
+        case "rut":
+          return e.rut_empresa;
         case "pct":
           return e.pct;
         case "faltan":
@@ -711,7 +716,9 @@ export function EmpresasClient({
               <ThSort col="empresa" orden={orden} setOrden={setOrden} className="w-[300px]">
                 Empresa
               </ThSort>
-              <TableHead>RUT</TableHead>
+              <ThSort col="rut" orden={orden} setOrden={setOrden}>
+                RUT
+              </ThSort>
               <ThSort col="pct" orden={orden} setOrden={setOrden}>
                 % Completado
               </ThSort>

@@ -1,11 +1,13 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AlertTriangle, FileDown, Pencil, Upload } from "lucide-react";
 import { etiquetaPeriodo } from "@/lib/periodos";
 import { formatFecha, formatMonto } from "@/lib/format";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import type { IndicadoresPrevired, IndicadoresRow } from "@/lib/previred";
 import {
   cargarPdfPrevired,
@@ -21,7 +23,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -36,6 +37,37 @@ import {
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+// Filas de las tablas leídas de la hoja Previred (para tipar el ordenamiento).
+type FilaAfp = IndicadoresPrevired["afp"][number];
+type FilaAfc = IndicadoresPrevired["afc"][number];
+type FilaPesado = IndicadoresPrevired["trabajos_pesados"][number];
+type FilaAsig = IndicadoresPrevired["asignacion_familiar"][number];
+
+/** Valor por columna para ordenar cada tabla (tasas y montos como número). */
+const VALOR_AFP: Record<string, (a: FilaAfp) => unknown> = {
+  afp: (a) => a.nombre,
+  trabajador: (a) => a.tasa_trabajador,
+  empleador: (a) => a.tasa_empleador,
+  total: (a) => a.tasa_total,
+  independiente: (a) => a.tasa_independiente,
+};
+const VALOR_AFC: Record<string, (a: FilaAfc) => unknown> = {
+  contrato: (a) => a.contrato,
+  empleador: (a) => a.empleador,
+  trabajador: (a) => a.trabajador,
+};
+const VALOR_PESADOS: Record<string, (t: FilaPesado) => unknown> = {
+  calificacion: (t) => t.calificacion,
+  total: (t) => t.total,
+  empleador: (t) => t.empleador,
+  trabajador: (t) => t.trabajador,
+};
+const VALOR_ASIG: Record<string, (t: FilaAsig) => unknown> = {
+  tramo: (t) => t.tramo,
+  monto: (t) => t.monto,
+  requisito: (t) => t.glosa,
+};
 
 /** "2026-05" → "2026-06" (mes en que se PAGAN las cotizaciones del período). */
 function mesSiguiente(periodo: string): string {
@@ -165,6 +197,40 @@ export function IndicadoresClient({
   const [guardando, startGuardar] = useTransition();
 
   const fila = filas.find((f) => f.periodo === periodoSel) ?? filas[0] ?? null;
+
+  // Orden por tabla (clic en el encabezado); sin orden queda como viene del PDF.
+  const [ordenAfp, setOrdenAfp] = useState<Orden>(null);
+  const [ordenAfc, setOrdenAfc] = useState<Orden>(null);
+  const [ordenPesados, setOrdenPesados] = useState<Orden>(null);
+  const [ordenAsig, setOrdenAsig] = useState<Orden>(null);
+
+  const afpOrdenadas = useMemo(() => {
+    const lista = fila?.afp ?? [];
+    if (!ordenAfp || !VALOR_AFP[ordenAfp.col]) return lista;
+    const valor = VALOR_AFP[ordenAfp.col];
+    return [...lista].sort((a, b) => comparar(valor(a), valor(b), ordenAfp.dir));
+  }, [fila, ordenAfp]);
+
+  const afcOrdenadas = useMemo(() => {
+    const lista = fila?.afc ?? [];
+    if (!ordenAfc || !VALOR_AFC[ordenAfc.col]) return lista;
+    const valor = VALOR_AFC[ordenAfc.col];
+    return [...lista].sort((a, b) => comparar(valor(a), valor(b), ordenAfc.dir));
+  }, [fila, ordenAfc]);
+
+  const pesadosOrdenados = useMemo(() => {
+    const lista = fila?.trabajos_pesados ?? [];
+    if (!ordenPesados || !VALOR_PESADOS[ordenPesados.col]) return lista;
+    const valor = VALOR_PESADOS[ordenPesados.col];
+    return [...lista].sort((a, b) => comparar(valor(a), valor(b), ordenPesados.dir));
+  }, [fila, ordenPesados]);
+
+  const asigOrdenados = useMemo(() => {
+    const lista = fila?.asignacion_familiar ?? [];
+    if (!ordenAsig || !VALOR_ASIG[ordenAsig.col]) return lista;
+    const valor = VALOR_ASIG[ordenAsig.col];
+    return [...lista].sort((a, b) => comparar(valor(a), valor(b), ordenAsig.dir));
+  }, [fila, ordenAsig]);
 
   function onArchivo(e: React.ChangeEvent<HTMLInputElement>) {
     const archivo = e.target.files?.[0];
@@ -383,15 +449,25 @@ export function IndicadoresClient({
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead>AFP</TableHead>
-                        <TableHead className="text-right">Trabajador</TableHead>
-                        <TableHead className="text-right">Empleador</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead className="text-right">Independiente</TableHead>
+                        <ThSort col="afp" orden={ordenAfp} setOrden={setOrdenAfp}>
+                          AFP
+                        </ThSort>
+                        <ThSort col="trabajador" orden={ordenAfp} setOrden={setOrdenAfp} className="text-right">
+                          Trabajador
+                        </ThSort>
+                        <ThSort col="empleador" orden={ordenAfp} setOrden={setOrdenAfp} className="text-right">
+                          Empleador
+                        </ThSort>
+                        <ThSort col="total" orden={ordenAfp} setOrden={setOrdenAfp} className="text-right">
+                          Total
+                        </ThSort>
+                        <ThSort col="independiente" orden={ordenAfp} setOrden={setOrdenAfp} className="text-right">
+                          Independiente
+                        </ThSort>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(fila.afp ?? []).map((a) => (
+                      {afpOrdenadas.map((a) => (
                         <TableRow key={a.nombre} className="hover:bg-transparent">
                           <TableCell className="font-medium">{a.nombre}</TableCell>
                           <TableCell className="text-right tabular-nums">{fmtPct(a.tasa_trabajador)}</TableCell>
@@ -424,13 +500,19 @@ export function IndicadoresClient({
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead>Contrato</TableHead>
-                        <TableHead className="text-right">Empleador</TableHead>
-                        <TableHead className="text-right">Trabajador</TableHead>
+                        <ThSort col="contrato" orden={ordenAfc} setOrden={setOrdenAfc}>
+                          Contrato
+                        </ThSort>
+                        <ThSort col="empleador" orden={ordenAfc} setOrden={setOrdenAfc} className="text-right">
+                          Empleador
+                        </ThSort>
+                        <ThSort col="trabajador" orden={ordenAfc} setOrden={setOrdenAfc} className="text-right">
+                          Trabajador
+                        </ThSort>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(fila.afc ?? []).map((a) => (
+                      {afcOrdenadas.map((a) => (
                         <TableRow key={a.contrato} className="hover:bg-transparent">
                           <TableCell>{a.contrato}</TableCell>
                           <TableCell className="text-right tabular-nums">
@@ -449,14 +531,22 @@ export function IndicadoresClient({
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead>Calificación</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead className="text-right">Empleador</TableHead>
-                        <TableHead className="text-right">Trabajador</TableHead>
+                        <ThSort col="calificacion" orden={ordenPesados} setOrden={setOrdenPesados}>
+                          Calificación
+                        </ThSort>
+                        <ThSort col="total" orden={ordenPesados} setOrden={setOrdenPesados} className="text-right">
+                          Total
+                        </ThSort>
+                        <ThSort col="empleador" orden={ordenPesados} setOrden={setOrdenPesados} className="text-right">
+                          Empleador
+                        </ThSort>
+                        <ThSort col="trabajador" orden={ordenPesados} setOrden={setOrdenPesados} className="text-right">
+                          Trabajador
+                        </ThSort>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(fila.trabajos_pesados ?? []).map((t) => (
+                      {pesadosOrdenados.map((t) => (
                         <TableRow key={t.calificacion} className="hover:bg-transparent">
                           <TableCell>{t.calificacion}</TableCell>
                           <TableCell className="text-right tabular-nums">{fmtPct(t.total)}</TableCell>
@@ -482,13 +572,19 @@ export function IndicadoresClient({
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
-                        <TableHead>Tramo</TableHead>
-                        <TableHead className="text-right">Monto</TableHead>
-                        <TableHead>Requisito de renta</TableHead>
+                        <ThSort col="tramo" orden={ordenAsig} setOrden={setOrdenAsig}>
+                          Tramo
+                        </ThSort>
+                        <ThSort col="monto" orden={ordenAsig} setOrden={setOrdenAsig} className="text-right">
+                          Monto
+                        </ThSort>
+                        <ThSort col="requisito" orden={ordenAsig} setOrden={setOrdenAsig}>
+                          Requisito de renta
+                        </ThSort>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(fila.asignacion_familiar ?? []).map((t) => (
+                      {asigOrdenados.map((t) => (
                         <TableRow key={t.tramo} className="hover:bg-transparent">
                           <TableCell className="font-medium">{t.tramo}</TableCell>
                           <TableCell className="text-right tabular-nums">{formatMonto(t.monto)}</TableCell>

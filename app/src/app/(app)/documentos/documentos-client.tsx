@@ -2,9 +2,10 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { FileText, Calculator } from "lucide-react";
+import { FileText, Calculator, ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { actualizarEstadoDocumento, type EstadoDoc } from "./actions";
 import { formatFecha } from "@/lib/format";
+import { comparar, siguienteOrden, type Orden } from "@/lib/ordenar";
 import { CLASE_FILA_DESTACADA, useGestionUrl } from "@/hooks/use-gestion-url";
 
 export type SolicitudDocRow = {
@@ -41,6 +42,42 @@ const ESTADOS: { value: EstadoDoc; label: string; cls: string }[] = [
 const selectCls =
   "h-8 rounded-md border border-input bg-card px-2 text-xs shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
+/** <th> ordenable de la tabla cruda: mismo comportamiento y flechita que ThSort. */
+function ThOrdenable({
+  col,
+  orden,
+  setOrden,
+  children,
+}: {
+  col: string;
+  orden: Orden;
+  setOrden: (o: Orden) => void;
+  children: React.ReactNode;
+}) {
+  const activo = orden?.col === col;
+  return (
+    <th className="px-3 py-2 font-medium">
+      <button
+        type="button"
+        onClick={() => setOrden(siguienteOrden(orden, col))}
+        className={`inline-flex items-center gap-1 transition-colors hover:text-foreground ${activo ? "text-foreground" : ""}`}
+        title="Ordenar"
+      >
+        {children}
+        {activo ? (
+          orden!.dir === "asc" ? (
+            <ArrowUp className="size-3.5" />
+          ) : (
+            <ArrowDown className="size-3.5" />
+          )
+        ) : (
+          <ArrowUpDown className="size-3.5 opacity-35" />
+        )}
+      </button>
+    </th>
+  );
+}
+
 export function DocumentosClient({
   filas,
   errorCarga,
@@ -50,18 +87,35 @@ export function DocumentosClient({
 }) {
   const [fArea, setFArea] = useState("todas");
   const [fEstado, setFEstado] = useState("pendientes");
+  const [orden, setOrden] = useState<Orden>(null);
   const [ocupado, startAccion] = useTransition();
   // Deep-link desde Inicio y requerimientos: destaca la fila y hace scroll.
   const gestionDestacada = useGestionUrl(filas);
 
   const visibles = useMemo(() => {
-    return filas.filter((f) => {
+    const out = filas.filter((f) => {
       if (fArea !== "todas" && f.area !== fArea) return false;
       if (fEstado === "pendientes") return f.estado === "solicitada" || f.estado === "en_revision";
       if (fEstado === "todas") return true;
       return f.estado === fEstado;
     });
-  }, [filas, fArea, fEstado]);
+    // Sin orden manual se conserva el del servidor: más recientes primero.
+    if (!orden) return out;
+    const valor = (f: SolicitudDocRow): unknown => {
+      switch (orden.col) {
+        case "empresa": return f.empresa;
+        case "area": return f.area;
+        case "documento": return f.tipoDocumento;
+        case "periodo": return f.periodo;
+        case "solicitada": return f.creada;
+        case "estado": return f.estado;
+        // la acción disponible depende del estado
+        case "accion": return f.estado;
+        default: return null;
+      }
+    };
+    return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
+  }, [filas, fArea, fEstado, orden]);
 
   const pendientes = filas.filter((f) => f.estado === "solicitada" || f.estado === "en_revision").length;
 
@@ -114,13 +168,13 @@ export function DocumentosClient({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:bg-card">
-              <th className="px-3 py-2 font-medium">Empresa</th>
-              <th className="px-3 py-2 font-medium">Área</th>
-              <th className="px-3 py-2 font-medium">Documento</th>
-              <th className="px-3 py-2 font-medium">Período</th>
-              <th className="px-3 py-2 font-medium">Solicitada</th>
-              <th className="px-3 py-2 font-medium">Estado</th>
-              <th className="px-3 py-2 font-medium">Acción</th>
+              <ThOrdenable col="empresa" orden={orden} setOrden={setOrden}>Empresa</ThOrdenable>
+              <ThOrdenable col="area" orden={orden} setOrden={setOrden}>Área</ThOrdenable>
+              <ThOrdenable col="documento" orden={orden} setOrden={setOrden}>Documento</ThOrdenable>
+              <ThOrdenable col="periodo" orden={orden} setOrden={setOrden}>Período</ThOrdenable>
+              <ThOrdenable col="solicitada" orden={orden} setOrden={setOrden}>Solicitada</ThOrdenable>
+              <ThOrdenable col="estado" orden={orden} setOrden={setOrden}>Estado</ThOrdenable>
+              <ThOrdenable col="accion" orden={orden} setOrden={setOrden}>Acción</ThOrdenable>
             </tr>
           </thead>
           <tbody>

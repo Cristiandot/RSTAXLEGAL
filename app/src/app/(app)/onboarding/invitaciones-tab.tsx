@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, Copy, ExternalLink, Eye, Link2, Plus } from "lucide-react";
 import { formatFecha } from "@/lib/format";
+import { ThSort } from "@/components/th-sort";
+import { comparar, type Orden } from "@/lib/ordenar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +92,30 @@ export function InvitacionesTab({
   const [mensaje, setMensaje] = useState("");
   const [copiado, setCopiado] = useState<string | null>(null);
   const [viendo, setViendo] = useState<InvitacionRow | null>(null);
+  const [orden, setOrden] = useState<Orden>(null);
+
+  // Por defecto se mantiene el orden del servidor (creación más reciente
+  // primero); con orden activo, por la columna elegida.
+  const invitacionesOrdenadas = useMemo(() => {
+    if (!orden) return invitaciones;
+    const val = (i: InvitacionRow): unknown => {
+      switch (orden.col) {
+        case "cliente":
+          return i.nombre_cliente;
+        case "creada":
+          return i.created_at;
+        case "plan":
+          return i.link_pago_nombre ?? (i.link_pago ? "Link personalizado" : "No requiere");
+        case "estado":
+          return i.estado;
+        case "empresa":
+          return i.empresa_razon;
+        default:
+          return null;
+      }
+    };
+    return [...invitaciones].sort((a, b) => comparar(val(a), val(b), orden.dir));
+  }, [invitaciones, orden]);
 
   function copiar(id: string, texto: string) {
     void navigator.clipboard.writeText(texto).then(() => {
@@ -264,11 +290,11 @@ export function InvitacionesTab({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Creada</TableHead>
-              <TableHead>Plan / link de pago</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead>Empresa vinculada</TableHead>
+              <ThSort col="cliente" orden={orden} setOrden={setOrden}>Cliente</ThSort>
+              <ThSort col="creada" orden={orden} setOrden={setOrden}>Creada</ThSort>
+              <ThSort col="plan" orden={orden} setOrden={setOrden}>Plan / link de pago</ThSort>
+              <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
+              <ThSort col="empresa" orden={orden} setOrden={setOrden}>Empresa vinculada</ThSort>
               <TableHead className="text-right">Link</TableHead>
             </TableRow>
           </TableHeader>
@@ -280,7 +306,7 @@ export function InvitacionesTab({
                 </TableCell>
               </TableRow>
             ) : null}
-            {invitaciones.map((i) => (
+            {invitacionesOrdenadas.map((i) => (
               <TableRow key={i.id}>
                 <TableCell className="text-sm font-medium">{i.nombre_cliente}</TableCell>
                 <TableCell className="text-xs whitespace-nowrap text-muted-foreground">

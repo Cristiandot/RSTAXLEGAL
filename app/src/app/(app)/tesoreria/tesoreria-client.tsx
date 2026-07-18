@@ -4,6 +4,8 @@ import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Landmark, Wallet, ChevronDown, Check, Loader2, Undo2, Zap } from "lucide-react";
 import { formatMonto, formatFecha } from "@/lib/format";
+import { comparar, type Orden } from "@/lib/ordenar";
+import { ThSort } from "@/components/th-sort";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -123,6 +125,26 @@ function EstadoBadge({ estado }: { estado: string }) {
 const nombreFuente = (f: string) =>
   ({ mercadopago: "Mercado Pago", generico: "Genérico", banco_demo: "Banco (demo)" } as Record<string, string>)[f] ?? f;
 
+/** Valor por columna para ordenar los movimientos. */
+const VALOR_MOV: Record<string, (m: Movimiento) => unknown> = {
+  fecha: (m) => m.fecha,
+  glosa: (m) => m.glosa,
+  cargo: (m) => m.cargo,
+  abono: (m) => m.abono,
+  estado: (m) => m.estado,
+};
+
+/** Valor por columna para ordenar la cuadratura por cartola importada. */
+const VALOR_CARTOLA: Record<string, (c: ResumenCartola) => unknown> = {
+  archivo: (c) => c.archivo,
+  rango: (c) => c.desde,
+  movs: (c) => c.movs,
+  abonos: (c) => c.abonos,
+  cargos: (c) => c.cargos,
+  saldo: (c) => c.saldoFinal,
+  pendientes: (c) => c.pendientes,
+};
+
 export function TesoreriaClient({
   cuentas,
   cuentaSeleccionada,
@@ -141,6 +163,8 @@ export function TesoreriaClient({
   const router = useRouter();
   const [buscar, setBuscar] = useState("");
   const [estadoF, setEstadoF] = useState("");
+  const [orden, setOrden] = useState<Orden>(null);
+  const [ordenCartolas, setOrdenCartolas] = useState<Orden>(null);
   const [expandido, setExpandido] = useState<string | null>(null);
   const [sugs, setSugs] = useState<Record<string, Sugerencia[] | "cargando">>({});
   const [pending, startTransition] = useTransition();
@@ -164,7 +188,7 @@ export function TesoreriaClient({
 
   const filtrados = useMemo(() => {
     const q = buscar.trim().toLowerCase();
-    return movimientos.filter((m) => {
+    const lista = movimientos.filter((m) => {
       if (estadoF && m.estado !== estadoF) return false;
       if (q) {
         const hay = `${m.glosa ?? ""} ${m.categoria ?? ""} ${m.referencia ?? ""} ${m.contraparte ?? ""}`.toLowerCase();
@@ -172,7 +196,20 @@ export function TesoreriaClient({
       }
       return true;
     });
-  }, [movimientos, buscar, estadoF]);
+    // sin orden elegido queda el orden actual (como viene del servidor)
+    if (orden && VALOR_MOV[orden.col]) {
+      const valor = VALOR_MOV[orden.col];
+      lista.sort((a, b) => comparar(valor(a), valor(b), orden.dir));
+    }
+    return lista;
+  }, [movimientos, buscar, estadoF, orden]);
+
+  // Cartolas ordenables por encabezado; sin orden queda el orden actual.
+  const cartolasOrdenadas = useMemo(() => {
+    if (!ordenCartolas || !VALOR_CARTOLA[ordenCartolas.col]) return cartolas;
+    const valor = VALOR_CARTOLA[ordenCartolas.col];
+    return [...cartolas].sort((a, b) => comparar(valor(a), valor(b), ordenCartolas.dir));
+  }, [cartolas, ordenCartolas]);
 
   async function toggleExpand(m: Movimiento) {
     if (expandido === m.id) {
@@ -308,17 +345,31 @@ export function TesoreriaClient({
               <table className="mt-3 w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="py-1.5 pr-2">Archivo</th>
-                    <th className="py-1.5 pr-2">Rango</th>
-                    <th className="py-1.5 pr-2 text-right">Movs</th>
-                    <th className="py-1.5 pr-2 text-right">Abonos</th>
-                    <th className="py-1.5 pr-2 text-right">Cargos</th>
-                    <th className="py-1.5 pr-2 text-right">Saldo final</th>
-                    <th className="py-1.5 text-right">Por conciliar</th>
+                    <ThSort col="archivo" orden={ordenCartolas} setOrden={setOrdenCartolas} className="h-auto py-1.5 pr-2 pl-0 text-xs text-muted-foreground">
+                      Archivo
+                    </ThSort>
+                    <ThSort col="rango" orden={ordenCartolas} setOrden={setOrdenCartolas} className="h-auto py-1.5 pr-2 pl-0 text-xs text-muted-foreground">
+                      Rango
+                    </ThSort>
+                    <ThSort col="movs" orden={ordenCartolas} setOrden={setOrdenCartolas} className="h-auto py-1.5 pr-2 pl-0 text-right text-xs text-muted-foreground">
+                      Movs
+                    </ThSort>
+                    <ThSort col="abonos" orden={ordenCartolas} setOrden={setOrdenCartolas} className="h-auto py-1.5 pr-2 pl-0 text-right text-xs text-muted-foreground">
+                      Abonos
+                    </ThSort>
+                    <ThSort col="cargos" orden={ordenCartolas} setOrden={setOrdenCartolas} className="h-auto py-1.5 pr-2 pl-0 text-right text-xs text-muted-foreground">
+                      Cargos
+                    </ThSort>
+                    <ThSort col="saldo" orden={ordenCartolas} setOrden={setOrdenCartolas} className="h-auto py-1.5 pr-2 pl-0 text-right text-xs text-muted-foreground">
+                      Saldo final
+                    </ThSort>
+                    <ThSort col="pendientes" orden={ordenCartolas} setOrden={setOrdenCartolas} className="h-auto py-1.5 pl-0 pr-0 text-right text-xs text-muted-foreground">
+                      Por conciliar
+                    </ThSort>
                   </tr>
                 </thead>
                 <tbody>
-                  {cartolas.map((c) => (
+                  {cartolasOrdenadas.map((c) => (
                     <tr key={c.archivo} className="border-b border-border/50 last:border-0">
                       <td className="max-w-[220px] truncate py-1.5 pr-2" title={c.archivo}>{c.archivo}</td>
                       <td className="whitespace-nowrap py-1.5 pr-2 tabular-nums text-muted-foreground">
@@ -425,11 +476,21 @@ export function TesoreriaClient({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[110px]">Fecha</TableHead>
-                  <TableHead>Glosa</TableHead>
-                  <TableHead className="text-right">Cargo</TableHead>
-                  <TableHead className="text-right">Abono</TableHead>
-                  <TableHead className="w-[150px]">Estado</TableHead>
+                  <ThSort col="fecha" orden={orden} setOrden={setOrden} className="w-[110px]">
+                    Fecha
+                  </ThSort>
+                  <ThSort col="glosa" orden={orden} setOrden={setOrden}>
+                    Glosa
+                  </ThSort>
+                  <ThSort col="cargo" orden={orden} setOrden={setOrden} className="text-right">
+                    Cargo
+                  </ThSort>
+                  <ThSort col="abono" orden={orden} setOrden={setOrden} className="text-right">
+                    Abono
+                  </ThSort>
+                  <ThSort col="estado" orden={orden} setOrden={setOrden} className="w-[150px]">
+                    Estado
+                  </ThSort>
                   <TableHead className="w-[130px] text-right">Acción</TableHead>
                 </TableRow>
               </TableHeader>
