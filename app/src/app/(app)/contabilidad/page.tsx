@@ -18,7 +18,7 @@ export default async function ContabilidadPage({
   const periodo = normalizarPeriodo(p);
   const supabase = await createClient();
 
-  const [filasRes, docsRes, pilotosRes, rcvRes, f29Res, honRes] =
+  const [filasRes, docsRes, pilotosRes, rcvRes, f29Res, honRes, gruposRes] =
     await Promise.all([
       supabase
         .from("v_checklist_conciliacion")
@@ -47,6 +47,7 @@ export default async function ContabilidadPage({
         .select("cliente_id")
         .eq("periodo", periodo)
         .limit(20000),
+      supabase.from("clientes").select("id, grupos_cliente(codigo)"),
     ]);
 
   const f29PorCliente = new Map(
@@ -55,6 +56,16 @@ export default async function ContabilidadPage({
   const rcvPorCliente = new Map(
     (rcvRes.data ?? []).map((r) => [r.cliente_id, r]),
   );
+  // Código de grupo ("A.4", "C.12"…) por cliente, para la prioridad de la grilla
+  const grupos: Record<string, string> = {};
+  for (const g of gruposRes.data ?? []) {
+    const rel = g.grupos_cliente as unknown;
+    const cod = Array.isArray(rel)
+      ? (rel[0] as { codigo?: string } | undefined)?.codigo
+      : (rel as { codigo?: string } | null)?.codigo;
+    if (cod) grupos[g.id as string] = cod;
+  }
+
   const honPorCliente = new Map<string, number>();
   for (const h of honRes.data ?? []) {
     honPorCliente.set(
@@ -96,6 +107,7 @@ export default async function ContabilidadPage({
         filas={(filasRes.data ?? []) as ConciliacionRow[]}
         documentos={documentos}
         rcvResumen={rcvResumen}
+        grupos={grupos}
         errorCarga={filasRes.error?.message ?? null}
       />
     </main>

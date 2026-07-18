@@ -260,16 +260,20 @@ export function ContabilidadClient({
   filas,
   documentos,
   rcvResumen = [],
+  grupos = {},
   errorCarga,
 }: {
   periodo: string;
   filas: ConciliacionRow[];
   documentos: DocumentoContable[];
   rcvResumen?: RcvResumenFila[];
+  /** Código de grupo por cliente ("A.4", "C.12"…) para prioridad y filtro. */
+  grupos?: Record<string, string>;
   errorCarga: string | null;
 }) {
   const router = useRouter();
   const [buscar, setBuscar] = useState("");
+  const [grupoF, setGrupoF] = useState("");
   // Proceso de aprendizaje contabilidad completa: la grilla parte mostrando
   // solo las empresas activadas (pilotos); el resto queda en standby y se va
   // activando una a una desde la misma grilla.
@@ -322,13 +326,21 @@ export function ContabilidadClient({
     );
   };
 
+  const grupoDe = (clienteId: string) => grupos[clienteId] ?? "";
+  // "A.4" → ["A", 4]; sin grupo → al final
+  const claveGrupo = (clienteId: string): [string, number] => {
+    const m = /^([A-Za-z]+)\.(\d+)/.exec(grupoDe(clienteId));
+    return m ? [m[1].toUpperCase(), Number(m[2])] : ["ZZZ", 9999];
+  };
+
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
     const out = filas.filter((c) => {
       if (q) {
-        const t = `${c.razon_social} ${c.rut_empresa ?? ""}`.toLowerCase();
+        const t = `${c.razon_social} ${c.rut_empresa ?? ""} ${grupoDe(c.cliente_id)}`.toLowerCase();
         if (!t.includes(q)) return false;
       }
+      if (grupoF && !grupoDe(c.cliente_id).toUpperCase().startsWith(`${grupoF}.`)) return false;
       if (contabF === "activadas" && !rcvPorCliente.has(c.cliente_id)) return false;
       if (contabF === "standby" && rcvPorCliente.has(c.cliente_id)) return false;
       if (docsF === "completos" && !facturasCompletas(c.cliente_id)) return false;
@@ -336,20 +348,38 @@ export function ContabilidadClient({
       if (docsF === "sin_docs" && !sinDocumentos(c.cliente_id)) return false;
       return true;
     });
-    if (!orden) return out;
+    if (!orden) {
+      // Orden por defecto: prioridad de grupo A → D (letra, número) y luego nombre
+      return [...out].sort((a, b) => {
+        const [la, na] = claveGrupo(a.cliente_id);
+        const [lb, nb] = claveGrupo(b.cliente_id);
+        if (la !== lb) return la < lb ? -1 : 1;
+        if (na !== nb) return na - nb;
+        return a.razon_social.localeCompare(b.razon_social, "es");
+      });
+    }
     const valor = (c: ConciliacionRow): unknown => {
       switch (orden.col) {
+        case "grupo": {
+          const [l, n] = claveGrupo(c.cliente_id);
+          return `${l}${String(n).padStart(4, "0")}`;
+        }
         case "cliente": return c.razon_social;
+        case "rut": return c.rut_empresa;
         case "docs": {
           const conteo = conteosDe(c.cliente_id);
           return -Object.values(conteo).reduce((a, b) => a + b, 0);
+        }
+        case "rcv": {
+          const r = rcvPorCliente.get(c.cliente_id);
+          return -((r?.docs_compras ?? 0) + (r?.docs_ventas ?? 0));
         }
         default: return null;
       }
     };
     return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filas, buscar, contabF, docsF, orden, conteosPorCliente, rcvPorCliente]);
+  }, [filas, buscar, grupoF, contabF, docsF, orden, conteosPorCliente, rcvPorCliente, grupos]);
 
   const resumen: {
     label: string;
@@ -414,6 +444,20 @@ export function ContabilidadClient({
         </div>
 
         <select
+          aria-label="Grupo"
+          className={selectCls}
+          value={grupoF}
+          onChange={(e) => setGrupoF(e.target.value)}
+        >
+          <option value="">Grupo: todos</option>
+          {["A", "B", "C", "D", "W", "Z"].map((g) => (
+            <option key={g} value={g}>
+              Grupo {g}
+            </option>
+          ))}
+        </select>
+
+        <select
           aria-label="Contabilidad completa"
           className={selectCls}
           value={contabF}
@@ -451,17 +495,18 @@ export function ContabilidadClient({
         <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              <ThSort col="grupo" orden={orden} setOrden={setOrden} className="w-16">Grupo</ThSort>
               <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[280px]">Cliente</ThSort>
-              <TableHead>RUT</TableHead>
+              <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT</ThSort>
               <ThSort col="docs" orden={orden} setOrden={setOrden}>Documentos del mes</ThSort>
-              <TableHead>Libros RCV</TableHead>
+              <ThSort col="rcv" orden={orden} setOrden={setOrden}>Libros RCV</ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={4}
+                  colSpan={5}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -476,9 +521,12 @@ export function ContabilidadClient({
                   }
                   className="group cursor-pointer"
                 >
+                  <TableCell className="text-xs font-medium text-muted-foreground tabular-nums">
+                    {grupoDe(c.cliente_id) || "—"}
+                  </TableCell>
                   <TableCell className="font-medium">
                     <span
-                      className="block max-w-[240px] truncate"
+                      className="block max-w-[280px] truncate"
                       title={c.razon_social}
                     >
                       {c.razon_social}
