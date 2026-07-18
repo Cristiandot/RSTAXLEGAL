@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { PieChart, Users, Table2, MapPin, MessageCircle, Clock, Loader2 } from "lucide-react";
 import { tieneFinanciera } from "./estado-resultado-actions";
+import { cargarEmpresaDetalle } from "./datos-actions";
 import { SolicitudForm, type InfoEmpresa } from "./solicitud-form";
 import { DetalleRemuneraciones } from "./remuneraciones";
 import { DatosEmpresa } from "./datos-empresa";
@@ -96,8 +97,14 @@ export function PortalCliente({
         </div>
       )}
 
-      {/* Datos de la empresa: % de cumplimiento, faltantes en rojo y accesos */}
-      <DatosEmpresa token={token} />
+      {/* En el portal de grupo, los datos y accesos se editan en "Todas": aquí
+          solo una franja mínima (razón social · RUT · completitud). Standalone
+          (una sola empresa, sin "Todas") mantiene la ficha completa editable. */}
+      {embedded ? (
+        <FranjaEmpresa token={token} empresa={empresa} />
+      ) : (
+        <DatosEmpresa token={token} />
+      )}
 
       {/* Vistas */}
       <div className="flex flex-nowrap justify-center gap-0.5 overflow-x-auto border-b">
@@ -243,6 +250,65 @@ export function PortalCliente({
           </div>
         </div>
       </footer>
+    </div>
+  );
+}
+
+function colorPct(pct: number): string {
+  if (pct >= 100) return "text-emerald-600";
+  if (pct >= 60) return "text-amber-600";
+  return "text-red-600";
+}
+function barPct(pct: number): string {
+  if (pct >= 100) return "bg-emerald-500";
+  if (pct >= 60) return "bg-amber-500";
+  return "bg-red-500";
+}
+
+/**
+ * Franja mínima de la vista por empresa: razón social · RUT + completitud.
+ * Solo lectura — la edición de datos y accesos vive en la pestaña "Todas".
+ */
+function FranjaEmpresa({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
+  const [pct, setPct] = useState<number | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    setPct(null);
+    cargarEmpresaDetalle(token).then((r) => {
+      if (vivo && r.ok && r.detalle) setPct(r.detalle.pct);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [token]);
+
+  return (
+    <div className="card-soft flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl bg-card px-4 py-3">
+      <div className="min-w-0">
+        <p className="truncate font-heading text-base font-semibold tracking-tight">
+          {empresa.razon_social}
+        </p>
+        {empresa.rut_empresa ? (
+          <p className="text-xs text-muted-foreground">{empresa.rut_empresa}</p>
+        ) : null}
+      </div>
+      {pct != null ? (
+        <div className="flex items-center gap-2">
+          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+            <div
+              className={`h-full rounded-full transition-all ${barPct(pct)}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className={`text-sm font-semibold ${colorPct(pct)}`}>{pct}%</span>
+          {pct < 100 ? (
+            <span className="hidden text-xs text-muted-foreground sm:inline">
+              · completa los datos en «Todas»
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

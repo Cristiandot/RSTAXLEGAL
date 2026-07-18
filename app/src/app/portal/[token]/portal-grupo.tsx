@@ -1,10 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import Image from "next/image";
-import { Building2, Home, LayoutGrid, KeyRound, Loader2, Check } from "lucide-react";
+import {
+  Building2, Home, LayoutGrid, KeyRound, Loader2, Check, ChevronDown, Pencil,
+} from "lucide-react";
 import { PortalCliente } from "@/app/solicitud/[token]/portal";
 import { TesoreriaBotonGrupo } from "@/app/solicitud/[token]/tesoreria-boton";
+import { DatosEmpresa } from "@/app/solicitud/[token]/datos-empresa";
+import { cargarEmpresaDetalle } from "@/app/solicitud/[token]/datos-actions";
 import { type InfoEmpresa } from "@/app/solicitud/[token]/solicitud-form";
 import { cambiarPinPortal } from "./portal-auth";
 
@@ -82,7 +86,8 @@ export function PortalGrupo({
             {slug ? <CambiarPin slug={slug} /> : null}
           </div>
           <p className="text-sm text-muted-foreground">
-            Selecciona la empresa para ver y completar su información.
+            En «Todas» administras los datos de tus empresas. Selecciona una para
+            ver su información.
           </p>
         </div>
       </div>
@@ -113,7 +118,7 @@ export function PortalGrupo({
       </div>
 
       {sel === "todas" ? (
-        <ResumenGrupo empresas={ordenadas} />
+        <TablaEmpresas empresas={ordenadas} />
       ) : (
         <PortalCliente
           key={ordenadas[sel].meta.token}
@@ -244,33 +249,110 @@ function CambiarPin({ slug }: { slug: string }) {
   );
 }
 
+function colorPct(pct: number): string {
+  if (pct >= 100) return "text-emerald-600";
+  if (pct >= 60) return "text-amber-600";
+  return "text-red-600";
+}
+function barPct(pct: number): string {
+  if (pct >= 100) return "bg-emerald-500";
+  if (pct >= 60) return "bg-amber-500";
+  return "bg-red-500";
+}
+
 /**
- * Resumen del grupo (contenido a definir). Por ahora, tarjetas por empresa con
- * lo básico, como placeholder navegable.
+ * Vista "Todas": tabla adaptable con una fila por empresa (razón social · RUT ·
+ * completitud). Cada fila se expande para editar los datos maestros y accesos
+ * mediante el editor DatosEmpresa. Es el único lugar donde el cliente ingresa o
+ * modifica información de sus empresas.
  */
-function ResumenGrupo({ empresas }: { empresas: EmpresaCargada[] }) {
+function TablaEmpresas({ empresas }: { empresas: EmpresaCargada[] }) {
+  const [pcts, setPcts] = useState<Record<string, number | null>>({});
+  const [abierta, setAbierta] = useState<string | null>(null);
+
+  const cargarPct = useCallback((token: string) => {
+    void cargarEmpresaDetalle(token).then((r) => {
+      setPcts((p) => ({ ...p, [token]: r.ok && r.detalle ? r.detalle.pct : null }));
+    });
+  }, []);
+
+  useEffect(() => {
+    for (const e of empresas) cargarPct(e.meta.token);
+  }, [empresas, cargarPct]);
+
+  const cols = "sm:grid sm:grid-cols-[1fr_150px_170px_110px] sm:items-center";
+
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        {empresas.map((e) => (
-          <div key={e.meta.token} className="card-soft rounded-xl bg-card p-4">
-            <div className="flex items-center gap-2">
-              {esCasaParticular(e.meta) ? (
-                <Home className="size-4 text-[var(--brand-teal)]" />
-              ) : (
-                <Building2 className="size-4 text-[var(--brand-teal)]" />
-              )}
-              <p className="font-medium">{etiquetaEmpresa(e.meta)}</p>
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {e.meta.rut_empresa ? `RUT ${e.meta.rut_empresa}` : "Sin RUT"}
-            </p>
-          </div>
-        ))}
+    <div className="space-y-2">
+      {/* Cabecera (solo desde sm) */}
+      <div className={`hidden gap-3 px-4 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground ${cols}`}>
+        <span>Empresa</span>
+        <span>RUT</span>
+        <span>Completitud</span>
+        <span className="text-right">Datos</span>
       </div>
-      <p className="text-center text-xs text-muted-foreground">
-        Resumen del grupo — en construcción.
-      </p>
+
+      {empresas.map((e) => {
+        const token = e.meta.token;
+        const pct = pcts[token];
+        const cargandoPct = pct === undefined;
+        const editando = abierta === token;
+        return (
+          <div key={token} className="card-soft overflow-hidden rounded-xl bg-card">
+            <button
+              type="button"
+              onClick={() => setAbierta((v) => (v === token ? null : token))}
+              className={`flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 text-left transition-colors hover:bg-muted/40 ${cols}`}
+            >
+              {/* Empresa */}
+              <span className="flex min-w-0 items-center gap-2">
+                {esCasaParticular(e.meta) ? (
+                  <Home className="size-4 shrink-0 text-[var(--brand-teal)]" />
+                ) : (
+                  <Building2 className="size-4 shrink-0 text-[var(--brand-teal)]" />
+                )}
+                <span className="truncate font-medium">{etiquetaEmpresa(e.meta)}</span>
+              </span>
+              {/* RUT */}
+              <span className="text-sm text-muted-foreground">
+                {e.meta.rut_empresa ?? "—"}
+              </span>
+              {/* Completitud */}
+              <span className="flex items-center gap-2">
+                {cargandoPct ? (
+                  <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                ) : pct == null ? (
+                  <span className="text-xs text-muted-foreground">—</span>
+                ) : (
+                  <>
+                    <span className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                      <span
+                        className={`block h-full rounded-full ${barPct(pct)}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </span>
+                    <span className={`text-sm font-semibold ${colorPct(pct)}`}>{pct}%</span>
+                  </>
+                )}
+              </span>
+              {/* Acción */}
+              <span className="flex items-center justify-end gap-1 text-sm font-medium text-[var(--brand-teal)]">
+                <Pencil className="size-3.5" />
+                {editando ? "Cerrar" : "Editar"}
+                <ChevronDown
+                  className={`size-4 transition-transform ${editando ? "rotate-180" : ""}`}
+                />
+              </span>
+            </button>
+
+            {editando ? (
+              <div className="border-t border-border bg-muted/20 px-4 py-4">
+                <DatosEmpresa token={token} onGuardado={() => cargarPct(token)} />
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }
