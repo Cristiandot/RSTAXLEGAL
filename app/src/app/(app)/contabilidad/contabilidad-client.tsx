@@ -15,6 +15,7 @@ import {
 } from "@/lib/ciclos";
 import {
   CATEGORIAS_ADICIONALES,
+  CATEGORIAS_DOCUMENTO,
   CATEGORIAS_PRINCIPALES,
   type CategoriaDocumento,
 } from "./categorias";
@@ -46,6 +47,7 @@ export type RcvResumenFila = {
   cliente_id: string;
   docs_compras: number;
   docs_ventas: number;
+  docs_honorarios: number;
   iva_credito_rcv: number;
   iva_debito_rcv: number;
   f29_iva_debito: number | null;
@@ -204,30 +206,51 @@ function CeldaRcv({
   );
 }
 
-/** Mini-checklist documental de la fila: una sigla por categoría principal. */
+/**
+ * Mini-checklist documental de la fila: una sigla por categoría principal.
+ * FC/FV/BH se encienden con archivo subido O con datos ya importados del SII
+ * (RCV / boletas de honorarios) — la descarga automática cuenta como cargado.
+ */
 function ChecklistDocs({
   conteos,
   adicionales,
+  rcv,
 }: {
   conteos: Record<string, number>;
   adicionales: number;
+  rcv?: RcvResumenFila;
 }) {
+  // Documentos que ya viven en el panel aunque nadie subiera un archivo
+  const datosSii: Record<string, number> = {
+    fact_compras: rcv?.docs_compras ?? 0,
+    fact_ventas: rcv?.docs_ventas ?? 0,
+    honorarios: rcv?.docs_honorarios ?? 0,
+  };
+  const chips = [...CATEGORIAS_PRINCIPALES, CATEGORIAS_DOCUMENTO[4]]; // + BH honorarios
   return (
     <div className="flex items-center gap-1">
-      {CATEGORIAS_PRINCIPALES.map((c) => {
-        const n = conteos[c.value] ?? 0;
+      {chips.map((c) => {
+        const nArchivos = conteos[c.value] ?? 0;
+        const nSii = datosSii[c.value] ?? 0;
+        const on = nArchivos > 0 || nSii > 0;
+        const detalle = [
+          nSii > 0 ? `${nSii} doc${nSii > 1 ? "s" : ""} del SII` : null,
+          nArchivos > 0 ? `${nArchivos} archivo${nArchivos > 1 ? "s" : ""}` : null,
+        ]
+          .filter(Boolean)
+          .join(" + ");
         return (
           <span
             key={c.value}
-            title={`${c.label}: ${n > 0 ? `${n} archivo${n > 1 ? "s" : ""}` : "pendiente"}`}
+            title={`${c.label}: ${on ? detalle : "pendiente"}`}
             className={`inline-flex h-6 min-w-7 items-center justify-center rounded-md border px-1 text-[11px] font-semibold ${
-              n > 0
+              on
                 ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                 : "border-border bg-muted/40 text-muted-foreground/60"
             }`}
           >
             {c.corta}
-            {n > 1 ? `·${n}` : ""}
+            {nArchivos > 1 ? `·${nArchivos}` : ""}
           </span>
         );
       })}
@@ -296,12 +319,24 @@ export function ContabilidadClient({
       (c["otro"] ?? 0),
     );
   };
+  // Un documento "está" si alguien subió el archivo O si ya se importó del SII
   const facturasCompletas = (clienteId: string) => {
     const c = conteosDe(clienteId);
-    return (c["fact_compras"] ?? 0) > 0 && (c["fact_ventas"] ?? 0) > 0;
+    const r = rcvPorCliente.get(clienteId);
+    return (
+      ((c["fact_compras"] ?? 0) > 0 || (r?.docs_compras ?? 0) > 0) &&
+      ((c["fact_ventas"] ?? 0) > 0 || (r?.docs_ventas ?? 0) > 0)
+    );
   };
-  const sinDocumentos = (clienteId: string) =>
-    Object.keys(conteosDe(clienteId)).length === 0;
+  const sinDocumentos = (clienteId: string) => {
+    const r = rcvPorCliente.get(clienteId);
+    return (
+      Object.keys(conteosDe(clienteId)).length === 0 &&
+      (r?.docs_compras ?? 0) === 0 &&
+      (r?.docs_ventas ?? 0) === 0 &&
+      (r?.docs_honorarios ?? 0) === 0
+    );
+  };
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
@@ -548,6 +583,7 @@ export function ContabilidadClient({
                     <ChecklistDocs
                       conteos={conteosDe(c.cliente_id)}
                       adicionales={adicionalesDe(c.cliente_id)}
+                      rcv={rcvPorCliente.get(c.cliente_id)}
                     />
                   </TableCell>
                   <TableCell>
@@ -608,8 +644,9 @@ export function ContabilidadClient({
 
       <p className="text-xs text-muted-foreground">
         Checklist: FC facturas de compras · FV facturas de ventas · BV ventas
-        con boleta · BC compras con boleta · +N documentos adicionales
-        (honorarios, otros gastos/ingresos). Verde = archivo cargado este mes.
+        con boleta · BC compras con boleta · BH boletas de honorarios · +N
+        documentos adicionales (otros gastos/ingresos). Verde = archivo cargado
+        este mes o datos ya importados del SII (RCV / honorarios).
         Libros RCV (contabilidad completa): C/V = documentos importados del
         SII · ✓ F29 = el IVA del RCV cuadra exacto con el F29 del período ·
         standby = empresa aún no activada (pasa el cursor sobre la fila para
