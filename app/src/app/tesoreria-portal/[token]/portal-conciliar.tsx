@@ -206,11 +206,15 @@ export function PortalConciliar({
                                     <span className="ml-2 tabular-nums text-muted-foreground">
                                       {formatMonto(s.monto)} · {formatFecha(s.fecha)}
                                     </span>
-                                    {s.rutMatch && (
+                                    {s.rutMatch ? (
                                       <span className="ml-2 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-700">
                                         RUT calza
                                       </span>
-                                    )}
+                                    ) : s.docTipo === "impuesto" || s.docTipo === "remuneracion" ? (
+                                      <span className="ml-2 rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] text-violet-700">
+                                        registro del panel
+                                      </span>
+                                    ) : null}
                                   </div>
                                   <button
                                     onClick={() =>

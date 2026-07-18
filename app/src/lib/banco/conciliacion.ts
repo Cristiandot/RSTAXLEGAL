@@ -123,6 +123,77 @@ export async function sugerenciasParaMovimiento(
         confianza: rutMatch ? "alta" : "media",
       });
     }
+
+    // ── Registros PROPIOS del panel (ventaja RSTL sobre Chipax): el F29, el
+    // Previred y las remuneraciones del ciclo mensual ya viven acá, así que el
+    // pago TGR/Previred/sueldos de la cartola se sugiere contra ellos.
+    const [{ data: f29s }, { data: ciclos }, { data: liqs }] = await Promise.all([
+      supabase
+        .from("ciclo_f29")
+        .select("id, periodo, monto_a_pagar, fecha_pago_f29")
+        .eq("cliente_id", mov.cliente_id)
+        .eq("monto_a_pagar", monto)
+        .limit(5),
+      supabase
+        .from("ciclo_liquidaciones")
+        .select("id, periodo, monto_previred_total")
+        .eq("cliente_id", mov.cliente_id)
+        .eq("monto_previred_total", monto)
+        .limit(5),
+      supabase
+        .from("liquidacion")
+        .select("periodo, liquido")
+        .eq("cliente_id", mov.cliente_id),
+    ]);
+    for (const f of f29s ?? []) {
+      if (tomados.has(f.id as string)) continue;
+      out.push({
+        docTipo: "impuesto",
+        docId: f.id as string,
+        ref: `F29 ${f.periodo}`,
+        contraparte: "Tesorería General de la República",
+        monto: Number(f.monto_a_pagar),
+        fecha: (f.fecha_pago_f29 as string | null) ?? `${f.periodo}-20`,
+        pagadoPct: null,
+        rutMatch: false,
+        confianza: "alta",
+      });
+    }
+    for (const c of ciclos ?? []) {
+      if (tomados.has(c.id as string)) continue;
+      out.push({
+        docTipo: "remuneracion",
+        docId: c.id as string,
+        ref: `Previred ${c.periodo}`,
+        contraparte: "Previred — cotizaciones",
+        monto: Number(c.monto_previred_total),
+        fecha: `${c.periodo}-10`,
+        pagadoPct: null,
+        rutMatch: false,
+        confianza: "alta",
+      });
+    }
+    // Remuneraciones: la suma de líquidos del período (el pago de sueldos suele
+    // salir como una sola transferencia por el total del mes).
+    const liquidoPorPeriodo = new Map<string, number>();
+    for (const l of liqs ?? []) {
+      const p = l.periodo as string;
+      liquidoPorPeriodo.set(p, (liquidoPorPeriodo.get(p) ?? 0) + Number(l.liquido ?? 0));
+    }
+    for (const [p, suma] of liquidoPorPeriodo) {
+      if (Math.round(suma) !== monto) continue;
+      out.push({
+        docTipo: "remuneracion",
+        docId: null,
+        ref: `Remuneraciones ${p}`,
+        contraparte: "Nómina del período (suma de líquidos)",
+        monto: Math.round(suma),
+        fecha: `${p}-28`,
+        pagadoPct: null,
+        rutMatch: false,
+        confianza: "alta",
+      });
+    }
   }
 
   if (Number(mov.abono) > 0) {
