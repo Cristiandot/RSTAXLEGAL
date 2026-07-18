@@ -28,7 +28,7 @@ export default async function GeneralPage({
 
   const { data: clientesData } = await supabase
     .from("clientes")
-    .select("id, razon_social, plazo_pago_ventas, plazo_pago_compras, conciliacion_desde")
+    .select("id, razon_social, plazo_pago_ventas, plazo_pago_compras, conciliacion_desde, grupo:grupos_cliente(codigo)")
     .eq("activo", true)
     .order("razon_social");
   const clientes = clientesData ?? [];
@@ -92,7 +92,11 @@ export default async function GeneralPage({
   return (
     <main className="mx-auto max-w-[1200px] px-4 pb-10 sm:px-6">
       <GeneralClient
-        clientes={clientes.map((c) => ({ id: c.id, razonSocial: c.razon_social }))}
+        clientes={clientes.map((c) => ({
+          id: c.id,
+          razonSocial: c.razon_social,
+          codigo: (c.grupo as unknown as { codigo: string | null } | null)?.codigo ?? null,
+        }))}
         clienteSeleccionado={cliente?.id ?? null}
         saldo={saldo}
         totalCxC={totalCxC}

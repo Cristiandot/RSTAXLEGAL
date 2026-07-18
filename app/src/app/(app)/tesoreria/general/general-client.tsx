@@ -5,13 +5,11 @@ import Link from "next/link";
 import { Landmark, ArrowUpRight } from "lucide-react";
 import { formatMonto, formatFecha } from "@/lib/format";
 import { TesoreriaNav } from "../tesoreria-nav";
+import { EmpresaSelect, type EmpresaOpcion } from "../empresa-select";
 
 export type TopContraparte = { nombre: string; rut: string | null; monto: number; docs: number };
 export type MovReciente = { id: string; fecha: string; glosa: string | null; abono: number; cargo: number; estado: string };
 export type CuentaSaldo = { id: string; alias: string; fuente: string; saldo: number | null; pendientes: number };
-
-const selectCls =
-  "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function KpiCard({ label, valor, tono, sub }: { label: string; valor: string; tono?: "ok" | "alerta"; sub?: string }) {
   const color = tono === "ok" ? "text-emerald-600" : tono === "alerta" ? "text-red-600" : "";
@@ -78,7 +76,7 @@ export function GeneralClient({
   movs,
   generado,
 }: {
-  clientes: { id: string; razonSocial: string }[];
+  clientes: EmpresaOpcion[];
   clienteSeleccionado: string | null;
   saldo: number;
   totalCxC: number;
@@ -105,17 +103,11 @@ export function GeneralClient({
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <label className="block text-xs text-muted-foreground">Empresa</label>
-          <select
-            className={`${selectCls} mt-1 w-72`}
+          <EmpresaSelect
+            empresas={clientes}
             value={clienteSeleccionado ?? ""}
-            onChange={(e) => router.push(`/tesoreria/general?cliente=${e.target.value}`)}
-          >
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.razonSocial}
-              </option>
-            ))}
-          </select>
+            onChange={(id) => router.push(`/tesoreria/general?cliente=${id}`)}
+          />
         </div>
         <span className="text-xs text-muted-foreground">Al día {formatFecha(generado)}</span>
       </div>

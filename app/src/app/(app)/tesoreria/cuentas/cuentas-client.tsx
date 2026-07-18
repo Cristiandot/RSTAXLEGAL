@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { actualizarPlazoPago, actualizarConciliacionDesde, enviarEstadoPago } from "../actions";
 import { TesoreriaNav } from "../tesoreria-nav";
+import { EmpresaSelect, type EmpresaOpcion } from "../empresa-select";
 
 export type Aging = {
   vigente: number;
@@ -38,9 +39,6 @@ export type FilaCuenta = {
   diasMora: number;
   bucket: keyof Aging;
 };
-
-const selectCls =
-  "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function KpiCard({ label, valor, tono }: { label: string; valor: string; tono?: "ok" | "alerta" | "fuerte" }) {
   const color = tono === "ok" ? "text-emerald-600" : tono === "alerta" ? "text-red-600" : "";
@@ -87,7 +85,7 @@ export function CuentasClient({
   generado,
 }: {
   tipo: "cobrar" | "pagar";
-  clientes: { id: string; razonSocial: string }[];
+  clientes: EmpresaOpcion[];
   clienteSeleccionado: string | null;
   plazo: number;
   conciliacionDesde: string | null;
@@ -215,17 +213,11 @@ export function CuentasClient({
 
         <div>
           <label className="block text-xs text-muted-foreground">Empresa</label>
-          <select
-            className={`${selectCls} mt-1 w-72`}
+          <EmpresaSelect
+            empresas={clientes}
             value={clienteSeleccionado ?? ""}
-            onChange={(e) => irA({ cliente: e.target.value })}
-          >
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.razonSocial}
-              </option>
-            ))}
-          </select>
+            onChange={(id) => irA({ cliente: id })}
+          />
         </div>
 
         <div>
