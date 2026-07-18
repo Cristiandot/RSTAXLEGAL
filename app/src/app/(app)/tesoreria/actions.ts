@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseCartola } from "@/lib/banco/parsers";
-import { upsertCuenta, insertarMovimientos } from "@/lib/banco/ingesta";
+import { upsertCuenta, insertarMovimientos, actualizarSaldoCuenta } from "@/lib/banco/ingesta";
 import {
   rutKey,
   sugerenciasParaMovimiento,
@@ -130,6 +130,8 @@ export async function subirCartola(
     parsed.movimientos,
   );
   if (res.error) return { ok: false, error: res.error };
+  // Saldo de la cuenta al día con el saldo corrido de la cartola (si lo trae).
+  await actualizarSaldoCuenta(supabase, cuenta.id);
   // Cruce automático al tiro: lo inequívoco se concilia solo.
   const auto = await conciliarAutomaticoCore(supabase, cuenta.id, { creadoPor: importadoPor });
   refrescar();

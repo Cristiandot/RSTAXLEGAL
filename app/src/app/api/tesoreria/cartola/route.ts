@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { parseCartola } from "@/lib/banco/parsers";
-import { upsertCuenta, insertarMovimientos } from "@/lib/banco/ingesta";
+import { upsertCuenta, insertarMovimientos, actualizarSaldoCuenta } from "@/lib/banco/ingesta";
 import { conciliarAutomaticoCore } from "@/lib/banco/conciliacion";
 
 /**
@@ -54,6 +54,8 @@ export async function POST(req: Request) {
   );
   if (res.error) return NextResponse.json({ ok: false, error: res.error }, { status: 500 });
 
+  // Saldo de la cuenta al día con el saldo corrido de la cartola (si lo trae).
+  await actualizarSaldoCuenta(supabase, cuenta.id);
   // Cruce automático al tiro (estilo Chipax): lo inequívoco se concilia solo.
   const auto = await conciliarAutomaticoCore(supabase, cuenta.id, { clienteId: cli.id as string });
 

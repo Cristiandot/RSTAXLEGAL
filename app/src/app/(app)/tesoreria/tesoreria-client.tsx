@@ -55,6 +55,18 @@ export type Movimiento = {
   contraparte: string | null;
 };
 
+/** Cuadratura por cartola importada (archivo): rango, totales y saldo final. */
+export type ResumenCartola = {
+  archivo: string;
+  movs: number;
+  desde: string;
+  hasta: string;
+  abonos: number;
+  cargos: number;
+  saldoFinal: number | null;
+  pendientes: number;
+};
+
 const ESTADOS: { valor: string; etiqueta: string }[] = [
   { valor: "", etiqueta: "Todos" },
   { valor: "pendiente", etiqueta: "Por conciliar" },
@@ -103,11 +115,13 @@ export function TesoreriaClient({
   cuentas,
   cuentaSeleccionada,
   movimientos,
+  cartolas,
   errorCarga,
 }: {
   cuentas: CuentaResumen[];
   cuentaSeleccionada: string | null;
   movimientos: Movimiento[];
+  cartolas: ResumenCartola[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -257,6 +271,46 @@ export function TesoreriaClient({
               <KpiCard label="Neto del período" valor={formatMonto(cuenta.neto)} tono={cuenta.neto >= 0 ? "ok" : "alerta"} />
               <KpiCard label="Por conciliar" valor={`${cuenta.pendientes} / ${cuenta.movimientos}`} />
             </div>
+          )}
+
+          {/* Cuadratura por cartola importada */}
+          {cartolas.length > 0 && (
+            <details className="card-soft mt-5 rounded-xl bg-card p-4">
+              <summary className="cursor-pointer text-sm font-medium">
+                Cartolas importadas ({cartolas.length})
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  rango, totales y saldo final por archivo
+                </span>
+              </summary>
+              <table className="mt-3 w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="py-1.5 pr-2">Archivo</th>
+                    <th className="py-1.5 pr-2">Rango</th>
+                    <th className="py-1.5 pr-2 text-right">Movs</th>
+                    <th className="py-1.5 pr-2 text-right">Abonos</th>
+                    <th className="py-1.5 pr-2 text-right">Cargos</th>
+                    <th className="py-1.5 pr-2 text-right">Saldo final</th>
+                    <th className="py-1.5 text-right">Por conciliar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cartolas.map((c) => (
+                    <tr key={c.archivo} className="border-b border-border/50 last:border-0">
+                      <td className="max-w-[220px] truncate py-1.5 pr-2" title={c.archivo}>{c.archivo}</td>
+                      <td className="whitespace-nowrap py-1.5 pr-2 tabular-nums text-muted-foreground">
+                        {formatFecha(c.desde)} — {formatFecha(c.hasta)}
+                      </td>
+                      <td className="py-1.5 pr-2 text-right tabular-nums">{c.movs}</td>
+                      <td className="py-1.5 pr-2 text-right tabular-nums text-emerald-600">{formatMonto(c.abonos)}</td>
+                      <td className="py-1.5 pr-2 text-right tabular-nums text-red-600">{formatMonto(c.cargos)}</td>
+                      <td className="py-1.5 pr-2 text-right tabular-nums">{c.saldoFinal == null ? "—" : formatMonto(c.saldoFinal)}</td>
+                      <td className="py-1.5 text-right tabular-nums">{c.pendientes > 0 ? c.pendientes : "✓"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
           )}
 
           {/* Filtros */}

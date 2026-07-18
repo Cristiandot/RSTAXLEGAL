@@ -42,6 +42,8 @@ export default async function GeneralPage({
   let topPagar: TopContraparte[] = [];
   let movs: MovReciente[] = [];
   let cuentas: CuentaSaldo[] = [];
+  let mesTotal = 0;
+  let mesResueltos = 0;
 
   if (cliente) {
     const desde = (cliente.conciliacion_desde as string | null) ?? addDias(hoy, -365);
@@ -61,6 +63,15 @@ export default async function GeneralPage({
         .eq("cliente_id", cliente.id)
         .eq("estado", "pendiente"),
     ]);
+
+    // Conciliación del mes en curso (gamificación estilo Chipax "% este mes").
+    const { data: movsMes } = await supabase
+      .from("banco_movimiento")
+      .select("estado")
+      .eq("cliente_id", cliente.id)
+      .gte("fecha", hoy.slice(0, 7) + "-01");
+    mesTotal = (movsMes ?? []).length;
+    mesResueltos = (movsMes ?? []).filter((m) => m.estado !== "pendiente").length;
 
     totalCxC = cxc.reduce((a, d) => a + d.pendiente, 0);
     totalCxP = cxp.reduce((a, d) => a + d.pendiente, 0);
@@ -105,6 +116,8 @@ export default async function GeneralPage({
         topPagar={topPagar}
         cuentas={cuentas}
         movs={movs}
+        mesTotal={mesTotal}
+        mesResueltos={mesResueltos}
         generado={hoy}
       />
     </main>

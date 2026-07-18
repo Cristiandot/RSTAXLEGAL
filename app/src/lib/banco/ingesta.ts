@@ -35,6 +35,31 @@ export async function upsertCuenta(
   return { id: data.id as string };
 }
 
+/**
+ * Actualiza el saldo de la cuenta con el saldo del movimiento más reciente que
+ * lo traiga (las cartolas de banco traen saldo corrido; MP no). Así el saldo
+ * deja de ser un dato manual: se mantiene solo con cada cartola subida.
+ */
+export async function actualizarSaldoCuenta(
+  supabase: SupabaseClient,
+  cuentaId: string,
+): Promise<void> {
+  const { data } = await supabase
+    .from("banco_movimiento")
+    .select("fecha, saldo")
+    .eq("cuenta_id", cuentaId)
+    .not("saldo", "is", null)
+    .order("fecha", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const ultimo = data?.[0];
+  if (!ultimo) return;
+  await supabase
+    .from("banco_cuenta")
+    .update({ saldo_actual: ultimo.saldo, saldo_fecha: ultimo.fecha, updated_at: new Date().toISOString() })
+    .eq("id", cuentaId);
+}
+
 /** Inserta movimientos deduplicando por (cuenta_id, hash). Devuelve cuántos nuevos. */
 export async function insertarMovimientos(
   supabase: SupabaseClient,
