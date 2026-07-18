@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { periodoActual, periodoPorDefecto, etiquetaPeriodo } from "@/lib/periodos";
+import { periodoActual, etiquetaPeriodo } from "@/lib/periodos";
 import {
   ControlRcvClient,
   type EmpresaControl,
@@ -10,9 +10,9 @@ import {
 
 export const metadata = { title: "Control RCV — RS Tax & Legal" };
 
-/** Todos los períodos (YYYY-MM) desde `desde` hasta el mes por defecto (mes anterior al actual). */
-function periodosDesde(desde: string): string[] {
-  const [yF, mF] = periodoPorDefecto().split("-").map(Number);
+/** Todos los períodos (YYYY-MM) desde `desde` hasta `hasta` inclusive. */
+function periodosEntre(desde: string, hasta: string): string[] {
+  const [yF, mF] = hasta.split("-").map(Number);
   const out: string[] = [];
   let [y, m] = desde.split("-").map(Number);
   while (y < yF || (y === yF && m <= mF)) {
@@ -23,13 +23,12 @@ function periodosDesde(desde: string): string[] {
 }
 
 export default async function ControlRcvPage() {
-  // Histórico completo cargado en la BD: 2025 entero + 2026 hasta el mes vigente.
-  // El cliente filtra por año (pestañas), así la grilla no muestra 18 columnas de golpe.
-  const periodos = periodosDesde("2025-01");
-  // Mes EN CURSO (no va en la grilla de meses): alimenta el reporte de avance
-  // del día 23 — acumulado de compras/ventas para que el cliente decida.
+  // Mes EN CURSO incluido: la grilla llega hasta el mes vigente (julio hoy), no
+  // solo hasta el mes cerrado, para que la contadora vea el avance del mes y
+  // pueda enviar el reporte del día 23. El cliente filtra por año (pestañas).
   const periodoEnCurso = periodoActual();
-  const periodosConActual = [...periodos, periodoEnCurso];
+  const periodos = periodosEntre("2025-01", periodoEnCurso);
+  const periodosConActual = periodos; // el mes en curso ya está incluido
   const supabase = await createClient();
 
   const [empresasRes, gruposRes, descargasRes, totalesRes, reportesRes] = await Promise.all([
