@@ -39,6 +39,8 @@ export type Sugerencia = {
   rutMatch: boolean;
   /** El folio del documento aparece en la glosa del movimiento ("PAGO FAC 2075"). */
   folioMatch?: boolean;
+  /** El monto del movimiento cubre solo parte del documento (abono parcial). */
+  parcial?: boolean;
   confianza: "alta" | "media";
 };
 
@@ -237,7 +239,63 @@ export async function sugerenciasParaMovimiento(
     }
   }
 
+  // ── ABONO PARCIAL: documentos de la MISMA contraparte (RUT) con monto mayor
+  // al del movimiento — un pago que cubre parte de una factura grande.
+  if (rutMov && out.length < 10) {
+    const monto = Math.abs(Number(mov.abono) - Number(mov.cargo));
+    if (Number(mov.cargo) > 0) {
+      const { data: parciales } = await supabase
+        .from("rcv_compras")
+        .select("id, folio, fecha_docto, rut_proveedor, razon_social, monto_total")
+        .eq("cliente_id", mov.cliente_id)
+        .eq("rut_proveedor", mov.rut_contraparte)
+        .gt("monto_total", monto)
+        .order("fecha_docto", { ascending: false })
+        .limit(3);
+      for (const c of parciales ?? []) {
+        if (tomados.has(c.id as string)) continue;
+        out.push({
+          docTipo: "compra",
+          docId: c.id as string,
+          ref: `Factura ${c.folio ?? "s/f"}`,
+          contraparte: c.razon_social || c.rut_proveedor,
+          monto: Number(c.monto_total),
+          fecha: c.fecha_docto as string | null,
+          pagadoPct: null,
+          rutMatch: true,
+          parcial: true,
+          confianza: "media",
+        });
+      }
+    } else if (Number(mov.abono) > 0) {
+      const { data: parciales } = await supabase
+        .from("rcv_ventas")
+        .select("id, folio, fecha_docto, rut_cliente, razon_social, monto_total")
+        .eq("cliente_id", mov.cliente_id)
+        .eq("rut_cliente", mov.rut_contraparte)
+        .gt("monto_total", monto)
+        .order("fecha_docto", { ascending: false })
+        .limit(3);
+      for (const v of parciales ?? []) {
+        if (tomados.has(v.id as string)) continue;
+        out.push({
+          docTipo: "venta",
+          docId: v.id as string,
+          ref: `Factura ${v.folio ?? "s/f"}`,
+          contraparte: v.razon_social || v.rut_cliente,
+          monto: Number(v.monto_total),
+          fecha: v.fecha_docto as string | null,
+          pagadoPct: null,
+          rutMatch: true,
+          parcial: true,
+          confianza: "media",
+        });
+      }
+    }
+  }
+
   out.sort((a, b) => {
+    if (!!a.parcial !== !!b.parcial) return a.parcial ? 1 : -1; // exactos primero
     if (a.rutMatch !== b.rutMatch) return a.rutMatch ? -1 : 1;
     if (!!a.folioMatch !== !!b.folioMatch) return a.folioMatch ? -1 : 1;
     const da = a.fecha && mov.fecha ? diasEntre(a.fecha, mov.fecha as string) : 9999;

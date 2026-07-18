@@ -149,6 +149,80 @@ function parseMercadoPago(rows: string[][]): ParsedMov[] {
   return movs;
 }
 
+// ── Mercado Pago SETTLEMENT (informe de liberaciones, CSV ;) ──
+// Columnas: SOURCE_ID;PAYMENT_METHOD_TYPE;TRANSACTION_TYPE;TRANSACTION_AMOUNT;
+// TRANSACTION_DATE;FEE_AMOUNT;SETTLEMENT_DATE;REAL_AMOUNT;TAXES_AMOUNT;...
+// Cada fila trae el BRUTO y su comisión juntos: se emiten como dos movimientos
+// (el bruto calza contra la factura; la comisión queda categorizada).
+function parseMercadoPagoSettlement(rows: string[][]): ParseResult {
+  const head = rows[0]?.map((c) => (c ?? "").toUpperCase().trim()) ?? [];
+  const col = (n: string) => head.indexOf(n);
+  const iId = col("SOURCE_ID");
+  const iMetodo = col("PAYMENT_METHOD_TYPE");
+  const iTipo = col("TRANSACTION_TYPE");
+  const iMonto = col("TRANSACTION_AMOUNT");
+  const iFecha = col("TRANSACTION_DATE");
+  const iFee = col("FEE_AMOUNT");
+  if (iId < 0 || iMonto < 0 || iFecha < 0) {
+    return { movimientos: [], error: "No parece un settlement de Mercado Pago (faltan SOURCE_ID / TRANSACTION_AMOUNT / TRANSACTION_DATE)." };
+  }
+  const METODO: Record<string, string> = {
+    bank_transfer: "transferencia",
+    available_money: "dinero en cuenta",
+    credit_card: "tarjeta de crédito",
+    debit_card: "tarjeta de débito",
+  };
+  const movs: ParsedMov[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const id = (r[iId] ?? "").trim();
+    const fecha = fechaChile(r[iFecha] ?? "");
+    if (!id || !fecha) continue;
+    const monto = Math.round(numMaquina(r[iMonto]));
+    const fee = Math.round(numMaquina(r[iFee] ?? 0));
+    const tipo = (r[iTipo] ?? "").trim();
+    const metodo = METODO[(r[iMetodo] ?? "").trim()] ?? (r[iMetodo] ?? "").trim();
+    const glosa = `${tipo === "SETTLEMENT" ? "Cobro" : tipo} MP${metodo ? ` · ${metodo}` : ""}`;
+    if (monto !== 0) {
+      movs.push({
+        fecha,
+        fecha_hora: /\dT\d/.test(r[iFecha]) ? new Date(r[iFecha]).toISOString() : null,
+        glosa,
+        descripcion: null,
+        rut_contraparte: null,
+        nombre_contraparte: null,
+        referencia: id,
+        referencia_grupo: id,
+        abono: monto > 0 ? monto : 0,
+        cargo: monto < 0 ? -monto : 0,
+        saldo: null,
+        categoria: null,
+        estado: "pendiente",
+        hash: `mpset:${id}`,
+      });
+    }
+    if (fee !== 0) {
+      movs.push({
+        fecha,
+        fecha_hora: null,
+        glosa: "Comisión Mercado Pago",
+        descripcion: null,
+        rut_contraparte: null,
+        nombre_contraparte: null,
+        referencia: id,
+        referencia_grupo: id,
+        abono: fee > 0 ? fee : 0,
+        cargo: fee < 0 ? -fee : 0,
+        saldo: null,
+        categoria: "comision",
+        estado: "pendiente",
+        hash: `mpset:${id}:fee`,
+      });
+    }
+  }
+  return { movimientos: movs };
+}
+
 // ── Genérico (mapeo por encabezado) ──
 const RUT_RE = /(\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK])/;
 function parseGenerico(rows: string[][]): ParseResult {
@@ -225,5 +299,6 @@ export function parseCartola(input: {
     return { movimientos: [], error: `No se pudo leer el archivo: ${(e as Error).message}` };
   }
   if (input.fuente === "mercadopago") return { movimientos: parseMercadoPago(rows) };
+  if (input.fuente === "mercadopago_settlement") return parseMercadoPagoSettlement(rows);
   return parseGenerico(rows);
 }

@@ -571,7 +571,11 @@ export function TesoreriaClient({
                                         <span className="ml-2 tabular-nums text-muted-foreground">
                                           {formatMonto(s.monto)} · {formatFecha(s.fecha)}
                                         </span>
-                                        {s.rutMatch ? (
+                                        {s.parcial ? (
+                                          <Badge variant="outline" className="ml-2 border-amber-200 bg-amber-50 text-amber-700">
+                                            abono parcial · mismo RUT
+                                          </Badge>
+                                        ) : s.rutMatch ? (
                                           <Badge variant="outline" className="ml-2 border-emerald-200 bg-emerald-50 text-emerald-700">
                                             RUT calza
                                           </Badge>

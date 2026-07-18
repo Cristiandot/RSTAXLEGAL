@@ -6,6 +6,7 @@ import { UploadCloud, Loader2, CheckCircle2 } from "lucide-react";
 
 const FUENTES = [
   { valor: "mercadopago", label: "Mercado Pago (cartola)" },
+  { valor: "mercadopago_settlement", label: "Mercado Pago (informe de liberaciones)" },
   { valor: "generico", label: "Otro banco (Excel / CSV con columnas)" },
 ];
 

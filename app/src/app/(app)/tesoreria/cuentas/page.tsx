@@ -15,7 +15,7 @@ export default async function CuentasPage({
 
   const { data: clientesData } = await supabase
     .from("clientes")
-    .select("id, razon_social, rut_empresa, contacto_correo, plazo_pago_ventas, plazo_pago_compras, conciliacion_desde, grupo:grupos_cliente(codigo)")
+    .select("id, razon_social, rut_empresa, contacto_correo, plazo_pago_ventas, plazo_pago_compras, conciliacion_desde, cobranza_texto, grupo:grupos_cliente(codigo)")
     .eq("activo", true)
     .order("razon_social");
   const clientes = clientesData ?? [];
@@ -44,6 +44,21 @@ export default async function CuentasPage({
     if (c.rut_empresa && c.contacto_correo) correoPorRut[rutKey(c.rut_empresa)] = c.contacto_correo;
   }
 
+  // Última gestión de cobranza por deudor ("hace X días", patrón Chipax).
+  const actividadPorRut: Record<string, string> = {};
+  if (cliente && tipo === "cobrar") {
+    const { data: acts } = await supabase
+      .from("cobranza_actividad")
+      .select("rut_deudor, created_at")
+      .eq("cliente_id", cliente.id)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    for (const a of acts ?? []) {
+      const k = rutKey(a.rut_deudor as string);
+      if (!actividadPorRut[k]) actividadPorRut[k] = (a.created_at as string).slice(0, 10);
+    }
+  }
+
   return (
     <main className="mx-auto max-w-[1400px] px-4 pb-10 sm:px-6">
       <CuentasClient
@@ -59,6 +74,8 @@ export default async function CuentasPage({
         aging={aging}
         filas={filas}
         correoPorRut={correoPorRut}
+        actividadPorRut={actividadPorRut}
+        cobranzaTexto={(cliente?.cobranza_texto as string | null) ?? null}
         generado={hoy}
       />
     </main>
