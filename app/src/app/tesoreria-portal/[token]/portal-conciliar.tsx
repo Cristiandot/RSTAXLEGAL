@@ -206,7 +206,11 @@ export function PortalConciliar({
                                     <span className="ml-2 tabular-nums text-muted-foreground">
                                       {formatMonto(s.monto)} · {formatFecha(s.fecha)}
                                     </span>
-                                    {s.rutMatch ? (
+                                    {s.parcial ? (
+                                      <span className="ml-2 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700">
+                                        abono parcial · mismo RUT
+                                      </span>
+                                    ) : s.rutMatch ? (
                                       <span className="ml-2 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] text-emerald-700">
                                         RUT calza
                                       </span>

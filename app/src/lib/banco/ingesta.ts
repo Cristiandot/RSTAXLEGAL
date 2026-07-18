@@ -3,6 +3,7 @@ import type { ParsedMov } from "./parsers";
 
 export const NOMBRE_FUENTE: Record<string, string> = {
   mercadopago: "Mercado Pago",
+  mercadopago_settlement: "Mercado Pago (liberaciones)",
   banco_chile: "Banco de Chile",
   bci: "Banco de Crédito e Inversiones (BCI)",
   santander: "Banco Santander",

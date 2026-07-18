@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { actualizarPlazoPago, actualizarConciliacionDesde, enviarEstadoPago } from "../actions";
+import { actualizarPlazoPago, actualizarConciliacionDesde, enviarEstadoPago, actualizarCobranzaTexto } from "../actions";
 import { TesoreriaNav } from "../tesoreria-nav";
 import { EmpresaSelect, type EmpresaOpcion } from "../empresa-select";
 
@@ -94,6 +94,8 @@ export function CuentasClient({
   aging,
   filas,
   correoPorRut,
+  actividadPorRut,
+  cobranzaTexto,
   generado,
 }: {
   tipo: "cobrar" | "pagar";
@@ -104,6 +106,8 @@ export function CuentasClient({
   aging: Aging;
   filas: FilaCuenta[];
   correoPorRut: Record<string, string>;
+  actividadPorRut: Record<string, string>;
+  cobranzaTexto: string | null;
   generado: string;
 }) {
   const router = useRouter();
@@ -111,7 +115,22 @@ export function CuentasClient({
   const [orden, setOrden] = useState<Orden>(null);
   const [plazoEdit, setPlazoEdit] = useState(String(plazo));
   const [desdeEdit, setDesdeEdit] = useState(conciliacionDesde ?? "");
+  const [textoEdit, setTextoEdit] = useState(cobranzaTexto ?? "");
   const [pending, startTransition] = useTransition();
+
+  // Días desde la última cobranza enviada a un deudor ("hace X días").
+  function diasDesde(iso: string | undefined): number | null {
+    if (!iso) return null;
+    return Math.max(0, Math.round((Date.parse(generado) - Date.parse(iso)) / 86400000));
+  }
+
+  function guardarTexto() {
+    if (!clienteSeleccionado || (textoEdit.trim() || null) === (cobranzaTexto ?? null)) return;
+    startTransition(async () => {
+      const res = await actualizarCobranzaTexto({ clienteId: clienteSeleccionado, texto: textoEdit });
+      if (res.ok) router.refresh();
+    });
+  }
 
   // Cobranza (solo Por cobrar): panel de envío del estado de pago por deudor.
   const rutKey = (r: string | null) => (r ?? "").toUpperCase().replace(/[^0-9K]/g, "");
@@ -279,6 +298,39 @@ export function CuentasClient({
         </div>
       </div>
 
+      {/* Plantilla del correo de cobranza (por empresa) */}
+      {esCobrar && (
+        <details className="card-soft mt-4 rounded-xl bg-card p-4">
+          <summary className="cursor-pointer text-sm font-medium">
+            Plantilla del correo de cobranza
+            <span className="ml-2 text-xs font-normal text-muted-foreground">
+              texto de saludo del estado de pago; vacío = redacción estándar
+            </span>
+          </summary>
+          <div className="mt-3 flex flex-col gap-2">
+            <textarea
+              value={textoEdit}
+              onChange={(e) => setTextoEdit(e.target.value)}
+              rows={3}
+              placeholder="Ej: Estimados, junto con saludar les compartimos el detalle de los documentos pendientes de pago con nuestra empresa:"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                La tabla de documentos, el total y la despedida se agregan siempre.
+              </span>
+              <button
+                onClick={guardarTexto}
+                disabled={pending || (textoEdit.trim() || null) === (cobranzaTexto ?? null)}
+                className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/50 disabled:opacity-40"
+              >
+                Guardar plantilla
+              </button>
+            </div>
+          </div>
+        </details>
+      )}
+
       {/* Aging */}
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <KpiCard label="Vigente" valor={formatMonto(aging.vigente)} tono="ok" />
@@ -369,12 +421,22 @@ export function CuentasClient({
                       {esCobrar && (
                         <TableCell className="text-right">
                           {f.rut ? (
-                            <button
-                              onClick={() => abrirCobranza(f)}
-                              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-muted/50"
-                            >
-                              <Mail className="h-3.5 w-3.5" /> Enviar
-                            </button>
+                            <>
+                              <button
+                                onClick={() => abrirCobranza(f)}
+                                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-muted/50"
+                              >
+                                <Mail className="h-3.5 w-3.5" /> Enviar
+                              </button>
+                              {(() => {
+                                const d = diasDesde(actividadPorRut[rutKey(f.rut)]);
+                                return d == null ? null : (
+                                  <span className="block text-[11px] text-muted-foreground">
+                                    {d === 0 ? "hoy" : `hace ${d}d`}
+                                  </span>
+                                );
+                              })()}
+                            </>
                           ) : (
                             <span className="text-xs text-muted-foreground">sin RUT</span>
                           )}

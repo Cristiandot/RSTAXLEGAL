@@ -162,7 +162,7 @@ export async function enviarEstadoPago(input: {
   const supabase = await createClient();
   const { data: empresa } = await supabase
     .from("clientes")
-    .select("id, razon_social, contacto_correo, plazo_pago_ventas, conciliacion_desde")
+    .select("id, razon_social, contacto_correo, plazo_pago_ventas, conciliacion_desde, cobranza_texto")
     .eq("id", input.clienteId)
     .maybeSingle();
   if (!empresa) return { ok: false, error: "Empresa no encontrada." };
@@ -192,9 +192,12 @@ export async function enviarEstadoPago(input: {
       </tr>`,
     )
     .join("");
+  // Plantilla por empresa (clientes.cobranza_texto); null = redacción estándar.
+  const intro =
+    (empresa.cobranza_texto as string | null)?.trim() ||
+    `Junto con saludar, compartimos el estado de pago de <strong>${deudor}</strong> con <strong>${empresa.razon_social}</strong> al ${formatFecha(hoy)}:`;
   const cuerpo = `
-    <p>Junto con saludar, compartimos el estado de pago de <strong>${deudor}</strong> con
-    <strong>${empresa.razon_social}</strong> al ${formatFecha(hoy)}:</p>
+    <p>${intro}</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px;margin:12px 0;">
       <thead><tr style="background:#f1f5f9;">
         <th style="padding:6px 10px;text-align:left;">Folio</th>
@@ -224,7 +227,35 @@ export async function enviarEstadoPago(input: {
     cc,
   });
   if (!res.ok) return { ok: false, error: res.error };
+
+  // Registro de actividad de cobranza (columna "última gestión" en Por cobrar).
+  const enviadoPor = await usuarioActualId(supabase);
+  await supabase.from("cobranza_actividad").insert({
+    cliente_id: empresa.id,
+    rut_deudor: input.rut,
+    correo,
+    docs: docs.length,
+    total,
+    enviado_por: enviadoPor,
+  });
+  refrescar();
   return { ok: true, docs: docs.length };
+}
+
+/** Guarda el texto introductorio del correo de cobranza de la empresa. */
+export async function actualizarCobranzaTexto(input: {
+  clienteId: string;
+  texto: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const texto = input.texto?.trim() || null;
+  const { error } = await supabase
+    .from("clientes")
+    .update({ cobranza_texto: texto })
+    .eq("id", input.clienteId);
+  if (error) return { ok: false, error: error.message };
+  refrescar();
+  return { ok: true };
 }
 
 const CAMPOS_AUTO = ["auto_conc_rut", "auto_conc_folio", "auto_conc_panel", "auto_conc_monto"] as const;
