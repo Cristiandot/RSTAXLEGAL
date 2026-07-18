@@ -22,6 +22,29 @@ function periodosEntre(desde: string, hasta: string): string[] {
   return out;
 }
 
+/**
+ * Trae TODAS las filas de una consulta paginando de a 1.000. Este proyecto
+ * Supabase tiene un tope duro de 1.000 filas en PostgREST que IGNORA el
+ * `.limit()`, así que con el histórico (2025+2026 × ~127 empresas = 2.400+
+ * filas) la consulta se truncaba en silencio y los meses cortados salían como
+ * "falta". Paginar con `.range()` es la única forma robusta e independiente de
+ * la configuración del proyecto. Requiere un orden estable para no saltar filas.
+ */
+async function traerTodo<T>(
+  construir: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<{ rows: T[]; error: string | null }> {
+  const TAM = 1000;
+  const rows: T[] = [];
+  for (let from = 0; ; from += TAM) {
+    const { data, error } = await construir(from, from + TAM - 1);
+    if (error) return { rows, error: error.message };
+    const lote = data ?? [];
+    rows.push(...lote);
+    if (lote.length < TAM) break;
+  }
+  return { rows, error: null };
+}
+
 export default async function ControlRcvPage() {
   // Mes EN CURSO incluido: la grilla llega hasta el mes vigente (julio hoy), no
   // solo hasta el mes cerrado, para que la contadora vea el avance del mes y
@@ -31,7 +54,7 @@ export default async function ControlRcvPage() {
   const periodosConActual = periodos; // el mes en curso ya está incluido
   const supabase = await createClient();
 
-  const [empresasRes, gruposRes, descargasRes, totalesRes, reportesRes] = await Promise.all([
+  const [empresasRes, gruposRes, descargasAll, totalesAll, reportesRes] = await Promise.all([
     // Solo empresas a las que les llevamos el RCV/contabilidad: hacen F29 (que se
     // arma del RCV) o contabilidad completa. Excluye casa particular, solo-RRHH,
     // solo-legal y trabajos puntuales.
@@ -43,18 +66,29 @@ export default async function ControlRcvPage() {
       .or("hace_f29.eq.true,hace_contabilidad_completa.eq.true")
       .order("razon_social"),
     supabase.from("grupos_cliente").select("id, codigo"),
-    supabase
-      .from("rcv_descargas")
-      .select(
-        "cliente_id, periodo, ventas_docs, compras_docs, ventas_docs_sii, compras_docs_sii, ventas_total_sii, compras_total_sii, alto_volumen, ultima_descarga",
-      )
-      .in("periodo", periodosConActual)
-      // ~127 empresas × 19 meses > 1.000: hay que subir el tope de PostgREST o
-      // las filas se truncan en silencio y los meses cortados salen como "falta".
-      .limit(100000),
+    // Paginadas (ver traerTodo): superan el tope de 1.000 filas de PostgREST.
+    traerTodo<DescargaRcv>((from, to) =>
+      supabase
+        .from("rcv_descargas")
+        .select(
+          "cliente_id, periodo, ventas_docs, compras_docs, ventas_docs_sii, compras_docs_sii, ventas_total_sii, compras_total_sii, alto_volumen, ultima_descarga",
+        )
+        .in("periodo", periodosConActual)
+        .order("cliente_id")
+        .order("periodo")
+        .range(from, to),
+    ),
     // Totales del registro por empresa y mes (ventas, compras y NC) para la
     // cuadratura visual de la contadora contra el SII (+ el mes en curso).
-    supabase.from("v_rcv_totales_periodo").select("*").in("periodo", periodosConActual).limit(100000),
+    traerTodo<TotalesRcv>((from, to) =>
+      supabase
+        .from("v_rcv_totales_periodo")
+        .select("*")
+        .in("periodo", periodosConActual)
+        .order("cliente_id")
+        .order("periodo")
+        .range(from, to),
+    ),
     // Reportes de avance ya enviados este mes (ritual del 23).
     supabase
       .from("rcv_reporte_avance")
@@ -76,8 +110,8 @@ export default async function ControlRcvPage() {
     correoEmpresa: (c.correo_empresa as string | null) ?? null,
   }));
 
-  const descargas = (descargasRes.data ?? []) as DescargaRcv[];
-  const totales = (totalesRes.data ?? []) as TotalesRcv[];
+  const descargas = descargasAll.rows;
+  const totales = totalesAll.rows;
   const reportes = (reportesRes.data ?? []) as ReporteAvance[];
 
   return (
@@ -90,7 +124,7 @@ export default async function ControlRcvPage() {
         totales={totales}
         periodoEnCurso={periodoEnCurso}
         reportes={reportes}
-        errorCarga={empresasRes.error?.message ?? descargasRes.error?.message ?? null}
+        errorCarga={empresasRes.error?.message ?? descargasAll.error ?? totalesAll.error ?? null}
       />
     </main>
   );
