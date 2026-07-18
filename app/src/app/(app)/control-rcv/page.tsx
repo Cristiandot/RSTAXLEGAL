@@ -34,7 +34,7 @@ export default async function ControlRcvPage() {
     supabase
       .from("rcv_descargas")
       .select(
-        "cliente_id, periodo, ventas_docs, compras_docs, ventas_docs_sii, compras_docs_sii, alto_volumen, ultima_descarga",
+        "cliente_id, periodo, ventas_docs, compras_docs, ventas_docs_sii, compras_docs_sii, ventas_total_sii, compras_total_sii, alto_volumen, ultima_descarga",
       )
       .in("periodo", periodos),
     // Totales del registro por empresa y mes (ventas, compras y NC) para la

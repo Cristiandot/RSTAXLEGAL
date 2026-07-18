@@ -41,6 +41,9 @@ export type DescargaRcv = {
   compras_docs: number;
   ventas_docs_sii: number | null;
   compras_docs_sii: number | null;
+  /** Montos del resumen oficial del SII (NC restadas). null = cuadratura vieja, solo por conteo. */
+  ventas_total_sii: number | null;
+  compras_total_sii: number | null;
   alto_volumen: boolean;
   ultima_descarga: string;
 };
@@ -78,12 +81,17 @@ function etiquetaCorta(periodo: string, multiAnio: boolean): string {
 /** Estado de un mes concreto de una empresa. */
 type EstadoCelda = "sin-clave" | "falta" | "parcial" | "sin-verificar" | "cuadra" | "revisar";
 
-function estadoDeCelda(d: DescargaRcv | null, tieneClave: boolean): EstadoCelda {
+function estadoDeCelda(d: DescargaRcv | null, tieneClave: boolean, tot: TotalesRcv | null): EstadoCelda {
   if (!tieneClave) return "sin-clave";
   if (!d) return "falta";
   if (d.alto_volumen) return "parcial";
   if (d.ventas_docs_sii === null || d.compras_docs_sii === null) return "sin-verificar";
-  return d.ventas_docs === d.ventas_docs_sii && d.compras_docs === d.compras_docs_sii ? "cuadra" : "revisar";
+  if (d.ventas_docs !== d.ventas_docs_sii || d.compras_docs !== d.compras_docs_sii) return "revisar";
+  // Cuadratura por MONTO (cuando la descarga/cuadratura guardó los totales del SII):
+  // los conteos pueden calzar y aun así diferir la plata (doc reemplazado, boleta ajustada).
+  if (d.ventas_total_sii !== null && Number(tot?.ventas_total ?? 0) !== Number(d.ventas_total_sii)) return "revisar";
+  if (d.compras_total_sii !== null && Number(tot?.compras_total ?? 0) !== Number(d.compras_total_sii)) return "revisar";
+  return "cuadra";
 }
 
 /** Rango para ordenar por el estado de un mes: de mejor (cuadra) a peor (sin clave). */
@@ -139,7 +147,8 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, tot
     const base = empresas.map((e) => {
       const celdas = periodos.map((p) => {
         const d = mapa.get(`${e.id}|${p}`) ?? null;
-        return { d, estado: estadoDeCelda(d, e.tieneClave) };
+        const tot = mapaTotales.get(`${e.id}|${p}`) ?? null;
+        return { d, tot, estado: estadoDeCelda(d, e.tieneClave, tot) };
       });
       const descargados = celdas.filter((c) => c.d !== null).length;
       const faltanMeses = e.tieneClave && descargados < periodos.length;
@@ -155,7 +164,7 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, tot
       const [lb, nb] = claveOrdenGrupo(b.empresa.grupoCodigo);
       return la.localeCompare(lb) || na - nb || a.empresa.razon_social.localeCompare(b.empresa.razon_social, "es");
     });
-  }, [empresas, periodos, mapa]);
+  }, [empresas, periodos, mapa, mapaTotales]);
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
@@ -307,20 +316,22 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, tot
                   <TableCell key={periodos[i]} className="px-1 text-center">
                     {f.empresa.tieneClave ? (
                       <Link href={`/control-rcv/${f.empresa.id}?periodo=${periodos[i]}`} className="inline-block hover:opacity-80" title="Ver detalle del mes">
-                        <CeldaEstado estado={c.estado} d={c.d} />
+                        <CeldaEstado estado={c.estado} d={c.d} tot={c.tot} />
                       </Link>
                     ) : (
-                      <CeldaEstado estado={c.estado} d={c.d} />
+                      <CeldaEstado estado={c.estado} d={c.d} tot={c.tot} />
                     )}
                   </TableCell>
                 ))}
 
                 <CeldaTotales
                   tot={mapaTotales.get(`${f.empresa.id}|${mesTotales}`) ?? null}
+                  d={mapa.get(`${f.empresa.id}|${mesTotales}`) ?? null}
                   registro="ventas"
                 />
                 <CeldaTotales
                   tot={mapaTotales.get(`${f.empresa.id}|${mesTotales}`) ?? null}
+                  d={mapa.get(`${f.empresa.id}|${mesTotales}`) ?? null}
                   registro="compras"
                 />
 
@@ -353,7 +364,7 @@ function LeyendaItem({ clase, texto }: { clase: string; texto: string }) {
 }
 
 /** Celda por (empresa, período): estado de descarga + cuadratura, con el detalle en el tooltip. */
-function CeldaEstado({ estado, d }: { estado: EstadoCelda; d: DescargaRcv | null }) {
+function CeldaEstado({ estado, d, tot }: { estado: EstadoCelda; d: DescargaRcv | null; tot: TotalesRcv | null }) {
   const { clase, glifo } = ESTILO_CELDA[estado];
   if (estado === "sin-clave") return <span className="text-slate-300">·</span>;
 
@@ -362,10 +373,17 @@ function CeldaEstado({ estado, d }: { estado: EstadoCelda; d: DescargaRcv | null
     d && d.ventas_docs_sii !== null
       ? `${d.ventas_docs_sii} ventas / ${d.compras_docs_sii} compras`
       : "sin verificar";
+  // Cuadratura por monto: solo cuando la descarga guardó los totales del SII.
+  const montos =
+    d && d.ventas_total_sii !== null
+      ? `\nVentas: ${formatMonto(Number(tot?.ventas_total ?? 0))} (SII ${formatMonto(Number(d.ventas_total_sii))})` +
+        `\nCompras: ${formatMonto(Number(tot?.compras_total ?? 0))} (SII ${formatMonto(Number(d.compras_total_sii ?? 0))})`
+      : "";
   const titulo =
     estado === "falta"
       ? "No descargado"
       : `Descargado: ${nuestros}\nSegún SII: ${sii}` +
+        montos +
         (estado === "parcial" ? "\nAlto volumen: falta descarga asíncrona" : "") +
         (estado === "revisar" ? "\n⚠ No cuadra con el SII" : "") +
         (d?.ultima_descarga ? `\nDescargado el ${new Date(d.ultima_descarga).toLocaleDateString("es-CL")}` : "");
@@ -383,18 +401,35 @@ function CeldaEstado({ estado, d }: { estado: EstadoCelda; d: DescargaRcv | null
 /**
  * Totales del mes seleccionado para la cuadratura de la contadora contra el
  * SII: total del registro (las NC vienen negativas, o sea es el neto) y, si
- * hay notas de crédito, su monto y cantidad debajo.
+ * hay notas de crédito, su monto y cantidad debajo. Si la descarga guardó el
+ * total oficial del SII y no calza con el nuestro, se muestra en ámbar.
  */
-function CeldaTotales({ tot, registro }: { tot: TotalesRcv | null; registro: "ventas" | "compras" }) {
+function CeldaTotales({ tot, d, registro }: { tot: TotalesRcv | null; d: DescargaRcv | null; registro: "ventas" | "compras" }) {
   const total = registro === "ventas" ? tot?.ventas_total : tot?.compras_total;
   const nc = registro === "ventas" ? tot?.ventas_nc_total : tot?.compras_nc_total;
   const ncDocs = (registro === "ventas" ? tot?.ventas_nc_docs : tot?.compras_nc_docs) ?? 0;
+  const totalSii = registro === "ventas" ? d?.ventas_total_sii : d?.compras_total_sii;
+  const difiereSii = totalSii !== null && totalSii !== undefined && Number(total ?? 0) !== Number(totalSii);
   if (total === null || total === undefined) {
-    return <TableCell className="text-right text-muted-foreground/50">—</TableCell>;
+    return (
+      <TableCell className="text-right">
+        <span className="text-muted-foreground/50">—</span>
+        {difiereSii && (
+          <div className="text-[11px] font-medium text-amber-600 tabular-nums" title="El SII declara movimientos que no tenemos descargados">
+            SII {formatMonto(Number(totalSii))}
+          </div>
+        )}
+      </TableCell>
+    );
   }
   return (
     <TableCell className="text-right">
       <div className="font-medium tabular-nums">{formatMonto(Number(total))}</div>
+      {difiereSii && (
+        <div className="text-[11px] font-medium text-amber-600 tabular-nums" title="No cuadra con el total que declara el SII">
+          SII {formatMonto(Number(totalSii))}
+        </div>
+      )}
       {ncDocs > 0 && (
         <div className="text-[11px] text-red-500 tabular-nums" title={`${ncDocs} nota${ncDocs === 1 ? "" : "s"} de crédito incluida${ncDocs === 1 ? "" : "s"} en el total`}>
           NC {formatMonto(Number(nc ?? 0))} ({ncDocs})
