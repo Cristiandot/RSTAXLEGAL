@@ -58,6 +58,11 @@ export type TotalesRcv = {
   compras_total: number | string | null;
   compras_nc_total: number | string | null;
   compras_nc_docs: number | null;
+  // Boletas de honorarios del período (brutos, sin anuladas).
+  bhe_emitidas_total: number | string | null;
+  bhe_emitidas_docs: number | null;
+  bhe_recibidas_total: number | string | null;
+  bhe_recibidas_docs: number | null;
 };
 
 type Props = {
@@ -187,6 +192,10 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, tot
           return tot?.ventas_total !== null && tot?.ventas_total !== undefined ? Number(tot.ventas_total) : null;
         case "compras":
           return tot?.compras_total !== null && tot?.compras_total !== undefined ? Number(tot.compras_total) : null;
+        case "bhe_emitidas":
+          return tot?.bhe_emitidas_total !== null && tot?.bhe_emitidas_total !== undefined ? Number(tot.bhe_emitidas_total) : null;
+        case "bhe_recibidas":
+          return tot?.bhe_recibidas_total !== null && tot?.bhe_recibidas_total !== undefined ? Number(tot.bhe_recibidas_total) : null;
         case "estado":
           // Estado global: al día → sin verificar → revisar → faltan → sin clave.
           if (!f.empresa.tieneClave) return 4;
@@ -218,10 +227,10 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, tot
         <h1 className="text-xl font-semibold">Control de descargas RCV</h1>
         <p className="text-sm text-muted-foreground">
           Por empresa y mes: si el Registro de Compras y Ventas está descargado del SII y si los
-          documentos cuadran con lo que el SII declara. Las columnas de Ventas y Compras traen los
-          totales del mes elegido (con las notas de crédito ya restadas y detalladas debajo) para
-          cuadrar contra el SII sin entrar empresa por empresa. Pasa el cursor por una celda para
-          ver el detalle.
+          documentos cuadran con lo que el SII declara. Las columnas de Ventas, Compras y BHE
+          (boletas de honorarios emitidas y recibidas, brutos) traen los totales del mes elegido —
+          con las notas de crédito ya restadas y detalladas debajo — para cuadrar contra el SII sin
+          entrar empresa por empresa. Pasa el cursor por una celda para ver el detalle.
         </p>
       </div>
 
@@ -290,6 +299,12 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, tot
               <ThSort col="compras" orden={orden} setOrden={setOrden} className="text-right">
                 Compras {etiquetaCorta(mesTotales, multiAnio)}
               </ThSort>
+              <ThSort col="bhe_emitidas" orden={orden} setOrden={setOrden} className="text-right">
+                <span title={`Boletas de honorarios emitidas — brutos de ${etiquetaCorta(mesTotales, multiAnio)}`}>BHE emit.</span>
+              </ThSort>
+              <ThSort col="bhe_recibidas" orden={orden} setOrden={setOrden} className="text-right">
+                <span title={`Boletas de honorarios recibidas (incluye BTE) — brutos de ${etiquetaCorta(mesTotales, multiAnio)}`}>BHE recib.</span>
+              </ThSort>
               <ThSort col="estado" orden={orden} setOrden={setOrden} className="text-center">
                 Estado
               </ThSort>
@@ -334,6 +349,8 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, tot
                   d={mapa.get(`${f.empresa.id}|${mesTotales}`) ?? null}
                   registro="compras"
                 />
+                <CeldaBhe tot={mapaTotales.get(`${f.empresa.id}|${mesTotales}`) ?? null} tipo="emitidas" />
+                <CeldaBhe tot={mapaTotales.get(`${f.empresa.id}|${mesTotales}`) ?? null} tipo="recibidas" />
 
                 <TableCell className="text-center">
                   <EstadoEmpresa fila={f} totalMeses={periodos.length} />
@@ -342,7 +359,7 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, tot
             ))}
             {filtradas.length === 0 && (
               <TableRow>
-                <TableCell colSpan={periodos.length + 4} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={periodos.length + 6} className="py-8 text-center text-muted-foreground">
                   Sin empresas para el filtro.
                 </TableCell>
               </TableRow>
@@ -435,6 +452,26 @@ function CeldaTotales({ tot, d, registro }: { tot: TotalesRcv | null; d: Descarg
           NC {formatMonto(Number(nc ?? 0))} ({ncDocs})
         </div>
       )}
+    </TableCell>
+  );
+}
+
+/**
+ * Boletas de honorarios del mes seleccionado (brutos, anuladas excluidas):
+ * emitidas por la empresa (profesionales que boletean) o recibidas (incluye BTE).
+ */
+function CeldaBhe({ tot, tipo }: { tot: TotalesRcv | null; tipo: "emitidas" | "recibidas" }) {
+  const total = tipo === "emitidas" ? tot?.bhe_emitidas_total : tot?.bhe_recibidas_total;
+  const docs = (tipo === "emitidas" ? tot?.bhe_emitidas_docs : tot?.bhe_recibidas_docs) ?? 0;
+  if (total === null || total === undefined) {
+    return <TableCell className="text-right text-muted-foreground/50">—</TableCell>;
+  }
+  return (
+    <TableCell className="text-right">
+      <div className="font-medium tabular-nums">{formatMonto(Number(total))}</div>
+      <div className="text-[11px] text-muted-foreground tabular-nums">
+        {docs} boleta{docs === 1 ? "" : "s"}
+      </div>
     </TableCell>
   );
 }
