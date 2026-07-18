@@ -26,6 +26,7 @@ import {
   KeyRound,
   ScrollText,
   Tags,
+  ReceiptText,
   Home,
   Scale,
   Send,
@@ -296,6 +297,15 @@ export const MODULOS: SeccionModulos[] = [
           "Diccionario de reglas (nombre → categoría) y auto-clasificación de proveedores exentos por empresa, con clasificación manual de lo que no calza.",
         href: "/clasificacion",
         icon: Tags,
+        estado: "activo",
+      },
+      {
+        key: "honorarios",
+        label: "Honorarios",
+        descripcion:
+          "Boletas de honorarios recibidas por empresa, descargadas del SII: totales de brutos, retención y líquido por año, y estado por cliente (con información / sin información).",
+        href: "/contabilidad/honorarios",
+        icon: ReceiptText,
         estado: "activo",
       },
       {

@@ -8,16 +8,8 @@ import { activarContabilidadCompleta } from "./actions";
 import { SelectorPeriodo } from "@/components/selector-periodo";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
-import {
-  claseEstado,
-  type ConciliacionRow,
-  type UsuarioOpcion,
-} from "@/lib/ciclos";
-import {
-  CATEGORIAS_ADICIONALES,
-  CATEGORIAS_PRINCIPALES,
-  type CategoriaDocumento,
-} from "./categorias";
+import { type ConciliacionRow } from "@/lib/ciclos";
+import { type CategoriaDocumento } from "./categorias";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -46,18 +38,12 @@ export type RcvResumenFila = {
   cliente_id: string;
   docs_compras: number;
   docs_ventas: number;
+  docs_honorarios: number;
   iva_credito_rcv: number;
   iva_debito_rcv: number;
   f29_iva_debito: number | null;
   f29_iva_credito: number | null;
 };
-
-const ESTADOS = [
-  "Sin iniciar",
-  "Descargando",
-  "Listo para conciliar",
-  "Conciliado",
-];
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -82,22 +68,6 @@ function ResumenCard({
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className={`mt-0.5 text-2xl font-semibold ${color}`}>{valor}</div>
     </div>
-  );
-}
-
-function BadgeKame({ estado }: { estado: string | null }) {
-  if (!estado) return <span className="text-muted-foreground">—</span>;
-  return estado === "ON" ? (
-    <Badge
-      variant="outline"
-      className="border-emerald-200 bg-emerald-50 text-emerald-700"
-    >
-      ON
-    </Badge>
-  ) : (
-    <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
-      OFF
-    </Badge>
   );
 }
 
@@ -204,33 +174,75 @@ function CeldaRcv({
   );
 }
 
-/** Mini-checklist documental de la fila: una sigla por categoría principal. */
+/**
+ * Mini-checklist documental de la fila. Tres ítems (pedido de Cristian
+ * 17-07-2026): RCV (compras+ventas del SII), BH boletas de honorarios y BT
+ * boletas a terceros. Se encienden con datos ya importados del SII O con un
+ * archivo subido; el resto de las categorías cuenta en el "+N".
+ * BT se descarga junto con las BH (mismo informe de recibidas del SII), por
+ * eso comparte su señal.
+ */
 function ChecklistDocs({
   conteos,
   adicionales,
+  rcv,
 }: {
   conteos: Record<string, number>;
   adicionales: number;
+  rcv?: RcvResumenFila;
 }) {
+  const nC = rcv?.docs_compras ?? 0;
+  const nV = rcv?.docs_ventas ?? 0;
+  const nH = rcv?.docs_honorarios ?? 0;
+  const archRcv = (conteos["fact_compras"] ?? 0) + (conteos["fact_ventas"] ?? 0);
+  const archHon = conteos["honorarios"] ?? 0;
+  const detalleSii = (n: number) => (n > 0 ? `${n} doc${n > 1 ? "s" : ""} del SII` : null);
+  const detalleArch = (n: number) => (n > 0 ? `${n} archivo${n > 1 ? "s" : ""}` : null);
+  const arma = (partes: (string | null)[]) =>
+    partes.filter(Boolean).join(" + ") || "pendiente";
+
+  const chips = [
+    {
+      key: "rcv",
+      corta: "RCV",
+      on: nC > 0 || nV > 0 || archRcv > 0,
+      title: `Libros RCV del SII (compras y ventas): ${arma([
+        nC + nV > 0 ? `C·${nC} V·${nV} del SII` : null,
+        detalleArch(archRcv),
+      ])}`,
+    },
+    {
+      key: "bh",
+      corta: "BH",
+      on: nH > 0 || archHon > 0,
+      title: `Boletas de honorarios recibidas: ${arma([
+        detalleSii(nH),
+        detalleArch(archHon),
+      ])}`,
+    },
+    {
+      key: "bt",
+      corta: "BT",
+      on: nH > 0 || archHon > 0,
+      title:
+        "Boletas a terceros (BTE): vienen incluidas en la descarga de boletas de honorarios del SII (la empresa es el receptor).",
+    },
+  ];
   return (
     <div className="flex items-center gap-1">
-      {CATEGORIAS_PRINCIPALES.map((c) => {
-        const n = conteos[c.value] ?? 0;
-        return (
-          <span
-            key={c.value}
-            title={`${c.label}: ${n > 0 ? `${n} archivo${n > 1 ? "s" : ""}` : "pendiente"}`}
-            className={`inline-flex h-6 min-w-7 items-center justify-center rounded-md border px-1 text-[11px] font-semibold ${
-              n > 0
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-border bg-muted/40 text-muted-foreground/60"
-            }`}
-          >
-            {c.corta}
-            {n > 1 ? `·${n}` : ""}
-          </span>
-        );
-      })}
+      {chips.map((c) => (
+        <span
+          key={c.key}
+          title={c.title}
+          className={`inline-flex h-6 min-w-8 items-center justify-center rounded-md border px-1 text-[11px] font-semibold ${
+            c.on
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-border bg-muted/40 text-muted-foreground/60"
+          }`}
+        >
+          {c.corta}
+        </span>
+      ))}
       {adicionales > 0 ? (
         <span
           className="inline-flex h-6 items-center justify-center rounded-md border border-sky-200 bg-sky-50 px-1.5 text-[11px] font-semibold text-sky-700"
@@ -246,14 +258,12 @@ function ChecklistDocs({
 export function ContabilidadClient({
   periodo,
   filas,
-  usuarios,
   documentos,
   rcvResumen = [],
   errorCarga,
 }: {
   periodo: string;
   filas: ConciliacionRow[];
-  usuarios: UsuarioOpcion[];
   documentos: DocumentoContable[];
   rcvResumen?: RcvResumenFila[];
   errorCarga: string | null;
@@ -264,11 +274,7 @@ export function ContabilidadClient({
   // solo las empresas activadas (pilotos); el resto queda en standby y se va
   // activando una a una desde la misma grilla.
   const [contabF, setContabF] = useState("activadas");
-  const [estadoF, setEstadoF] = useState("");
   const [docsF, setDocsF] = useState("");
-  const [kameF, setKameF] = useState("");
-  const [saludF, setSaludF] = useState("");
-  const [respF, setRespF] = useState("");
   const [orden, setOrden] = useState<Orden>(null);
 
   const rcvPorCliente = useMemo(
@@ -289,19 +295,32 @@ export function ContabilidadClient({
 
   const conteosDe = (clienteId: string) =>
     conteosPorCliente.get(clienteId) ?? {};
+  // Todo lo que no está en el checklist (RCV/BH/BT) cuenta en el "+N"
   const adicionalesDe = (clienteId: string) => {
     const c = conteosDe(clienteId);
-    return CATEGORIAS_ADICIONALES.reduce(
-      (acc, cat) => acc + (c[cat.value] ?? 0),
-      (c["otro"] ?? 0),
+    return ["boleta_ventas", "boleta_compras", "otro_gasto", "otro_ingreso", "otro"].reduce(
+      (acc, cat) => acc + (c[cat] ?? 0),
+      0,
     );
   };
+  // Un documento "está" si alguien subió el archivo O si ya se importó del SII
   const facturasCompletas = (clienteId: string) => {
     const c = conteosDe(clienteId);
-    return (c["fact_compras"] ?? 0) > 0 && (c["fact_ventas"] ?? 0) > 0;
+    const r = rcvPorCliente.get(clienteId);
+    return (
+      ((c["fact_compras"] ?? 0) > 0 || (r?.docs_compras ?? 0) > 0) &&
+      ((c["fact_ventas"] ?? 0) > 0 || (r?.docs_ventas ?? 0) > 0)
+    );
   };
-  const sinDocumentos = (clienteId: string) =>
-    Object.keys(conteosDe(clienteId)).length === 0;
+  const sinDocumentos = (clienteId: string) => {
+    const r = rcvPorCliente.get(clienteId);
+    return (
+      Object.keys(conteosDe(clienteId)).length === 0 &&
+      (r?.docs_compras ?? 0) === 0 &&
+      (r?.docs_ventas ?? 0) === 0 &&
+      (r?.docs_honorarios ?? 0) === 0
+    );
+  };
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
@@ -312,37 +331,25 @@ export function ContabilidadClient({
       }
       if (contabF === "activadas" && !rcvPorCliente.has(c.cliente_id)) return false;
       if (contabF === "standby" && rcvPorCliente.has(c.cliente_id)) return false;
-      if (estadoF && c.estado !== estadoF) return false;
       if (docsF === "completos" && !facturasCompletas(c.cliente_id)) return false;
       if (docsF === "parciales" && (facturasCompletas(c.cliente_id) || sinDocumentos(c.cliente_id))) return false;
       if (docsF === "sin_docs" && !sinDocumentos(c.cliente_id)) return false;
-      if (kameF && c.kame_cert_estado !== kameF) return false;
-      if (saludF === "si" && !c.es_profesional_salud) return false;
-      if (saludF === "no" && c.es_profesional_salud) return false;
-      if (respF === "__SIN_ASIGNAR__") {
-        if (c.responsable) return false;
-      } else if (respF && c.responsable !== respF) return false;
       return true;
     });
     if (!orden) return out;
     const valor = (c: ConciliacionRow): unknown => {
       switch (orden.col) {
         case "cliente": return c.razon_social;
-        case "kame": return c.kame_cert_estado;
-        case "salud": return c.es_profesional_salud ? 0 : 1;
-        case "estado": return c.estado;
-        case "responsable": return c.responsable;
         case "docs": {
           const conteo = conteosDe(c.cliente_id);
           return -Object.values(conteo).reduce((a, b) => a + b, 0);
         }
-        case "iva": return c.es_profesional_salud ? c.iva_salud_ejecuciones : null;
         default: return null;
       }
     };
     return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filas, buscar, contabF, estadoF, docsF, kameF, saludF, respF, orden, conteosPorCliente, rcvPorCliente]);
+  }, [filas, buscar, contabF, docsF, orden, conteosPorCliente, rcvPorCliente]);
 
   const resumen: {
     label: string;
@@ -361,19 +368,9 @@ export function ContabilidadClient({
       ).length,
     },
     {
-      label: "Facturas C+V",
+      label: "RCV completo",
       valor: filas.filter((c) => facturasCompletas(c.cliente_id)).length,
       tono: "ok",
-    },
-    {
-      label: "Conciliados",
-      valor: filas.filter((c) => c.estado === "Conciliado").length,
-      tono: "ok",
-    },
-    {
-      label: "KAME OFF",
-      valor: filas.filter((c) => c.kame_cert_estado === "OFF").length,
-      tono: "alerta",
     },
   ];
 
@@ -389,7 +386,7 @@ export function ContabilidadClient({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {resumen.map((r) => (
           <ResumenCard
             key={r.label}
@@ -434,60 +431,9 @@ export function ContabilidadClient({
           onChange={(e) => setDocsF(e.target.value)}
         >
           <option value="">Docs: todos</option>
-          <option value="completos">Facturas C+V completas</option>
+          <option value="completos">RCV completo (compras y ventas)</option>
           <option value="parciales">Carga parcial</option>
           <option value="sin_docs">Sin documentos</option>
-        </select>
-
-        <select
-          aria-label="Estado"
-          className={selectCls}
-          value={estadoF}
-          onChange={(e) => setEstadoF(e.target.value)}
-        >
-          <option value="">Todos los estados</option>
-          {ESTADOS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-
-        <select
-          aria-label="KAME"
-          className={selectCls}
-          value={kameF}
-          onChange={(e) => setKameF(e.target.value)}
-        >
-          <option value="">KAME: todos</option>
-          <option value="ON">KAME ON</option>
-          <option value="OFF">KAME OFF</option>
-        </select>
-
-        <select
-          aria-label="Salud"
-          className={selectCls}
-          value={saludF}
-          onChange={(e) => setSaludF(e.target.value)}
-        >
-          <option value="">Todos</option>
-          <option value="si">Solo Salud (IVA semanal)</option>
-          <option value="no">No salud</option>
-        </select>
-
-        <select
-          aria-label="Responsable"
-          className={selectCls}
-          value={respF}
-          onChange={(e) => setRespF(e.target.value)}
-        >
-          <option value="">Todos los responsables</option>
-          <option value="__SIN_ASIGNAR__">Sin asignar</option>
-          {usuarios.map((u) => (
-            <option key={u.id} value={u.nombre}>
-              {u.nombre}
-            </option>
-          ))}
         </select>
 
         <span className="ml-auto text-sm text-muted-foreground">
@@ -505,22 +451,17 @@ export function ContabilidadClient({
         <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[240px]">Cliente</ThSort>
+              <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[280px]">Cliente</ThSort>
               <TableHead>RUT</TableHead>
               <ThSort col="docs" orden={orden} setOrden={setOrden}>Documentos del mes</ThSort>
               <TableHead>Libros RCV</TableHead>
-              <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
-              <ThSort col="kame" orden={orden} setOrden={setOrden}>KAME</ThSort>
-              <ThSort col="salud" orden={orden} setOrden={setOrden}>Salud</ThSort>
-              <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
-              <ThSort col="iva" orden={orden} setOrden={setOrden}>IVA cambios</ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={4}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -548,6 +489,7 @@ export function ContabilidadClient({
                     <ChecklistDocs
                       conteos={conteosDe(c.cliente_id)}
                       adicionales={adicionalesDe(c.cliente_id)}
+                      rcv={rcvPorCliente.get(c.cliente_id)}
                     />
                   </TableCell>
                   <TableCell>
@@ -563,42 +505,6 @@ export function ContabilidadClient({
                       />
                     )}
                   </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={claseEstado(c.estado)}>
-                      {c.estado}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <BadgeKame estado={c.kame_cert_estado} />
-                  </TableCell>
-                  <TableCell>
-                    {c.es_profesional_salud ? (
-                      <Badge
-                        variant="outline"
-                        className="border-pink-200 bg-pink-50 text-pink-700"
-                      >
-                        Salud
-                      </Badge>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                  <TableCell>{c.responsable ?? "—"}</TableCell>
-                  <TableCell>
-                    {c.es_profesional_salud ? (
-                      c.iva_salud_ejecuciones > 0 ? (
-                        <span>
-                          <strong>{c.iva_salud_ejecuciones}</strong> cambios
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          Sin cambios
-                        </span>
-                      )
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
                 </TableRow>
               ))
             )}
@@ -607,9 +513,11 @@ export function ContabilidadClient({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Checklist: FC facturas de compras · FV facturas de ventas · BV ventas
-        con boleta · BC compras con boleta · +N documentos adicionales
-        (honorarios, otros gastos/ingresos). Verde = archivo cargado este mes.
+        Checklist: RCV libros de compras y ventas del SII · BH boletas de
+        honorarios · BT boletas a terceros (vienen incluidas en la descarga de
+        honorarios) · +N documentos adicionales (boletas de venta/compra,
+        otros gastos/ingresos). Verde = datos importados del SII o archivo
+        cargado este mes.
         Libros RCV (contabilidad completa): C/V = documentos importados del
         SII · ✓ F29 = el IVA del RCV cuadra exacto con el F29 del período ·
         standby = empresa aún no activada (pasa el cursor sobre la fila para
