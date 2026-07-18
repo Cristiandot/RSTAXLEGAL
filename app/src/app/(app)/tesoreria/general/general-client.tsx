@@ -74,6 +74,8 @@ export function GeneralClient({
   topPagar,
   cuentas,
   movs,
+  mesTotal,
+  mesResueltos,
   generado,
 }: {
   clientes: EmpresaOpcion[];
@@ -85,11 +87,14 @@ export function GeneralClient({
   topPagar: TopContraparte[];
   cuentas: CuentaSaldo[];
   movs: MovReciente[];
+  mesTotal: number;
+  mesResueltos: number;
   generado: string;
 }) {
   const router = useRouter();
   const proyectado = saldo + totalCxC - totalCxP;
   const q = clienteSeleccionado ? `?cliente=${clienteSeleccionado}` : "";
+  const pctMes = mesTotal > 0 ? Math.round((mesResueltos / mesTotal) * 100) : null;
 
   return (
     <div className="mt-4">
@@ -109,7 +114,21 @@ export function GeneralClient({
             onChange={(id) => router.push(`/tesoreria/general?cliente=${id}`)}
           />
         </div>
-        <span className="text-xs text-muted-foreground">Al día {formatFecha(generado)}</span>
+        <div className="text-right">
+          <span className="block text-xs text-muted-foreground">Al día {formatFecha(generado)}</span>
+          {pctMes != null && (
+            <span className="mt-1 inline-flex items-center gap-2 text-xs text-muted-foreground">
+              Conciliación del mes
+              <span className="inline-block h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+                <span
+                  className={`block h-1.5 rounded-full ${pctMes >= 100 ? "bg-emerald-500" : "bg-[var(--brand-teal,#17a2b8)]"}`}
+                  style={{ width: `${Math.min(100, pctMes)}%` }}
+                />
+              </span>
+              <span className="font-semibold tabular-nums text-foreground">{pctMes}%</span>
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">

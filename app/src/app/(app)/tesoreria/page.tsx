@@ -1,5 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import { TesoreriaClient, type CuentaResumen, type Movimiento } from "./tesoreria-client";
+import {
+  TesoreriaClient,
+  type CuentaResumen,
+  type Movimiento,
+  type ResumenCartola,
+} from "./tesoreria-client";
 
 export const metadata = { title: "Tesorería y Banco — RS Tax & Legal" };
 
@@ -87,14 +92,44 @@ export default async function TesoreriaPage({
   // Cuenta seleccionada (por query o la primera): trae sus movimientos.
   const cuentaId = cuentaSel && cuentas.some((c) => c.id === cuentaSel) ? cuentaSel : cuentas[0]?.id ?? null;
   let movimientos: Movimiento[] = [];
+  let cartolas: ResumenCartola[] = [];
   if (cuentaId) {
     const { data: movData } = await supabase
       .from("banco_movimiento")
-      .select("id, cuenta_id, fecha, glosa, abono, cargo, saldo, estado, categoria, referencia, rut_contraparte, nombre_contraparte")
+      .select("id, cuenta_id, fecha, glosa, abono, cargo, saldo, estado, categoria, referencia, rut_contraparte, nombre_contraparte, archivo_origen")
       .eq("cuenta_id", cuentaId)
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(2000);
+
+    // Cuadratura por cartola importada (estilo reporte "Conciliación Bancaria"
+    // de Chipax): por archivo, rango de fechas, abonos, cargos y saldo final.
+    const porArchivo = new Map<string, ResumenCartola>();
+    for (const m of (movData ?? []) as (MovRow & { archivo_origen: string | null })[]) {
+      const clave = m.archivo_origen ?? "(sin archivo)";
+      const r = porArchivo.get(clave) ?? {
+        archivo: clave,
+        movs: 0,
+        desde: m.fecha,
+        hasta: m.fecha,
+        abonos: 0,
+        cargos: 0,
+        saldoFinal: null,
+        pendientes: 0,
+      };
+      r.movs += 1;
+      if (m.fecha < r.desde) r.desde = m.fecha;
+      if (m.fecha >= r.hasta) {
+        r.hasta = m.fecha;
+        if (m.saldo != null) r.saldoFinal = n(m.saldo);
+      }
+      r.abonos += n(m.abono);
+      r.cargos += n(m.cargo);
+      if (m.estado === "pendiente") r.pendientes += 1;
+      porArchivo.set(clave, r);
+    }
+    cartolas = [...porArchivo.values()].sort((a, b) => (a.hasta < b.hasta ? 1 : -1));
+
     movimientos = ((movData ?? []) as MovRow[]).map((m) => ({
       id: m.id,
       fecha: m.fecha,
@@ -115,6 +150,7 @@ export default async function TesoreriaPage({
         cuentas={cuentas}
         cuentaSeleccionada={cuentaId}
         movimientos={movimientos}
+        cartolas={cartolas}
         errorCarga={errCuentas?.message ?? null}
       />
     </main>
