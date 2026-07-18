@@ -377,14 +377,18 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
       </div>
 
       <div className="rounded-xl border bg-card">
-        <Table stickyHeader>
+        {/* Densidad compacta SOLO en esta grilla (muchas columnas): texto xs,
+            encabezados más bajos y celdas con menos alto. El overflow-x-auto del
+            propio Table hace que en pantallas chicas la tabla scrollee dentro de
+            la tarjeta sin romper el ancho de la página. */}
+        <Table stickyHeader className="text-xs [&_th]:h-9 [&_td]:py-1">
           <TableHeader>
             <TableRow>
-              <ThSort col="empresa" orden={orden} setOrden={setOrden} className="min-w-[240px]">
+              <ThSort col="empresa" orden={orden} setOrden={setOrden} className="min-w-[170px]">
                 Empresa
               </ThSort>
               {periodos.map((p, i) => (
-                <ThSort key={p} col={p} orden={orden} setOrden={setOrden} className="w-14 text-center">
+                <ThSort key={p} col={p} orden={orden} setOrden={setOrden} className="w-12 px-1 text-center">
                   <span title={etiquetas[i]}>{etiquetaCorta(p, multiAnio)}</span>
                 </ThSort>
               ))}
@@ -413,16 +417,18 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
           <TableBody>
             {filtradas.map((f) => (
               <TableRow key={f.empresa.id}>
-                <TableCell>
-                  <div className="flex items-center gap-2">
+                <TableCell className="max-w-[240px]">
+                  <div className="flex items-center gap-1.5">
                     {f.empresa.grupoCodigo && (
-                      <span className="inline-flex w-10 shrink-0 justify-center rounded bg-muted px-1 py-0.5 text-[11px] font-semibold text-muted-foreground tabular-nums">
+                      <span className="inline-flex w-8 shrink-0 justify-center rounded bg-muted px-1 py-0.5 text-[10px] font-semibold text-muted-foreground tabular-nums">
                         {f.empresa.grupoCodigo}
                       </span>
                     )}
-                    <div>
-                      <div className="font-medium leading-tight">{f.empresa.razon_social}</div>
-                      <div className="text-xs text-muted-foreground">{f.empresa.rut_empresa}</div>
+                    <div className="min-w-0">
+                      <div className="truncate font-medium leading-tight" title={f.empresa.razon_social}>
+                        {f.empresa.razon_social}
+                      </div>
+                      <div className="text-[10px] leading-tight text-muted-foreground">{f.empresa.rut_empresa}</div>
                     </div>
                   </div>
                 </TableCell>
@@ -549,7 +555,7 @@ function CeldaEstado({ estado, d, tot }: { estado: EstadoCelda; d: DescargaRcv |
 
   return (
     <span
-      className={cn("inline-flex size-6 items-center justify-center rounded-md border text-[11px] font-medium", clase)}
+      className={cn("inline-flex size-5 items-center justify-center rounded-md border text-[10px] font-medium", clase)}
       title={titulo}
     >
       {glifo}
@@ -577,7 +583,7 @@ function CeldaTotales({ tot, d, registro }: { tot: TotalesRcv | null; d: Descarg
       <TableCell className="text-right">
         <span className="text-muted-foreground/50">—</span>
         {difiereSii && (
-          <div className="text-[11px] font-medium text-amber-600 tabular-nums" title="El SII declara movimientos que no tenemos descargados">
+          <div className="text-[10px] font-medium leading-tight text-amber-600 tabular-nums" title="El SII declara movimientos que no tenemos descargados">
             SII {formatMonto(Number(totalSii))}
           </div>
         )}
@@ -588,12 +594,12 @@ function CeldaTotales({ tot, d, registro }: { tot: TotalesRcv | null; d: Descarg
     <TableCell className="text-right">
       <div className="font-medium tabular-nums">{formatMonto(Number(total))}</div>
       {difiereSii && (
-        <div className="text-[11px] font-medium text-amber-600 tabular-nums" title="No cuadra con el total que declara el SII">
+        <div className="text-[10px] font-medium leading-tight text-amber-600 tabular-nums" title="No cuadra con el total que declara el SII">
           SII {formatMonto(Number(totalSii))}
         </div>
       )}
       {ncDocs > 0 && (
-        <div className="text-[11px] text-red-500 tabular-nums" title={`${ncDocs} nota${ncDocs === 1 ? "" : "s"} de crédito incluida${ncDocs === 1 ? "" : "s"} en el total`}>
+        <div className="text-[10px] leading-tight text-red-500 tabular-nums" title={`${ncDocs} nota${ncDocs === 1 ? "" : "s"} de crédito incluida${ncDocs === 1 ? "" : "s"} en el total`}>
           NC {formatMonto(Number(nc ?? 0))} ({ncDocs})
         </div>
       )}
@@ -614,7 +620,7 @@ function CeldaBhe({ tot, tipo }: { tot: TotalesRcv | null; tipo: "emitidas" | "r
   return (
     <TableCell className="text-right">
       <div className="font-medium tabular-nums">{formatMonto(Number(total))}</div>
-      <div className="text-[11px] text-muted-foreground tabular-nums">
+      <div className="text-[10px] leading-tight text-muted-foreground tabular-nums">
         {docs} boleta{docs === 1 ? "" : "s"}
       </div>
     </TableCell>
