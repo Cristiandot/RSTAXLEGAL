@@ -8,11 +8,7 @@ import { activarContabilidadCompleta } from "./actions";
 import { SelectorPeriodo } from "@/components/selector-periodo";
 import { comparar, type Orden } from "@/lib/ordenar";
 import { ThSort } from "@/components/th-sort";
-import {
-  claseEstado,
-  type ConciliacionRow,
-  type UsuarioOpcion,
-} from "@/lib/ciclos";
+import { type ConciliacionRow } from "@/lib/ciclos";
 import { type CategoriaDocumento } from "./categorias";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -49,13 +45,6 @@ export type RcvResumenFila = {
   f29_iva_credito: number | null;
 };
 
-const ESTADOS = [
-  "Sin iniciar",
-  "Descargando",
-  "Listo para conciliar",
-  "Conciliado",
-];
-
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -79,22 +68,6 @@ function ResumenCard({
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className={`mt-0.5 text-2xl font-semibold ${color}`}>{valor}</div>
     </div>
-  );
-}
-
-function BadgeKame({ estado }: { estado: string | null }) {
-  if (!estado) return <span className="text-muted-foreground">—</span>;
-  return estado === "ON" ? (
-    <Badge
-      variant="outline"
-      className="border-emerald-200 bg-emerald-50 text-emerald-700"
-    >
-      ON
-    </Badge>
-  ) : (
-    <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
-      OFF
-    </Badge>
   );
 }
 
@@ -285,14 +258,12 @@ function ChecklistDocs({
 export function ContabilidadClient({
   periodo,
   filas,
-  usuarios,
   documentos,
   rcvResumen = [],
   errorCarga,
 }: {
   periodo: string;
   filas: ConciliacionRow[];
-  usuarios: UsuarioOpcion[];
   documentos: DocumentoContable[];
   rcvResumen?: RcvResumenFila[];
   errorCarga: string | null;
@@ -303,11 +274,7 @@ export function ContabilidadClient({
   // solo las empresas activadas (pilotos); el resto queda en standby y se va
   // activando una a una desde la misma grilla.
   const [contabF, setContabF] = useState("activadas");
-  const [estadoF, setEstadoF] = useState("");
   const [docsF, setDocsF] = useState("");
-  const [kameF, setKameF] = useState("");
-  const [saludF, setSaludF] = useState("");
-  const [respF, setRespF] = useState("");
   const [orden, setOrden] = useState<Orden>(null);
 
   const rcvPorCliente = useMemo(
@@ -364,37 +331,25 @@ export function ContabilidadClient({
       }
       if (contabF === "activadas" && !rcvPorCliente.has(c.cliente_id)) return false;
       if (contabF === "standby" && rcvPorCliente.has(c.cliente_id)) return false;
-      if (estadoF && c.estado !== estadoF) return false;
       if (docsF === "completos" && !facturasCompletas(c.cliente_id)) return false;
       if (docsF === "parciales" && (facturasCompletas(c.cliente_id) || sinDocumentos(c.cliente_id))) return false;
       if (docsF === "sin_docs" && !sinDocumentos(c.cliente_id)) return false;
-      if (kameF && c.kame_cert_estado !== kameF) return false;
-      if (saludF === "si" && !c.es_profesional_salud) return false;
-      if (saludF === "no" && c.es_profesional_salud) return false;
-      if (respF === "__SIN_ASIGNAR__") {
-        if (c.responsable) return false;
-      } else if (respF && c.responsable !== respF) return false;
       return true;
     });
     if (!orden) return out;
     const valor = (c: ConciliacionRow): unknown => {
       switch (orden.col) {
         case "cliente": return c.razon_social;
-        case "kame": return c.kame_cert_estado;
-        case "salud": return c.es_profesional_salud ? 0 : 1;
-        case "estado": return c.estado;
-        case "responsable": return c.responsable;
         case "docs": {
           const conteo = conteosDe(c.cliente_id);
           return -Object.values(conteo).reduce((a, b) => a + b, 0);
         }
-        case "iva": return c.es_profesional_salud ? c.iva_salud_ejecuciones : null;
         default: return null;
       }
     };
     return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filas, buscar, contabF, estadoF, docsF, kameF, saludF, respF, orden, conteosPorCliente, rcvPorCliente]);
+  }, [filas, buscar, contabF, docsF, orden, conteosPorCliente, rcvPorCliente]);
 
   const resumen: {
     label: string;
@@ -417,16 +372,6 @@ export function ContabilidadClient({
       valor: filas.filter((c) => facturasCompletas(c.cliente_id)).length,
       tono: "ok",
     },
-    {
-      label: "Conciliados",
-      valor: filas.filter((c) => c.estado === "Conciliado").length,
-      tono: "ok",
-    },
-    {
-      label: "KAME OFF",
-      valor: filas.filter((c) => c.kame_cert_estado === "OFF").length,
-      tono: "alerta",
-    },
   ];
 
   return (
@@ -441,7 +386,7 @@ export function ContabilidadClient({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {resumen.map((r) => (
           <ResumenCard
             key={r.label}
@@ -491,57 +436,6 @@ export function ContabilidadClient({
           <option value="sin_docs">Sin documentos</option>
         </select>
 
-        <select
-          aria-label="Estado"
-          className={selectCls}
-          value={estadoF}
-          onChange={(e) => setEstadoF(e.target.value)}
-        >
-          <option value="">Todos los estados</option>
-          {ESTADOS.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-
-        <select
-          aria-label="KAME"
-          className={selectCls}
-          value={kameF}
-          onChange={(e) => setKameF(e.target.value)}
-        >
-          <option value="">KAME: todos</option>
-          <option value="ON">KAME ON</option>
-          <option value="OFF">KAME OFF</option>
-        </select>
-
-        <select
-          aria-label="Salud"
-          className={selectCls}
-          value={saludF}
-          onChange={(e) => setSaludF(e.target.value)}
-        >
-          <option value="">Todos</option>
-          <option value="si">Solo Salud (IVA semanal)</option>
-          <option value="no">No salud</option>
-        </select>
-
-        <select
-          aria-label="Responsable"
-          className={selectCls}
-          value={respF}
-          onChange={(e) => setRespF(e.target.value)}
-        >
-          <option value="">Todos los responsables</option>
-          <option value="__SIN_ASIGNAR__">Sin asignar</option>
-          {usuarios.map((u) => (
-            <option key={u.id} value={u.nombre}>
-              {u.nombre}
-            </option>
-          ))}
-        </select>
-
         <span className="ml-auto text-sm text-muted-foreground">
           {filtradas.length} de {filas.length} clientes
         </span>
@@ -557,22 +451,17 @@ export function ContabilidadClient({
         <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[240px]">Cliente</ThSort>
+              <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[280px]">Cliente</ThSort>
               <TableHead>RUT</TableHead>
               <ThSort col="docs" orden={orden} setOrden={setOrden}>Documentos del mes</ThSort>
               <TableHead>Libros RCV</TableHead>
-              <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
-              <ThSort col="kame" orden={orden} setOrden={setOrden}>KAME</ThSort>
-              <ThSort col="salud" orden={orden} setOrden={setOrden}>Salud</ThSort>
-              <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
-              <ThSort col="iva" orden={orden} setOrden={setOrden}>IVA cambios</ThSort>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={9}
+                  colSpan={4}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -614,42 +503,6 @@ export function ContabilidadClient({
                         clienteId={c.cliente_id}
                         razonSocial={c.razon_social}
                       />
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={claseEstado(c.estado)}>
-                      {c.estado}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <BadgeKame estado={c.kame_cert_estado} />
-                  </TableCell>
-                  <TableCell>
-                    {c.es_profesional_salud ? (
-                      <Badge
-                        variant="outline"
-                        className="border-pink-200 bg-pink-50 text-pink-700"
-                      >
-                        Salud
-                      </Badge>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                  <TableCell>{c.responsable ?? "—"}</TableCell>
-                  <TableCell>
-                    {c.es_profesional_salud ? (
-                      c.iva_salud_ejecuciones > 0 ? (
-                        <span>
-                          <strong>{c.iva_salud_ejecuciones}</strong> cambios
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">
-                          Sin cambios
-                        </span>
-                      )
-                    ) : (
-                      "—"
                     )}
                   </TableCell>
                 </TableRow>

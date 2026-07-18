@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { normalizarPeriodo } from "@/lib/periodos";
-import type { ConciliacionRow, UsuarioOpcion } from "@/lib/ciclos";
+import type { ConciliacionRow } from "@/lib/ciclos";
 import {
   ContabilidadClient,
   type DocumentoContable,
@@ -18,9 +18,8 @@ export default async function ContabilidadPage({
   const periodo = normalizarPeriodo(p);
   const supabase = await createClient();
 
-  const [usuariosRes, filasRes, docsRes, pilotosRes, rcvRes, f29Res, honRes] =
+  const [filasRes, docsRes, pilotosRes, rcvRes, f29Res, honRes] =
     await Promise.all([
-      supabase.from("usuarios").select("id, nombre").eq("activo", true).order("nombre"),
       supabase
         .from("v_checklist_conciliacion")
         .select("*")
@@ -95,7 +94,6 @@ export default async function ContabilidadPage({
       <ContabilidadClient
         periodo={periodo}
         filas={(filasRes.data ?? []) as ConciliacionRow[]}
-        usuarios={(usuariosRes.data ?? []) as UsuarioOpcion[]}
         documentos={documentos}
         rcvResumen={rcvResumen}
         errorCarga={filasRes.error?.message ?? null}
