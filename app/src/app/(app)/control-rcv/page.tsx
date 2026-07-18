@@ -49,10 +49,13 @@ export default async function ControlRcvPage() {
       .select(
         "cliente_id, periodo, ventas_docs, compras_docs, ventas_docs_sii, compras_docs_sii, ventas_total_sii, compras_total_sii, alto_volumen, ultima_descarga",
       )
-      .in("periodo", periodosConActual),
+      .in("periodo", periodosConActual)
+      // ~127 empresas × 19 meses > 1.000: hay que subir el tope de PostgREST o
+      // las filas se truncan en silencio y los meses cortados salen como "falta".
+      .limit(100000),
     // Totales del registro por empresa y mes (ventas, compras y NC) para la
     // cuadratura visual de la contadora contra el SII (+ el mes en curso).
-    supabase.from("v_rcv_totales_periodo").select("*").in("periodo", periodosConActual),
+    supabase.from("v_rcv_totales_periodo").select("*").in("periodo", periodosConActual).limit(100000),
     // Reportes de avance ya enviados este mes (ritual del 23).
     supabase
       .from("rcv_reporte_avance")
