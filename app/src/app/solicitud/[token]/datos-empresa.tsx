@@ -33,7 +33,14 @@ function fmtFecha(v: string): string {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : v;
 }
 
-export function DatosEmpresa({ token }: { token: string }) {
+export function DatosEmpresa({
+  token,
+  onGuardado,
+}: {
+  token: string;
+  /** Se llama tras guardar con éxito (p. ej. para refrescar la completitud en la tabla "Todas"). */
+  onGuardado?: () => void;
+}) {
   const [detalle, setDetalle] = useState<EmpresaDetalle | null>(null);
   const [cargando, setCargando] = useState(true);
   const [form, setForm] = useState<Record<string, string>>({});
@@ -71,6 +78,7 @@ export function DatosEmpresa({ token }: { token: string }) {
       if (r.ok) {
         toast.success("Datos guardados");
         await recargar();
+        onGuardado?.();
       } else {
         toast.error(r.error ?? "No se pudo guardar");
       }
