@@ -37,8 +37,19 @@ export type Sugerencia = {
   fecha: string | null;
   pagadoPct: number | null;
   rutMatch: boolean;
+  /** El folio del documento aparece en la glosa del movimiento ("PAGO FAC 2075"). */
+  folioMatch?: boolean;
   confianza: "alta" | "media";
 };
+
+/** Números de 2+ dígitos presentes en la glosa (candidatos a folio). */
+function foliosEnTexto(...textos: (string | null | undefined)[]): Set<string> {
+  const out = new Set<string>();
+  for (const t of textos) {
+    for (const m of (t ?? "").matchAll(/\d{2,10}/g)) out.add(m[0].replace(/^0+/, "") || m[0]);
+  }
+  return out;
+}
 
 /** El movimiento debe pertenecer al cliente indicado (seguridad del portal). */
 async function movimientoDe(
@@ -48,7 +59,7 @@ async function movimientoDe(
 ) {
   const { data: mov } = await supabase
     .from("banco_movimiento")
-    .select("id, cliente_id, fecha, abono, cargo, rut_contraparte")
+    .select("id, cliente_id, fecha, abono, cargo, rut_contraparte, glosa, descripcion, referencia")
     .eq("id", movimientoId)
     .maybeSingle();
   if (!mov) return null;
@@ -70,6 +81,7 @@ export async function sugerenciasParaMovimiento(
   if (!mov) return { ok: false, error: "Movimiento no encontrado" };
 
   const rutMov = rutKey(mov.rut_contraparte);
+  const foliosGlosa = foliosEnTexto(mov.glosa as string, mov.descripcion as string);
   const out: Sugerencia[] = [];
 
   const { data: yaConc } = await supabase
@@ -90,6 +102,7 @@ export async function sugerenciasParaMovimiento(
     for (const c of compras ?? []) {
       if (tomados.has(c.id as string)) continue;
       const rutMatch = !!rutMov && rutKey(c.rut_proveedor) === rutMov;
+      const folioMatch = !!c.folio && foliosGlosa.has(String(c.folio).replace(/^0+/, ""));
       out.push({
         docTipo: "compra",
         docId: c.id as string,
@@ -99,7 +112,8 @@ export async function sugerenciasParaMovimiento(
         fecha: c.fecha_docto as string | null,
         pagadoPct: null,
         rutMatch,
-        confianza: rutMatch ? "alta" : "media",
+        folioMatch,
+        confianza: rutMatch || folioMatch ? "alta" : "media",
       });
     }
     const { data: hons } = await supabase
@@ -207,6 +221,7 @@ export async function sugerenciasParaMovimiento(
     for (const v of ventas ?? []) {
       if (tomados.has(v.id as string)) continue;
       const rutMatch = !!rutMov && rutKey(v.rut_cliente) === rutMov;
+      const folioMatch = !!v.folio && foliosGlosa.has(String(v.folio).replace(/^0+/, ""));
       out.push({
         docTipo: "venta",
         docId: v.id as string,
@@ -216,13 +231,15 @@ export async function sugerenciasParaMovimiento(
         fecha: v.fecha_docto as string | null,
         pagadoPct: null,
         rutMatch,
-        confianza: rutMatch ? "alta" : "media",
+        folioMatch,
+        confianza: rutMatch || folioMatch ? "alta" : "media",
       });
     }
   }
 
   out.sort((a, b) => {
     if (a.rutMatch !== b.rutMatch) return a.rutMatch ? -1 : 1;
+    if (!!a.folioMatch !== !!b.folioMatch) return a.folioMatch ? -1 : 1;
     const da = a.fecha && mov.fecha ? diasEntre(a.fecha, mov.fecha as string) : 9999;
     const db = b.fecha && mov.fecha ? diasEntre(b.fecha, mov.fecha as string) : 9999;
     return da - db;
