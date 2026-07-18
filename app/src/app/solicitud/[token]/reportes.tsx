@@ -1,13 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, AlertTriangle, Receipt, Building2, Tags } from "lucide-react";
-import {
-  cargarReportes,
-  cargarSinClasificarParticipacion,
-  type Reportes as RepData,
-  type SinClasificarPart,
-} from "./reportes-actions";
+import { Loader2, AlertTriangle, Receipt, Building2 } from "lucide-react";
+import { cargarReportes, type Reportes as RepData } from "./reportes-actions";
 
 const NOMBRE_MES: Record<string, string> = {
   "01":"Ene","02":"Feb","03":"Mar","04":"Abr","05":"May","06":"Jun",
@@ -21,20 +16,15 @@ function mesDe(p: string) { const m = p.match(/-(\d{2})$/); return m ? NOMBRE_ME
 
 export function Reportes({ token, anio }: { token: string; anio: number }) {
   const [d, setD] = useState<RepData | null>(null);
-  const [sinPart, setSinPart] = useState<SinClasificarPart | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     let vivo = true;
     setCargando(true);
-    setSinPart(null);
     cargarReportes(token, anio).then((r) => {
       if (!vivo) return;
       setD(r.ok ? (r.data ?? null) : null);
       setCargando(false);
-    });
-    cargarSinClasificarParticipacion(token, anio).then((r) => {
-      if (vivo) setSinPart(r.ok ? (r.data ?? null) : null);
     });
     return () => { vivo = false; };
   }, [token, anio]);
@@ -71,31 +61,6 @@ export function Reportes({ token, anio }: { token: string; anio: number }) {
 
   return (
     <div className="space-y-4">
-      {sinPart && sinPart.pct > 0 ? (
-        <div className={card}>
-          <p className="mb-1 text-sm font-medium">
-            <Tags className="mr-1.5 inline size-4 align-middle text-amber-600" aria-hidden="true" />
-            Facturas sin clasificar
-          </p>
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <div className="text-2xl font-semibold tabular-nums text-amber-700">{sinPart.pct}%</div>
-              <div className="text-xs text-muted-foreground">
-                {clp(sinPart.monto_sin)} de {clp(sinPart.monto_total)} en compras · {sinPart.docs} doc
-                {sinPart.docs === 1 ? "" : "s"}
-              </div>
-            </div>
-            <div className="h-2 w-32 overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.min(sinPart.pct, 100)}%` }} />
-            </div>
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Participación de tus compras aún sin categoría. Clasifícalas en &quot;Tus facturas&quot; para
-            afinar el Estado de Resultado.
-          </p>
-        </div>
-      ) : null}
-
       {/* 1. Estructura de costos y márgenes */}
       <div className={card}>
         <p className="mb-3 text-sm font-medium">Estructura de costos y márgenes</p>
@@ -118,20 +83,6 @@ export function Reportes({ token, anio }: { token: string; anio: number }) {
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* IVA crédito no recuperable */}
-      <div className={card}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium">IVA crédito no recuperable</p>
-            <p className="mt-1 text-xs text-muted-foreground">Giro exento: el IVA de las compras no se recupera y se vuelve costo.</p>
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-semibold tabular-nums text-amber-600">{clp(d.iva_credito_no_recuperable)}</div>
-            <div className="text-xs text-muted-foreground">{anio}</div>
-          </div>
         </div>
       </div>
 
@@ -195,21 +146,6 @@ export function Reportes({ token, anio }: { token: string; anio: number }) {
               <div key={p.nombre} className="flex justify-between gap-2">
                 <span className="truncate" title={p.nombre}>{p.nombre}</span>
                 <span className="shrink-0 tabular-nums text-muted-foreground">{clp(p.monto)} · {p.docs} doc{p.docs === 1 ? "" : "s"}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {/* 4c. Honorarios de terceros (BHE recibidas) */}
-      {hayHon && d.honorarios_recibidos.length > 0 ? (
-        <div className={card}>
-          <p className="mb-2 text-sm font-medium"><Receipt className="mr-1 inline size-4 align-middle text-muted-foreground" aria-hidden="true" />Honorarios de terceros</p>
-          <div className="space-y-1.5 text-sm">
-            {d.honorarios_recibidos.slice(0, 6).map((p) => (
-              <div key={p.nombre} className="flex justify-between gap-2">
-                <span className="truncate" title={p.nombre}>{p.nombre}</span>
-                <span className="shrink-0 tabular-nums text-muted-foreground">{clp(p.monto)}</span>
               </div>
             ))}
           </div>
