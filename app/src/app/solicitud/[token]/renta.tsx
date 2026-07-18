@@ -16,17 +16,18 @@ type Proyeccion = {
   resultadoAnual: number;
   ventaAnual: number;
   gastosMenores: number;
-  base: number;
-  impuesto: number;
-  ppm: number;
-  rentaPagar: number;
-  // Beneficio de reinversión (50% de la base, tope 5.000 UF).
+  base: number; // base afecta antes de reinversión
+  // Beneficio de reinversión (50% de la base, tope 5.000 UF) — YA restado.
   deduccion50: number; // 50% de la base (antes de tope)
   uf: number | null; // valor UF del indicador Previred
   topeUf5000: number | null; // 5.000 UF en $
   topado: boolean; // el 50% supera el tope
-  deduccionMax: number; // rebaja efectiva (min 50% vs tope)
-  ahorroReinv: number; // ahorro de impuesto con la rebaja efectiva
+  deduccionMax: number; // rebaja efectiva aplicada (min 50% vs tope)
+  baseNeta: number; // base afecta tras la rebaja de reinversión
+  impuesto: number; // impuesto sobre la base neta
+  impuestoSinBeneficio: number; // impuesto si NO reinvirtiera (referencia)
+  ppm: number;
+  rentaPagar: number; // refleja lo que efectivamente pagaría (con beneficio)
   tasaPct: number;
   mesesReales: number;
   mesesProyectados: number[]; // índices 1..12 proyectados
@@ -85,27 +86,30 @@ function proyectar(
   const gastosMenores = ventaAnual * 0.05;
   const base = resultadoAnual - gastosMenores;
   const tasa = tasaPct / 100;
-  const impuesto = base * tasa;
-  const rentaPagar = impuesto - ppm;
-  // Reinversión: rebaja del 50% de la base, con tope de 5.000 UF.
+  // Reinversión: rebaja del 50% de la base, con tope de 5.000 UF — se RESTA para
+  // que la renta a pagar refleje lo que efectivamente pagaría reinvirtiendo.
   const deduccion50 = base * 0.5;
   const topeUf5000 = uf ? uf * 5000 : null;
   const topado = topeUf5000 !== null && deduccion50 > topeUf5000;
   const deduccionMax = topeUf5000 !== null ? Math.min(deduccion50, topeUf5000) : deduccion50;
+  const baseNeta = base - deduccionMax;
+  const impuesto = baseNeta * tasa;
+  const rentaPagar = impuesto - ppm;
   return {
     resultadoAnual,
     ventaAnual,
     gastosMenores,
     base,
-    impuesto,
-    ppm,
-    rentaPagar,
     deduccion50,
     uf,
     topeUf5000,
     topado,
     deduccionMax,
-    ahorroReinv: deduccionMax * tasa,
+    baseNeta,
+    impuesto,
+    impuestoSinBeneficio: base * tasa,
+    ppm,
+    rentaPagar,
     tasaPct,
     mesesReales: ultimoReal,
     mesesProyectados: proyectados,
@@ -171,6 +175,12 @@ export function RentaProyectada({ token, anio = 2026 }: { token: string; anio?: 
           {linea("Resultado anualizado proyectado", p.resultadoAnual)}
           {linea("Gastos menores proyectados (5% ventas)", p.gastosMenores, "− ")}
           {linea("Base afecta estimada", p.base, "= ")}
+          {linea(
+            p.topado ? "Rebaja por reinversión (tope 5.000 UF)" : "Rebaja por reinversión (50%)",
+            p.deduccionMax,
+            "− ",
+          )}
+          {linea("Base afecta neta", p.baseNeta, "= ")}
           {linea(`Impuesto 1ª categoría (${p.tasaPct}% ProPyme)`, p.impuesto, "= ")}
           {linea("PPM acumulado (crédito)", p.ppm, "− ")}
           {linea("Renta a pagar proyectada", p.rentaPagar, "= ", true)}
@@ -180,19 +190,16 @@ export function RentaProyectada({ token, anio = 2026 }: { token: string; anio?: 
         <div className="mt-3 flex items-start gap-2 rounded-md bg-emerald-50 p-3">
           <Sprout className="mt-0.5 size-4 shrink-0 text-emerald-700" aria-hidden="true" />
           <p className="m-0 text-xs text-emerald-800">
-            <strong>Beneficio de reinversión (50%).</strong> Si reinviertes utilidades, puedes rebajar
-            de la base el 50% de lo reinvertido, con <strong>tope de 5.000 UF</strong> (ProPyme 14D N°3,
-            incentivo al ahorro). El 50% de tu base es {clp(p.deduccion50)}
-            {enUf(p.deduccion50) ? ` (${enUf(p.deduccion50)})` : ""}.{" "}
+            <strong>Esta proyección ya descuenta el beneficio de reinversión.</strong> El 50% de la
+            base es {clp(p.deduccion50)}{enUf(p.deduccion50) ? ` (${enUf(p.deduccion50)})` : ""}
             {p.topado && p.topeUf5000 !== null ? (
-              <>
-                Como supera el tope, la rebaja máxima es <strong>{clp(p.topeUf5000)}</strong> (5.000 UF),
-                con un ahorro de impuesto de hasta {clp(p.ahorroReinv)}.
-              </>
+              <>, pero está topado en <strong>5.000 UF = {clp(p.topeUf5000)}</strong>, que es la rebaja aplicada</>
             ) : (
-              <>Con ese monto, el ahorro de impuesto sería de hasta {clp(p.ahorroReinv)}.</>
+              <>, aplicado completo</>
             )}{" "}
-            Lo calculamos con el monto exacto a reinvertir antes del cierre.
+            (ProPyme 14D N°3, incentivo al ahorro). <strong>Requiere reinvertir efectivamente</strong> las
+            utilidades: si no lo haces, el impuesto sería {clp(p.impuestoSinBeneficio)} y la renta a pagar{" "}
+            {clp(p.impuestoSinBeneficio - p.ppm)}.
           </p>
         </div>
 
