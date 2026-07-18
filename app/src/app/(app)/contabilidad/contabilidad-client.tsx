@@ -13,12 +13,7 @@ import {
   type ConciliacionRow,
   type UsuarioOpcion,
 } from "@/lib/ciclos";
-import {
-  CATEGORIAS_ADICIONALES,
-  CATEGORIAS_DOCUMENTO,
-  CATEGORIAS_PRINCIPALES,
-  type CategoriaDocumento,
-} from "./categorias";
+import { type CategoriaDocumento } from "./categorias";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -207,9 +202,12 @@ function CeldaRcv({
 }
 
 /**
- * Mini-checklist documental de la fila: una sigla por categoría principal.
- * FC/FV/BH se encienden con archivo subido O con datos ya importados del SII
- * (RCV / boletas de honorarios) — la descarga automática cuenta como cargado.
+ * Mini-checklist documental de la fila. Tres ítems (pedido de Cristian
+ * 17-07-2026): RCV (compras+ventas del SII), BH boletas de honorarios y BT
+ * boletas a terceros. Se encienden con datos ya importados del SII O con un
+ * archivo subido; el resto de las categorías cuenta en el "+N".
+ * BT se descarga junto con las BH (mismo informe de recibidas del SII), por
+ * eso comparte su señal.
  */
 function ChecklistDocs({
   conteos,
@@ -220,40 +218,58 @@ function ChecklistDocs({
   adicionales: number;
   rcv?: RcvResumenFila;
 }) {
-  // Documentos que ya viven en el panel aunque nadie subiera un archivo
-  const datosSii: Record<string, number> = {
-    fact_compras: rcv?.docs_compras ?? 0,
-    fact_ventas: rcv?.docs_ventas ?? 0,
-    honorarios: rcv?.docs_honorarios ?? 0,
-  };
-  const chips = [...CATEGORIAS_PRINCIPALES, CATEGORIAS_DOCUMENTO[4]]; // + BH honorarios
+  const nC = rcv?.docs_compras ?? 0;
+  const nV = rcv?.docs_ventas ?? 0;
+  const nH = rcv?.docs_honorarios ?? 0;
+  const archRcv = (conteos["fact_compras"] ?? 0) + (conteos["fact_ventas"] ?? 0);
+  const archHon = conteos["honorarios"] ?? 0;
+  const detalleSii = (n: number) => (n > 0 ? `${n} doc${n > 1 ? "s" : ""} del SII` : null);
+  const detalleArch = (n: number) => (n > 0 ? `${n} archivo${n > 1 ? "s" : ""}` : null);
+  const arma = (partes: (string | null)[]) =>
+    partes.filter(Boolean).join(" + ") || "pendiente";
+
+  const chips = [
+    {
+      key: "rcv",
+      corta: "RCV",
+      on: nC > 0 || nV > 0 || archRcv > 0,
+      title: `Libros RCV del SII (compras y ventas): ${arma([
+        nC + nV > 0 ? `C·${nC} V·${nV} del SII` : null,
+        detalleArch(archRcv),
+      ])}`,
+    },
+    {
+      key: "bh",
+      corta: "BH",
+      on: nH > 0 || archHon > 0,
+      title: `Boletas de honorarios recibidas: ${arma([
+        detalleSii(nH),
+        detalleArch(archHon),
+      ])}`,
+    },
+    {
+      key: "bt",
+      corta: "BT",
+      on: nH > 0 || archHon > 0,
+      title:
+        "Boletas a terceros (BTE): vienen incluidas en la descarga de boletas de honorarios del SII (la empresa es el receptor).",
+    },
+  ];
   return (
     <div className="flex items-center gap-1">
-      {chips.map((c) => {
-        const nArchivos = conteos[c.value] ?? 0;
-        const nSii = datosSii[c.value] ?? 0;
-        const on = nArchivos > 0 || nSii > 0;
-        const detalle = [
-          nSii > 0 ? `${nSii} doc${nSii > 1 ? "s" : ""} del SII` : null,
-          nArchivos > 0 ? `${nArchivos} archivo${nArchivos > 1 ? "s" : ""}` : null,
-        ]
-          .filter(Boolean)
-          .join(" + ");
-        return (
-          <span
-            key={c.value}
-            title={`${c.label}: ${on ? detalle : "pendiente"}`}
-            className={`inline-flex h-6 min-w-7 items-center justify-center rounded-md border px-1 text-[11px] font-semibold ${
-              on
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-border bg-muted/40 text-muted-foreground/60"
-            }`}
-          >
-            {c.corta}
-            {nArchivos > 1 ? `·${nArchivos}` : ""}
-          </span>
-        );
-      })}
+      {chips.map((c) => (
+        <span
+          key={c.key}
+          title={c.title}
+          className={`inline-flex h-6 min-w-8 items-center justify-center rounded-md border px-1 text-[11px] font-semibold ${
+            c.on
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-border bg-muted/40 text-muted-foreground/60"
+          }`}
+        >
+          {c.corta}
+        </span>
+      ))}
       {adicionales > 0 ? (
         <span
           className="inline-flex h-6 items-center justify-center rounded-md border border-sky-200 bg-sky-50 px-1.5 text-[11px] font-semibold text-sky-700"
@@ -312,11 +328,12 @@ export function ContabilidadClient({
 
   const conteosDe = (clienteId: string) =>
     conteosPorCliente.get(clienteId) ?? {};
+  // Todo lo que no está en el checklist (RCV/BH/BT) cuenta en el "+N"
   const adicionalesDe = (clienteId: string) => {
     const c = conteosDe(clienteId);
-    return CATEGORIAS_ADICIONALES.reduce(
-      (acc, cat) => acc + (c[cat.value] ?? 0),
-      (c["otro"] ?? 0),
+    return ["boleta_ventas", "boleta_compras", "otro_gasto", "otro_ingreso", "otro"].reduce(
+      (acc, cat) => acc + (c[cat] ?? 0),
+      0,
     );
   };
   // Un documento "está" si alguien subió el archivo O si ya se importó del SII
@@ -396,7 +413,7 @@ export function ContabilidadClient({
       ).length,
     },
     {
-      label: "Facturas C+V",
+      label: "RCV completo",
       valor: filas.filter((c) => facturasCompletas(c.cliente_id)).length,
       tono: "ok",
     },
@@ -469,7 +486,7 @@ export function ContabilidadClient({
           onChange={(e) => setDocsF(e.target.value)}
         >
           <option value="">Docs: todos</option>
-          <option value="completos">Facturas C+V completas</option>
+          <option value="completos">RCV completo (compras y ventas)</option>
           <option value="parciales">Carga parcial</option>
           <option value="sin_docs">Sin documentos</option>
         </select>
@@ -643,10 +660,11 @@ export function ContabilidadClient({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Checklist: FC facturas de compras · FV facturas de ventas · BV ventas
-        con boleta · BC compras con boleta · BH boletas de honorarios · +N
-        documentos adicionales (otros gastos/ingresos). Verde = archivo cargado
-        este mes o datos ya importados del SII (RCV / honorarios).
+        Checklist: RCV libros de compras y ventas del SII · BH boletas de
+        honorarios · BT boletas a terceros (vienen incluidas en la descarga de
+        honorarios) · +N documentos adicionales (boletas de venta/compra,
+        otros gastos/ingresos). Verde = datos importados del SII o archivo
+        cargado este mes.
         Libros RCV (contabilidad completa): C/V = documentos importados del
         SII · ✓ F29 = el IVA del RCV cuadra exacto con el F29 del período ·
         standby = empresa aún no activada (pasa el cursor sobre la fila para
