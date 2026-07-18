@@ -63,6 +63,10 @@ export type TotalesRcv = {
   bhe_emitidas_docs: number | null;
   bhe_recibidas_total: number | string | null;
   bhe_recibidas_docs: number | null;
+  // Sumas COMPARABLES con el resumen del SII (excluyen tipos que el RCV no
+  // lista, ej. DIN 914 de importación). Solo para el semáforo de cuadratura.
+  ventas_total_rcv: number | string | null;
+  compras_total_rcv: number | string | null;
 };
 
 type Props = {
@@ -93,9 +97,10 @@ function estadoDeCelda(d: DescargaRcv | null, tieneClave: boolean, tot: TotalesR
   if (d.ventas_docs_sii === null || d.compras_docs_sii === null) return "sin-verificar";
   if (d.ventas_docs !== d.ventas_docs_sii || d.compras_docs !== d.compras_docs_sii) return "revisar";
   // Cuadratura por MONTO (cuando la descarga/cuadratura guardó los totales del SII):
-  // los conteos pueden calzar y aun así diferir la plata (doc reemplazado, boleta ajustada).
-  if (d.ventas_total_sii !== null && Number(tot?.ventas_total ?? 0) !== Number(d.ventas_total_sii)) return "revisar";
-  if (d.compras_total_sii !== null && Number(tot?.compras_total ?? 0) !== Number(d.compras_total_sii)) return "revisar";
+  // los conteos pueden calzar y aun así diferir la plata (doc reemplazado, boleta
+  // ajustada). Se compara la suma COMPARABLE (sin tipos fuera del RCV, ej. DIN 914).
+  if (d.ventas_total_sii !== null && Number(tot?.ventas_total_rcv ?? 0) !== Number(d.ventas_total_sii)) return "revisar";
+  if (d.compras_total_sii !== null && Number(tot?.compras_total_rcv ?? 0) !== Number(d.compras_total_sii)) return "revisar";
   return "cuadra";
 }
 
@@ -391,10 +396,11 @@ function CeldaEstado({ estado, d, tot }: { estado: EstadoCelda; d: DescargaRcv |
       ? `${d.ventas_docs_sii} ventas / ${d.compras_docs_sii} compras`
       : "sin verificar";
   // Cuadratura por monto: solo cuando la descarga guardó los totales del SII.
+  // Se muestran las sumas comparables (sin tipos fuera del RCV, ej. DIN 914).
   const montos =
     d && d.ventas_total_sii !== null
-      ? `\nVentas: ${formatMonto(Number(tot?.ventas_total ?? 0))} (SII ${formatMonto(Number(d.ventas_total_sii))})` +
-        `\nCompras: ${formatMonto(Number(tot?.compras_total ?? 0))} (SII ${formatMonto(Number(d.compras_total_sii ?? 0))})`
+      ? `\nVentas: ${formatMonto(Number(tot?.ventas_total_rcv ?? 0))} (SII ${formatMonto(Number(d.ventas_total_sii))})` +
+        `\nCompras: ${formatMonto(Number(tot?.compras_total_rcv ?? 0))} (SII ${formatMonto(Number(d.compras_total_sii ?? 0))})`
       : "";
   const titulo =
     estado === "falta"
@@ -426,7 +432,10 @@ function CeldaTotales({ tot, d, registro }: { tot: TotalesRcv | null; d: Descarg
   const nc = registro === "ventas" ? tot?.ventas_nc_total : tot?.compras_nc_total;
   const ncDocs = (registro === "ventas" ? tot?.ventas_nc_docs : tot?.compras_nc_docs) ?? 0;
   const totalSii = registro === "ventas" ? d?.ventas_total_sii : d?.compras_total_sii;
-  const difiereSii = totalSii !== null && totalSii !== undefined && Number(total ?? 0) !== Number(totalSii);
+  // La comparación usa la suma comparable (sin tipos fuera del RCV, ej. DIN 914);
+  // la celda igual muestra el total completo.
+  const comparable = registro === "ventas" ? tot?.ventas_total_rcv : tot?.compras_total_rcv;
+  const difiereSii = totalSii !== null && totalSii !== undefined && Number(comparable ?? 0) !== Number(totalSii);
   if (total === null || total === undefined) {
     return (
       <TableCell className="text-right">
