@@ -8,6 +8,7 @@ import {
   type FacturaPortal,
   type TipoFactura,
 } from "./facturas-actions";
+type Ajuste = { monto: number; docs: number };
 import { cargarSinClasificar, clasificarProveedor, type CategoriaOpcion } from "./clasificar-actions";
 
 function clp(n: number | string | null): string {
@@ -26,6 +27,7 @@ function fmtFecha(f: string | null): string {
 export function Facturas({ token, anio = 2026 }: { token: string; anio?: number }) {
   const [tipo, setTipo] = useState<TipoFactura>("recibidas");
   const [facturas, setFacturas] = useState<FacturaPortal[] | null>(null);
+  const [ajustes, setAjustes] = useState<Map<string, Ajuste>>(new Map());
   const [cats, setCats] = useState<CategoriaOpcion[]>([]);
   const [abierto, setAbierto] = useState<Set<string>>(new Set());
   const [guardando, setGuardando] = useState<string | null>(null);
@@ -41,6 +43,9 @@ export function Facturas({ token, anio = 2026 }: { token: string; anio?: number 
       if (!vivo) return;
       const fs = r.ok ? (r.facturas ?? []) : [];
       setFacturas(fs);
+      const aj = new Map<string, Ajuste>();
+      for (const a of r.ajustes ?? []) aj.set(a.periodo, { monto: Number(a.monto ?? 0), docs: a.docs });
+      setAjustes(aj);
       // Abre el mes más reciente por defecto.
       const meses = [...new Set(fs.map((f) => f.periodo))].sort().reverse();
       setAbierto(new Set(meses.slice(0, 1)));
@@ -148,7 +153,8 @@ export function Facturas({ token, anio = 2026 }: { token: string; anio?: number 
       ) : (
         <div className="space-y-2">
           {porMes.map(([periodo, fs]) => {
-            const total = fs.reduce((a, f) => a + Number(f.monto ?? 0), 0);
+            const aj = ajustes.get(periodo);
+            const total = fs.reduce((a, f) => a + Number(f.monto ?? 0), 0) + (aj?.monto ?? 0);
             const noPag = fs.filter((f) => !f.pagado).length;
             const open = abierto.has(periodo);
             return (
@@ -170,6 +176,13 @@ export function Facturas({ token, anio = 2026 }: { token: string; anio?: number 
 
                 {open ? (
                   <div className="divide-y divide-border/50 border-t border-border/50">
+                    {aj && aj.docs > 0 ? (
+                      <div className="bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground">
+                        {aj.docs} nota{aj.docs === 1 ? "" : "s"} de crédito/débito por{" "}
+                        <span className="tabular-nums">{clp(aj.monto)}</span> — ya descontada
+                        {aj.docs === 1 ? "" : "s"} del total del mes.
+                      </div>
+                    ) : null}
                     {fs.map((f) => (
                       <div key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2 text-sm">
                         <div className="min-w-0 flex-1">

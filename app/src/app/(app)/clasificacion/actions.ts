@@ -87,6 +87,15 @@ export async function clasificarManual(
   if (actual?.fuente === "cliente") {
     return { ok: false, error: "El cliente ya clasificó este proveedor; su elección prima." };
   }
+  if (!categoria || categoria === "sin_clasificar") {
+    const { error } = await supabase
+      .from("rcv_proveedor_categoria")
+      .delete()
+      .eq("cliente_id", clienteId)
+      .eq("rut_proveedor", rut);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
   const { error } = await supabase
     .from("rcv_proveedor_categoria")
     .upsert(

@@ -19,11 +19,13 @@ export type FacturaPortal = {
   n_documentos: number | null;
 };
 
+export type AjusteMes = { periodo: string; monto: number | string; docs: number };
+
 export async function cargarFacturas(
   token: string,
   anio: number,
   tipo: TipoFactura,
-): Promise<{ ok: boolean; facturas?: FacturaPortal[] }> {
+): Promise<{ ok: boolean; facturas?: FacturaPortal[]; ajustes?: AjusteMes[] }> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("portal_facturas", {
     p_token: token,
@@ -31,7 +33,8 @@ export async function cargarFacturas(
     p_tipo: tipo,
   });
   if (error || !data) return { ok: false };
-  return { ok: true, facturas: data as FacturaPortal[] };
+  const d = data as { facturas?: FacturaPortal[]; ajustes?: AjusteMes[] };
+  return { ok: true, facturas: d.facturas ?? [], ajustes: d.ajustes ?? [] };
 }
 
 export async function marcarPago(
