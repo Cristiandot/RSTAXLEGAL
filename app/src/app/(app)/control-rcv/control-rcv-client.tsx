@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { formatMonto } from "@/lib/format";
 import { ThSort } from "@/components/th-sort";
 import { comparar, type Orden } from "@/lib/ordenar";
 
@@ -44,13 +45,35 @@ export type DescargaRcv = {
   ultima_descarga: string;
 };
 
+/** Fila de `v_rcv_totales_periodo`: totales del registro por empresa y mes (NC negativas). */
+export type TotalesRcv = {
+  cliente_id: string;
+  periodo: string;
+  ventas_total: number | string | null;
+  ventas_nc_total: number | string | null;
+  ventas_nc_docs: number | null;
+  compras_total: number | string | null;
+  compras_nc_total: number | string | null;
+  compras_nc_docs: number | null;
+};
+
 type Props = {
   periodos: string[];
   etiquetas: string[];
   empresas: EmpresaControl[];
   descargas: DescargaRcv[];
+  totales: TotalesRcv[];
   errorCarga: string | null;
 };
+
+const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+/** "2026-01" → "Ene" (o "Ene 25" si el rango cruza de año, para no confundir). */
+function etiquetaCorta(periodo: string, multiAnio: boolean): string {
+  const [y, m] = periodo.split("-").map(Number);
+  const mes = MESES_CORTOS[(m ?? 1) - 1] ?? periodo;
+  return multiAnio ? `${mes} ${String(y).slice(2)}` : mes;
+}
 
 /** Estado de un mes concreto de una empresa. */
 type EstadoCelda = "sin-clave" | "falta" | "parcial" | "sin-verificar" | "cuadra" | "revisar";
@@ -78,7 +101,7 @@ const ESTILO_CELDA: Record<EstadoCelda, { clase: string; glifo: string }> = {
   "revisar": { clase: "border-amber-200 bg-amber-50 text-amber-700", glifo: "≠" },
   "parcial": { clase: "border-violet-200 bg-violet-50 text-violet-700", glifo: "≈" },
   "sin-verificar": { clase: "border-sky-200 bg-sky-50 text-sky-700", glifo: "•" },
-  "falta": { clase: "border-red-200 bg-red-50 text-red-600", glifo: "falta" },
+  "falta": { clase: "border-red-200 bg-red-50 text-red-600", glifo: "✗" },
   "sin-clave": { clase: "border-transparent text-slate-300", glifo: "·" },
 };
 
@@ -91,16 +114,26 @@ function ResumenCard({ label, valor, tono }: { label: string; valor: number; ton
   );
 }
 
-export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, errorCarga }: Props) {
+export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, totales, errorCarga }: Props) {
   const [buscar, setBuscar] = useState("");
   const [soloPendientes, setSoloPendientes] = useState(false);
   const [orden, setOrden] = useState<Orden>(null);
+  // Mes cuyos totales (ventas/compras/NC) se muestran en las columnas de montos.
+  const [mesTotales, setMesTotales] = useState(periodos[periodos.length - 1]);
 
   const mapa = useMemo(() => {
     const m = new Map<string, DescargaRcv>();
     for (const d of descargas) m.set(`${d.cliente_id}|${d.periodo}`, d);
     return m;
   }, [descargas]);
+
+  const mapaTotales = useMemo(() => {
+    const m = new Map<string, TotalesRcv>();
+    for (const t of totales) m.set(`${t.cliente_id}|${t.periodo}`, t);
+    return m;
+  }, [totales]);
+
+  const multiAnio = new Set(periodos.map((p) => p.slice(0, 4))).size > 1;
 
   const filas = useMemo(() => {
     const base = empresas.map((e) => {
@@ -137,9 +170,14 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
       // Columnas de mes: se ordena por el estado del mes (de mejor a peor).
       const iMes = periodos.indexOf(orden.col);
       if (iMes >= 0) return RANGO_ESTADO_CELDA[f.celdas[iMes].estado];
+      const tot = mapaTotales.get(`${f.empresa.id}|${mesTotales}`);
       switch (orden.col) {
         case "empresa":
           return f.empresa.razon_social;
+        case "ventas":
+          return tot?.ventas_total !== null && tot?.ventas_total !== undefined ? Number(tot.ventas_total) : null;
+        case "compras":
+          return tot?.compras_total !== null && tot?.compras_total !== undefined ? Number(tot.compras_total) : null;
         case "estado":
           // Estado global: al día → sin verificar → revisar → faltan → sin clave.
           if (!f.empresa.tieneClave) return 4;
@@ -152,7 +190,7 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
       }
     };
     return [...out].sort((a, b) => comparar(val(a), val(b), orden.dir));
-  }, [filas, buscar, soloPendientes, orden, periodos]);
+  }, [filas, buscar, soloPendientes, orden, periodos, mapaTotales, mesTotales]);
 
   const resumen = useMemo(() => {
     let alDia = 0, porRevisar = 0, conFaltantes = 0, sinClave = 0;
@@ -171,8 +209,10 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
         <h1 className="text-xl font-semibold">Control de descargas RCV</h1>
         <p className="text-sm text-muted-foreground">
           Por empresa y mes: si el Registro de Compras y Ventas está descargado del SII y si los
-          documentos cuadran con lo que el SII declara. Pasa el cursor por una celda para ver el
-          detalle (nuestros documentos vs. los del SII).
+          documentos cuadran con lo que el SII declara. Las columnas de Ventas y Compras traen los
+          totales del mes elegido (con las notas de crédito ya restadas y detalladas debajo) para
+          cuadrar contra el SII sin entrar empresa por empresa. Pasa el cursor por una celda para
+          ver el detalle.
         </p>
       </div>
 
@@ -201,6 +241,19 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
           <Checkbox checked={soloPendientes} onCheckedChange={(v) => setSoloPendientes(Boolean(v))} />
           Solo con pendientes
         </label>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          Totales de
+          <select
+            aria-label="Mes de los totales"
+            className="h-9 rounded-md border border-input bg-card px-2 text-sm text-foreground shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={mesTotales}
+            onChange={(e) => setMesTotales(e.target.value)}
+          >
+            {periodos.map((p, i) => (
+              <option key={p} value={p}>{etiquetas[i]}</option>
+            ))}
+          </select>
+        </label>
         <div className="ml-auto flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <LeyendaItem clase="bg-emerald-500" texto="cuadra" />
           <LeyendaItem clase="bg-amber-500" texto="revisar" />
@@ -217,11 +270,17 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
               <ThSort col="empresa" orden={orden} setOrden={setOrden} className="min-w-[240px]">
                 Empresa
               </ThSort>
-              {etiquetas.map((et, i) => (
-                <ThSort key={periodos[i]} col={periodos[i]} orden={orden} setOrden={setOrden} className="text-center">
-                  {et}
+              {periodos.map((p, i) => (
+                <ThSort key={p} col={p} orden={orden} setOrden={setOrden} className="w-14 text-center">
+                  <span title={etiquetas[i]}>{etiquetaCorta(p, multiAnio)}</span>
                 </ThSort>
               ))}
+              <ThSort col="ventas" orden={orden} setOrden={setOrden} className="text-right">
+                Ventas {etiquetaCorta(mesTotales, multiAnio)}
+              </ThSort>
+              <ThSort col="compras" orden={orden} setOrden={setOrden} className="text-right">
+                Compras {etiquetaCorta(mesTotales, multiAnio)}
+              </ThSort>
               <ThSort col="estado" orden={orden} setOrden={setOrden} className="text-center">
                 Estado
               </ThSort>
@@ -245,7 +304,7 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
                 </TableCell>
 
                 {f.celdas.map((c, i) => (
-                  <TableCell key={periodos[i]} className="text-center">
+                  <TableCell key={periodos[i]} className="px-1 text-center">
                     {f.empresa.tieneClave ? (
                       <Link href={`/control-rcv/${f.empresa.id}?periodo=${periodos[i]}`} className="inline-block hover:opacity-80" title="Ver detalle del mes">
                         <CeldaEstado estado={c.estado} d={c.d} />
@@ -256,6 +315,15 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
                   </TableCell>
                 ))}
 
+                <CeldaTotales
+                  tot={mapaTotales.get(`${f.empresa.id}|${mesTotales}`) ?? null}
+                  registro="ventas"
+                />
+                <CeldaTotales
+                  tot={mapaTotales.get(`${f.empresa.id}|${mesTotales}`) ?? null}
+                  registro="compras"
+                />
+
                 <TableCell className="text-center">
                   <EstadoEmpresa fila={f} totalMeses={periodos.length} />
                 </TableCell>
@@ -263,7 +331,7 @@ export function ControlRcvClient({ periodos, etiquetas, empresas, descargas, err
             ))}
             {filtradas.length === 0 && (
               <TableRow>
-                <TableCell colSpan={periodos.length + 2} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={periodos.length + 4} className="py-8 text-center text-muted-foreground">
                   Sin empresas para el filtro.
                 </TableCell>
               </TableRow>
@@ -304,11 +372,35 @@ function CeldaEstado({ estado, d }: { estado: EstadoCelda; d: DescargaRcv | null
 
   return (
     <span
-      className={cn("inline-flex min-w-[2.2rem] items-center justify-center rounded-md border px-1.5 py-0.5 text-xs font-medium", clase)}
+      className={cn("inline-flex size-6 items-center justify-center rounded-md border text-[11px] font-medium", clase)}
       title={titulo}
     >
       {glifo}
     </span>
+  );
+}
+
+/**
+ * Totales del mes seleccionado para la cuadratura de la contadora contra el
+ * SII: total del registro (las NC vienen negativas, o sea es el neto) y, si
+ * hay notas de crédito, su monto y cantidad debajo.
+ */
+function CeldaTotales({ tot, registro }: { tot: TotalesRcv | null; registro: "ventas" | "compras" }) {
+  const total = registro === "ventas" ? tot?.ventas_total : tot?.compras_total;
+  const nc = registro === "ventas" ? tot?.ventas_nc_total : tot?.compras_nc_total;
+  const ncDocs = (registro === "ventas" ? tot?.ventas_nc_docs : tot?.compras_nc_docs) ?? 0;
+  if (total === null || total === undefined) {
+    return <TableCell className="text-right text-muted-foreground/50">—</TableCell>;
+  }
+  return (
+    <TableCell className="text-right">
+      <div className="font-medium tabular-nums">{formatMonto(Number(total))}</div>
+      {ncDocs > 0 && (
+        <div className="text-[11px] text-red-500 tabular-nums" title={`${ncDocs} nota${ncDocs === 1 ? "" : "s"} de crédito incluida${ncDocs === 1 ? "" : "s"} en el total`}>
+          NC {formatMonto(Number(nc ?? 0))} ({ncDocs})
+        </div>
+      )}
+    </TableCell>
   );
 }
 

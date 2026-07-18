@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { periodoPorDefecto, etiquetaPeriodo } from "@/lib/periodos";
-import { ControlRcvClient, type EmpresaControl, type DescargaRcv } from "./control-rcv-client";
+import { ControlRcvClient, type EmpresaControl, type DescargaRcv, type TotalesRcv } from "./control-rcv-client";
 
 export const metadata = { title: "Control RCV — RS Tax & Legal" };
 
@@ -19,7 +19,7 @@ export default async function ControlRcvPage() {
   const periodos = ultimosPeriodos(6);
   const supabase = await createClient();
 
-  const [empresasRes, gruposRes, descargasRes] = await Promise.all([
+  const [empresasRes, gruposRes, descargasRes, totalesRes] = await Promise.all([
     // Solo empresas a las que les llevamos el RCV/contabilidad: hacen F29 (que se
     // arma del RCV) o contabilidad completa. Excluye casa particular, solo-RRHH,
     // solo-legal y trabajos puntuales.
@@ -37,6 +37,9 @@ export default async function ControlRcvPage() {
         "cliente_id, periodo, ventas_docs, compras_docs, ventas_docs_sii, compras_docs_sii, alto_volumen, ultima_descarga",
       )
       .in("periodo", periodos),
+    // Totales del registro por empresa y mes (ventas, compras y NC) para la
+    // cuadratura visual de la contadora contra el SII.
+    supabase.from("v_rcv_totales_periodo").select("*").in("periodo", periodos),
   ]);
 
   const codigoPorGrupo = new Map<string, string>();
@@ -53,6 +56,7 @@ export default async function ControlRcvPage() {
   }));
 
   const descargas = (descargasRes.data ?? []) as DescargaRcv[];
+  const totales = (totalesRes.data ?? []) as TotalesRcv[];
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
@@ -61,6 +65,7 @@ export default async function ControlRcvPage() {
         etiquetas={periodos.map(etiquetaPeriodo)}
         empresas={empresas}
         descargas={descargas}
+        totales={totales}
         errorCarga={empresasRes.error?.message ?? descargasRes.error?.message ?? null}
       />
     </main>
