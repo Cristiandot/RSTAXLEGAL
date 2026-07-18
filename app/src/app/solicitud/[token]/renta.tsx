@@ -1,31 +1,123 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Landmark, Info } from "lucide-react";
+import { Loader2, Landmark, Info, Sprout } from "lucide-react";
 import { cargarRenta, type Renta } from "./reportes-actions";
+import { cargarEstadoResultado, type MesResultado } from "./estado-resultado-actions";
 
 function clp(n: number): string {
   return (n < 0 ? "-$" : "$") + new Intl.NumberFormat("es-CL").format(Math.abs(Math.round(n)));
 }
 
+const MES_ABR = ["", "ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+type Proyeccion = {
+  resultadoAnual: number;
+  ventaAnual: number;
+  gastosMenores: number;
+  base: number;
+  impuesto: number;
+  ppm: number;
+  rentaPagar: number;
+  baseReinv: number;
+  impuestoReinv: number;
+  ahorroReinv: number;
+  tasaPct: number;
+  mesesReales: number;
+  mesesProyectados: number[]; // índices 1..12 proyectados
+};
+
+/**
+ * Proyección de la renta: los meses no cerrados se estiman como el promedio de
+ * los 3 meses inmediatamente anteriores, en cascada (un mes proyectado alimenta
+ * el siguiente). Cerrado = mes con remuneraciones cargadas (info completa).
+ */
+function proyectar(meses: MesResultado[], ppm: number, tasaPct: number): Proyeccion | null {
+  if (meses.length === 0) return null;
+  const resultado: (number | null)[] = Array(13).fill(null);
+  const ventas: (number | null)[] = Array(13).fill(null);
+  let ultimoReal = 0;
+  let hayCerrado = false;
+  for (const m of meses) {
+    const mes = Number(m.periodo.slice(5, 7));
+    if (mes < 1 || mes > 12) continue;
+    resultado[mes] = Number(m.resultado ?? 0);
+    ventas[mes] = Number(m.ingresos ?? 0);
+    if (m.remun_cargada) {
+      hayCerrado = true;
+      if (mes > ultimoReal) ultimoReal = mes;
+    }
+  }
+  // Sin meses cerrados (p. ej. año histórico sin remuneraciones): se toman como
+  // reales todos los meses con datos y se proyecta solo lo que falte al final.
+  if (!hayCerrado) {
+    for (let mes = 12; mes >= 1; mes--) {
+      if (resultado[mes] !== null) { ultimoReal = mes; break; }
+    }
+  }
+
+  const proyectados: number[] = [];
+  const prom3 = (arr: (number | null)[], mes: number) => {
+    const v = [arr[mes - 1], arr[mes - 2], arr[mes - 3]].filter((x): x is number => x !== null);
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
+  };
+  for (let mes = 1; mes <= 12; mes++) {
+    const esReal = mes <= ultimoReal && resultado[mes] !== null;
+    if (esReal) continue;
+    resultado[mes] = prom3(resultado, mes);
+    ventas[mes] = prom3(ventas, mes);
+    proyectados.push(mes);
+  }
+
+  const sum = (arr: (number | null)[]) => arr.reduce((a: number, b) => a + (b ?? 0), 0);
+  const resultadoAnual = sum(resultado);
+  const ventaAnual = sum(ventas);
+  const gastosMenores = ventaAnual * 0.05;
+  const base = resultadoAnual - gastosMenores;
+  const tasa = tasaPct / 100;
+  const impuesto = base * tasa;
+  const rentaPagar = impuesto - ppm;
+  const baseReinv = base * 0.5;
+  const impuestoReinv = baseReinv * tasa;
+  return {
+    resultadoAnual,
+    ventaAnual,
+    gastosMenores,
+    base,
+    impuesto,
+    ppm,
+    rentaPagar,
+    baseReinv,
+    impuestoReinv,
+    ahorroReinv: impuesto - impuestoReinv,
+    tasaPct,
+    mesesReales: ultimoReal,
+    mesesProyectados: proyectados,
+  };
+}
+
 export function RentaProyectada({ token, anio = 2026 }: { token: string; anio?: number }) {
-  const [d, setD] = useState<Renta | null>(null);
+  const [p, setP] = useState<Proyeccion | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
     let vivo = true;
     setCargando(true);
-    cargarRenta(token, anio).then((r) => {
-      if (!vivo) return;
-      setD(r.ok ? (r.data ?? null) : null);
-      setCargando(false);
-    });
+    Promise.all([cargarRenta(token, anio), cargarEstadoResultado(token, anio)]).then(
+      ([rRenta, rEr]) => {
+        if (!vivo) return;
+        const d: Renta | null = rRenta.ok ? (rRenta.data ?? null) : null;
+        const meses = rEr.ok ? (rEr.meses ?? []) : [];
+        setP(d ? proyectar(meses, Number(d.ppm_acumulado ?? 0), d.tasa_pct ?? 12.5) : null);
+        setCargando(false);
+      },
+    );
     return () => { vivo = false; };
   }, [token, anio]);
 
   const card = "card-soft rounded-xl bg-card p-5";
   if (cargando) return <div className={`${card} flex items-center gap-2 text-sm text-muted-foreground`}><Loader2 className="size-4 animate-spin" /> Cargando…</div>;
-  if (!d) return null;
+  if (!p) return null;
 
   const linea = (etq: string, val: number, op = "", fuerte = false) => (
     <div className={`flex justify-between py-1.5 ${fuerte ? "border-t border-border font-medium" : "border-b border-border/60"}`}>
@@ -34,9 +126,12 @@ export function RentaProyectada({ token, anio = 2026 }: { token: string; anio?: 
     </div>
   );
 
+  const proyTxt = p.mesesProyectados.length
+    ? p.mesesProyectados.map((m) => MES_ABR[m]).join(", ")
+    : null;
+
   return (
     <div className="space-y-4">
-      {/* Renta proyectada */}
       <div className={card}>
         <div className="mb-3 flex items-center justify-between gap-2">
           <span className="font-heading text-lg font-semibold tracking-tight">
@@ -45,23 +140,38 @@ export function RentaProyectada({ token, anio = 2026 }: { token: string; anio?: 
           </span>
           <div className="text-right">
             <div className="text-xs text-muted-foreground">Renta a pagar (est.)</div>
-            <div className="text-2xl font-semibold tabular-nums text-foreground">{clp(d.renta_a_pagar)}</div>
+            <div className="text-2xl font-semibold tabular-nums text-foreground">{clp(p.rentaPagar)}</div>
           </div>
         </div>
 
         <div className="text-sm">
-          {linea("Resultado anualizado", d.resultado_anualizado)}
-          {linea(`Impuesto 1ª categoría (${d.tasa_pct}% ProPyme)`, d.renta_estimada, "= ")}
-          {linea("PPM acumulado (crédito)", d.ppm_acumulado, "− ")}
-          {linea("Renta a pagar proyectada", d.renta_a_pagar, "= ", true)}
+          {linea("Resultado anualizado proyectado", p.resultadoAnual)}
+          {linea("Gastos menores proyectados (5% ventas)", p.gastosMenores, "− ")}
+          {linea("Base afecta estimada", p.base, "= ")}
+          {linea(`Impuesto 1ª categoría (${p.tasaPct}% ProPyme)`, p.impuesto, "= ")}
+          {linea("PPM acumulado (crédito)", p.ppm, "− ")}
+          {linea("Renta a pagar proyectada", p.rentaPagar, "= ", true)}
         </div>
 
-        <div className="mt-3 flex items-start gap-2 rounded-md bg-amber-50 p-3">
+        {/* Beneficio de reinversión (ProPyme 14 D N°3 · incentivo al ahorro) */}
+        <div className="mt-3 flex items-start gap-2 rounded-md bg-emerald-50 p-3">
+          <Sprout className="mt-0.5 size-4 shrink-0 text-emerald-700" aria-hidden="true" />
+          <p className="m-0 text-xs text-emerald-800">
+            <strong>Beneficio de reinversión (50%).</strong> Si reinviertes utilidades en la empresa,
+            puedes rebajar de la base afecta el <strong>50% de lo reinvertido, con tope de UF 5.000</strong>{" "}
+            (ProPyme 14D N°3, incentivo al ahorro). En tu caso el tope acota el beneficio, así que el
+            ahorro real es menor al 50% teórico — lo calculamos con el monto exacto a reinvertir antes
+            del cierre.
+          </p>
+        </div>
+
+        <div className="mt-2 flex items-start gap-2 rounded-md bg-amber-50 p-3">
           <Info className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden="true" />
           <p className="m-0 text-xs text-amber-800">
-            Estimación de gestión: resultado anualizado sobre {d.meses_completos} meses con
-            información completa, tasa transitoria ProPyme 14D N°3 ({d.tasa_pct}%), menos el
-            PPM acumulado del año. No reemplaza el cálculo formal de la Renta Líquida Imponible.
+            Estimación de gestión: {p.mesesReales} meses reales
+            {proyTxt ? `; los meses ${proyTxt} se proyectan como el promedio de los 3 meses anteriores` : ""}.
+            Tasa transitoria ProPyme 14D N°3 ({p.tasaPct}%), menos el PPM acumulado del año. No
+            reemplaza el cálculo formal de la Renta Líquida Imponible.
           </p>
         </div>
       </div>
