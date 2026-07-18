@@ -23,7 +23,7 @@ export default async function TesoreriaPortalPage({
 
   const { data: cliente } = await supabase
     .from("clientes")
-    .select("id, razon_social, hace_tesoreria, plazo_pago_ventas, plazo_pago_compras, conciliacion_desde")
+    .select("id, razon_social, hace_tesoreria, grupo_id, plazo_pago_ventas, plazo_pago_compras, conciliacion_desde")
     .eq("form_token", token)
     .eq("activo", true)
     .maybeSingle();
@@ -67,6 +67,21 @@ export default async function TesoreriaPortalPage({
     );
   }
 
+  // Empresas hermanas del grupo con tesorería activa: si hay más de una, el
+  // cliente elige con cuál conciliar (chips arriba, como en su portal).
+  let hermanas: { token: string; nombre: string }[] = [];
+  if (cliente.grupo_id) {
+    const { data: hs } = await supabase
+      .from("clientes")
+      .select("form_token, razon_social")
+      .eq("grupo_id", cliente.grupo_id)
+      .eq("activo", true)
+      .eq("hace_tesoreria", true)
+      .not("form_token", "is", null)
+      .order("razon_social");
+    hermanas = (hs ?? []).map((h) => ({ token: h.form_token as string, nombre: h.razon_social as string }));
+  }
+
   const hoy = hoyChile();
   const desde = (cliente.conciliacion_desde as string | null) ?? addDias(hoy, -365);
 
@@ -107,6 +122,25 @@ export default async function TesoreriaPortalPage({
           <Image src="/logo-claro.png" alt="RS Tax & Legal" width={170} height={48} priority className="h-auto w-[160px]" />
           <div className="text-right text-sm text-muted-foreground">Al día {formatFecha(hoy)}</div>
         </div>
+
+        {/* Selector de empresa del grupo (solo si hay más de una con tesorería) */}
+        {hermanas.length > 1 && (
+          <div className="mt-5 flex flex-wrap gap-2">
+            {hermanas.map((h) => (
+              <a
+                key={h.token}
+                href={`/tesoreria-portal/${h.token}`}
+                className={`inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                  h.token === token
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {h.nombre}
+              </a>
+            ))}
+          </div>
+        )}
 
         <h1 className="mt-6 font-heading text-2xl font-semibold">{cliente.razon_social}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
