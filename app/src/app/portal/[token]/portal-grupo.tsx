@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Image from "next/image";
 import { Building2, Home, LayoutGrid, KeyRound, Loader2, Check } from "lucide-react";
 import { PortalCliente } from "@/app/solicitud/[token]/portal";
-import { TesoreriaBoton } from "@/app/solicitud/[token]/tesoreria-boton";
+import { TesoreriaBotonGrupo } from "@/app/solicitud/[token]/tesoreria-boton";
 import { type InfoEmpresa } from "@/app/solicitud/[token]/solicitud-form";
 import { cambiarPinPortal } from "./portal-auth";
 
@@ -71,9 +71,7 @@ export function PortalGrupo({
             className="h-auto w-[150px] sm:w-[180px]"
           />
           <div className="flex flex-wrap justify-end gap-2">
-            {empresas.map((e) => (
-              <TesoreriaBoton key={e.meta.token} token={e.meta.token} />
-            ))}
+            <TesoreriaBotonGrupo tokens={empresas.map((e) => e.meta.token)} />
           </div>
         </div>
         <div>
