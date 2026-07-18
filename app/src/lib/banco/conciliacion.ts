@@ -390,15 +390,143 @@ export async function desconciliarMovimientoCore(
  *   monto → monto exacto con candidato único, sin RUT (opt-in)
  * Lo que no calza inequívocamente queda pendiente.
  */
+/**
+ * Búsqueda MANUAL de documentos para conciliar (recuadro de búsqueda estilo
+ * Chipax): por folio, razón social/RUT o monto. Busca en la dirección del
+ * movimiento (cargo → compras y honorarios; abono → ventas), excluyendo lo ya
+ * conciliado. El monto distinto al del movimiento se marca `parcial`.
+ */
+export async function buscarDocumentosCore(
+  supabase: SupabaseClient,
+  movimientoId: string,
+  q: string,
+  clienteId?: string,
+): Promise<{ ok: boolean; sugerencias?: Sugerencia[]; error?: string }> {
+  const mov = await movimientoDe(supabase, movimientoId, clienteId);
+  if (!mov) return { ok: false, error: "Movimiento no encontrado" };
+  const texto = q.trim().slice(0, 60);
+  if (texto.length < 2) return { ok: true, sugerencias: [] };
+
+  const montoMov = Math.abs(Number(mov.abono) - Number(mov.cargo));
+  const rutMov = rutKey(mov.rut_contraparte);
+  const esCargo = Number(mov.cargo) > 0;
+  // Sanitizar para el filtro .or() de PostgREST (comas y paréntesis rompen la sintaxis).
+  const sano = texto.replace(/[(),%]/g, " ").trim();
+  const num = Number(sano.replace(/\./g, "").replace(",", "."));
+  const esNumero = /^[\d.,]+$/.test(sano) && Number.isFinite(num) && num > 0;
+
+  const { data: yaConc } = await supabase
+    .from("banco_conciliacion")
+    .select("doc_id")
+    .eq("cliente_id", mov.cliente_id)
+    .not("doc_id", "is", null);
+  const tomados = new Set((yaConc ?? []).map((r) => r.doc_id as string));
+
+  const out: Sugerencia[] = [];
+  const pushDoc = (s: Sugerencia) => {
+    if (s.docId && tomados.has(s.docId)) return;
+    out.push({ ...s, parcial: s.monto !== montoMov ? true : undefined });
+  };
+
+  if (esCargo) {
+    const filtro = esNumero
+      ? `folio.eq.${Math.round(num)},monto_total.eq.${Math.round(num)}`
+      : `razon_social.ilike.%${sano}%,rut_proveedor.ilike.%${sano}%`;
+    const { data: compras } = await supabase
+      .from("rcv_compras")
+      .select("id, folio, fecha_docto, rut_proveedor, razon_social, monto_total")
+      .eq("cliente_id", mov.cliente_id)
+      .or(filtro)
+      .order("fecha_docto", { ascending: false })
+      .limit(8);
+    for (const c of compras ?? []) {
+      pushDoc({
+        docTipo: "compra",
+        docId: c.id as string,
+        ref: `Factura ${c.folio ?? "s/f"}`,
+        contraparte: c.razon_social || c.rut_proveedor,
+        monto: Number(c.monto_total),
+        fecha: c.fecha_docto as string | null,
+        pagadoPct: null,
+        rutMatch: !!rutMov && rutKey(c.rut_proveedor) === rutMov,
+        confianza: "media",
+      });
+    }
+    const filtroHon = esNumero
+      ? `folio.eq.${Math.round(num)},liquido.eq.${Math.round(num)}`
+      : `nombre.ilike.%${sano}%,rut_emisor.ilike.%${sano}%`;
+    const { data: hons } = await supabase
+      .from("honorarios_recibidos")
+      .select("id, folio, fecha, rut_emisor, nombre, liquido")
+      .eq("cliente_id", mov.cliente_id)
+      .or(filtroHon)
+      .limit(6);
+    for (const h of hons ?? []) {
+      pushDoc({
+        docTipo: "honorario",
+        docId: h.id as string,
+        ref: `Boleta hon. ${h.folio ?? "s/f"}`,
+        contraparte: h.nombre || h.rut_emisor,
+        monto: Number(h.liquido),
+        fecha: h.fecha as string | null,
+        pagadoPct: null,
+        rutMatch: !!rutMov && rutKey(h.rut_emisor) === rutMov,
+        confianza: "media",
+      });
+    }
+  } else {
+    const filtro = esNumero
+      ? `folio.eq.${Math.round(num)},monto_total.eq.${Math.round(num)}`
+      : `razon_social.ilike.%${sano}%,rut_cliente.ilike.%${sano}%`;
+    const { data: ventas } = await supabase
+      .from("rcv_ventas")
+      .select("id, folio, fecha_docto, rut_cliente, razon_social, monto_total")
+      .eq("cliente_id", mov.cliente_id)
+      .or(filtro)
+      .order("fecha_docto", { ascending: false })
+      .limit(10);
+    for (const v of ventas ?? []) {
+      pushDoc({
+        docTipo: "venta",
+        docId: v.id as string,
+        ref: `Factura ${v.folio ?? "s/f"}`,
+        contraparte: v.razon_social || v.rut_cliente,
+        monto: Number(v.monto_total),
+        fecha: v.fecha_docto as string | null,
+        pagadoPct: null,
+        rutMatch: !!rutMov && rutKey(v.rut_cliente) === rutMov,
+        confianza: "media",
+      });
+    }
+  }
+
+  return { ok: true, sugerencias: out.slice(0, 10) };
+}
+
+/** Par movimiento↔documento propuesto por el cruce (pestaña "Sugerencias"). */
+export type ParConciliacion = {
+  movimientoId: string;
+  movGlosa: string | null;
+  movFecha: string;
+  monto: number;
+  esCargo: boolean;
+  docTipo: DocTipoConciliacion;
+  docId: string | null;
+  docRef: string;
+  contraparte: string | null;
+  criterio: string;
+};
+
 export async function conciliarAutomaticoCore(
   supabase: SupabaseClient,
   cuentaId: string,
-  opts?: { creadoPor?: string | null; clienteId?: string },
+  opts?: { creadoPor?: string | null; clienteId?: string; dryRun?: boolean },
 ): Promise<{
   ok: boolean;
   conciliados?: number;
   revisar?: number;
   porCriterio?: Record<string, number>;
+  pares?: ParConciliacion[];
   error?: string;
 }> {
   const { data: cuenta } = await supabase
@@ -429,15 +557,15 @@ export async function conciliarAutomaticoCore(
         .not("doc_id", "is", null),
       supabase
         .from("rcv_compras")
-        .select("id, monto_total, rut_proveedor, folio")
+        .select("id, monto_total, rut_proveedor, folio, razon_social")
         .eq("cliente_id", cuenta.cliente_id),
       supabase
         .from("rcv_ventas")
-        .select("id, monto_total, rut_cliente, folio")
+        .select("id, monto_total, rut_cliente, folio, razon_social")
         .eq("cliente_id", cuenta.cliente_id),
       supabase
         .from("honorarios_recibidos")
-        .select("id, liquido, rut_emisor, folio")
+        .select("id, liquido, rut_emisor, folio, nombre")
         .eq("cliente_id", cuenta.cliente_id),
       supabase
         .from("ciclo_f29")
@@ -462,7 +590,7 @@ export async function conciliarAutomaticoCore(
     monto: cli?.auto_conc_monto === true,
   };
 
-  type Cand = { id: string; rut: string; folio: string; tipo: DocTipoConciliacion };
+  type Cand = { id: string; rut: string; folio: string; tipo: DocTipoConciliacion; nombre: string };
   const porMontoCargo = new Map<number, Cand[]>();
   const porMontoAbono = new Map<number, Cand[]>();
   const push = (m: Map<number, Cand[]>, monto: number, c: Cand) => {
@@ -471,9 +599,9 @@ export async function conciliarAutomaticoCore(
     m.set(monto, arr);
   };
   const folioKey = (f: unknown) => String(f ?? "").replace(/^0+/, "");
-  for (const c of compras ?? []) push(porMontoCargo, Number(c.monto_total), { id: c.id as string, rut: rutKey(c.rut_proveedor), folio: folioKey(c.folio), tipo: "compra" });
-  for (const h of hons ?? []) push(porMontoCargo, Number(h.liquido), { id: h.id as string, rut: rutKey(h.rut_emisor), folio: folioKey(h.folio), tipo: "honorario" });
-  for (const v of ventas ?? []) push(porMontoAbono, Number(v.monto_total), { id: v.id as string, rut: rutKey(v.rut_cliente), folio: folioKey(v.folio), tipo: "venta" });
+  for (const c of compras ?? []) push(porMontoCargo, Number(c.monto_total), { id: c.id as string, rut: rutKey(c.rut_proveedor), folio: folioKey(c.folio), tipo: "compra", nombre: (c.razon_social as string) || (c.rut_proveedor as string) || "" });
+  for (const h of hons ?? []) push(porMontoCargo, Number(h.liquido), { id: h.id as string, rut: rutKey(h.rut_emisor), folio: folioKey(h.folio), tipo: "honorario", nombre: (h.nombre as string) || (h.rut_emisor as string) || "" });
+  for (const v of ventas ?? []) push(porMontoAbono, Number(v.monto_total), { id: v.id as string, rut: rutKey(v.rut_cliente), folio: folioKey(v.folio), tipo: "venta", nombre: (v.razon_social as string) || (v.rut_cliente as string) || "" });
 
   // Registros propios del panel, indexados por monto (solo cargos).
   type CandPanel = { id: string | null; tipo: DocTipoConciliacion; ref: string };
@@ -496,6 +624,7 @@ export async function conciliarAutomaticoCore(
   const panelUsados = new Set<string>(); // refs de panel ya asignadas en esta corrida
   const inserts: Array<Record<string, unknown>> = [];
   const movConciliados: string[] = [];
+  const pares: ParConciliacion[] = [];
   const porCriterio: Record<string, number> = { rut: 0, folio: 0, panel: 0, monto: 0 };
 
   for (const m of movs ?? []) {
@@ -537,6 +666,20 @@ export async function conciliarAutomaticoCore(
       if (elegido.candPanel.id) asignados.add(elegido.candPanel.id);
     }
     porCriterio[elegido.criterio] += 1;
+    pares.push({
+      movimientoId: m.id as string,
+      movGlosa: (m.glosa as string) ?? null,
+      movFecha: m.fecha as string,
+      monto,
+      esCargo: Number(m.cargo) > 0,
+      docTipo: elegido.cand ? elegido.cand.tipo : elegido.candPanel!.tipo,
+      docId: elegido.cand ? elegido.cand.id : elegido.candPanel!.id,
+      docRef: elegido.cand
+        ? `Factura ${elegido.cand.folio || "s/f"}`
+        : elegido.candPanel!.ref,
+      contraparte: elegido.cand ? elegido.cand.nombre : elegido.candPanel!.ref,
+      criterio: elegido.criterio,
+    });
     inserts.push({
       movimiento_id: m.id as string,
       cliente_id: cuenta.cliente_id as string,
@@ -551,7 +694,7 @@ export async function conciliarAutomaticoCore(
     movConciliados.push(m.id as string);
   }
 
-  if (inserts.length > 0) {
+  if (!opts?.dryRun && inserts.length > 0) {
     const { error: e1 } = await supabase.from("banco_conciliacion").insert(inserts);
     if (e1) return { ok: false, error: e1.message };
     for (let i = 0; i < movConciliados.length; i += 200) {
@@ -562,5 +705,5 @@ export async function conciliarAutomaticoCore(
     }
   }
   const totalPend = (movs ?? []).length;
-  return { ok: true, conciliados: inserts.length, revisar: totalPend - inserts.length, porCriterio };
+  return { ok: true, conciliados: inserts.length, revisar: totalPend - inserts.length, porCriterio, pares };
 }

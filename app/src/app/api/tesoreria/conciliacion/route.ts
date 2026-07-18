@@ -6,7 +6,9 @@ import {
   categorizarMovimientoCore,
   desconciliarMovimientoCore,
   conciliarAutomaticoCore,
+  buscarDocumentosCore,
   type DocTipoConciliacion,
+  type ParConciliacion,
 } from "@/lib/banco/conciliacion";
 
 /**
@@ -48,6 +50,25 @@ export async function POST(req: Request) {
   if (accion === "sugerencias") {
     const res = await sugerenciasParaMovimiento(supabase, String(body.movimientoId ?? ""), clienteId);
     return NextResponse.json(res, { status: res.ok ? 200 : 400 });
+  }
+  // Búsqueda manual de documentos para un movimiento (folio / nombre / monto).
+  if (accion === "buscar") {
+    const res = await buscarDocumentosCore(supabase, String(body.movimientoId ?? ""), String(body.q ?? ""), clienteId);
+    return NextResponse.json(res, { status: res.ok ? 200 : 400 });
+  }
+  // Pares sugeridos SIN conciliar (pestaña "Sugerencias" estilo Chipax).
+  if (accion === "sugerencias_lote") {
+    const { data: cuentas } = await supabase
+      .from("banco_cuenta")
+      .select("id")
+      .eq("cliente_id", clienteId)
+      .eq("activo", true);
+    const pares: ParConciliacion[] = [];
+    for (const c of cuentas ?? []) {
+      const r = await conciliarAutomaticoCore(supabase, c.id as string, { clienteId, dryRun: true });
+      if (r.ok && r.pares) pares.push(...r.pares);
+    }
+    return NextResponse.json({ ok: true, pares });
   }
   if (accion === "conciliar") {
     const res = await conciliarMovimientoCore(supabase, {
