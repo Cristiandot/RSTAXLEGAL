@@ -4,12 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Users, UserPlus, FileText, Stethoscope, Banknote, FileX,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
-import { cargarRrhh, type RrhhInfo } from "./portal-actions";
+import { cargarRrhh, type RrhhInfo, type TrabajadorRrhh } from "./portal-actions";
 import { BarrasDotacion } from "./mini-charts";
-import { DocumentosRrhh } from "./documentos-rrhh";
 import { FichaTrabajador } from "./ficha-trabajador";
 import { formatFecha, formatMonto } from "@/lib/format";
+import { comparar, siguienteOrden, type Orden } from "@/lib/ordenar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const MESES = [
@@ -68,6 +69,48 @@ function Kpi({
   );
 }
 
+/** Valor por columna para ordenar la nómina (números como números). */
+function valorOrden(t: TrabajadorRrhh, col: string): string | number | null {
+  switch (col) {
+    case "nombre": return t.nombre;
+    case "cargo": return t.cargo;
+    case "contrato": return t.tipo_contrato;
+    case "desde": return t.fecha_ingreso;
+    case "saldo": return vacDevengadas(t.fecha_ingreso);
+    default: return null;
+  }
+}
+
+/** Encabezado ordenable de la nómina (tabla simple): clic alterna asc → desc → sin orden. */
+function ThOrd({
+  col, orden, setOrden, children, className,
+}: {
+  col: string;
+  orden: Orden;
+  setOrden: (o: Orden) => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const activo = orden?.col === col;
+  return (
+    <th className={`font-medium ${className ?? ""}`}>
+      <button
+        type="button"
+        onClick={() => setOrden(siguienteOrden(orden, col))}
+        className={`inline-flex items-center gap-1 transition-colors hover:text-foreground ${activo ? "text-foreground" : ""}`}
+        title="Ordenar"
+      >
+        {children}
+        {activo ? (
+          orden!.dir === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />
+        ) : (
+          <ArrowUpDown className="size-3 opacity-35" />
+        )}
+      </button>
+    </th>
+  );
+}
+
 export function RecursosHumanos({
   token,
   onSolicitarGestion,
@@ -80,6 +123,7 @@ export function RecursosHumanos({
   const [cargando, setCargando] = useState(true);
   const [fichaId, setFichaId] = useState<string | null>(null);
   const [fichaOpen, setFichaOpen] = useState(false);
+  const [orden, setOrden] = useState<Orden>({ col: "nombre", dir: "asc" });
 
   const recargar = useCallback(async (p: string) => {
     setCargando(true);
@@ -93,7 +137,13 @@ export function RecursosHumanos({
     void recargar(periodo);
   }, [periodo, recargar]);
 
-  const periodosDoc = useMemo(() => ultimosPeriodos(6), []);
+  const filas = useMemo(() => {
+    const arr = info?.trabajadores ?? [];
+    if (!orden) return arr;
+    return [...arr].sort((a, b) =>
+      comparar(valorOrden(a, orden.col), valorOrden(b, orden.col), orden.dir),
+    );
+  }, [info, orden]);
 
   return (
     <div className="space-y-5">
@@ -201,22 +251,22 @@ export function RecursosHumanos({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {info.trabajadores && info.trabajadores.length > 0 ? (
+              {filas.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left text-xs text-muted-foreground">
-                        <th className="py-2 pr-2 font-medium">Trabajador</th>
-                        <th className="py-2 pr-2 font-medium">Cargo</th>
-                        <th className="py-2 pr-2 font-medium">Contrato</th>
-                        <th className="py-2 pr-2 font-medium">Desde</th>
-                        <th className="py-2 font-medium">Saldo vac. (aprox.)</th>
+                        <ThOrd col="nombre" orden={orden} setOrden={setOrden} className="py-2 pr-2">Trabajador</ThOrd>
+                        <ThOrd col="cargo" orden={orden} setOrden={setOrden} className="py-2 pr-2">Cargo</ThOrd>
+                        <ThOrd col="contrato" orden={orden} setOrden={setOrden} className="py-2 pr-2">Contrato</ThOrd>
+                        <ThOrd col="desde" orden={orden} setOrden={setOrden} className="py-2 pr-2">Desde</ThOrd>
+                        <ThOrd col="saldo" orden={orden} setOrden={setOrden} className="py-2">Saldo vac. (aprox.)</ThOrd>
                       </tr>
                     </thead>
                     <tbody>
-                      {info.trabajadores.map((t, i) => (
+                      {filas.map((t) => (
                         <tr
-                          key={i}
+                          key={t.id}
                           onClick={() => { setFichaId(t.id); setFichaOpen(true); }}
                           className="cursor-pointer border-b transition-colors last:border-0 hover:bg-muted/40"
                           title="Ver ficha del trabajador"
@@ -259,37 +309,6 @@ export function RecursosHumanos({
             </CardContent>
           </Card>
 
-          {info.licencias && info.licencias.length > 0 ? (
-            <Card className="card-soft border-transparent">
-              <CardHeader>
-                <CardTitle className="text-base">Licencias vigentes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-1.5 text-sm">
-                  {info.licencias.map((l, i) => (
-                    <li key={i} className="flex items-baseline justify-between gap-2">
-                      <span className="font-medium">{l.trabajador ?? "—"}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {l.dias ? `${l.dias} días · ` : ""}
-                        {formatFecha(l.fecha_inicio)} al {formatFecha(l.fecha_termino)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          ) : null}
-
-          <DocumentosRrhh
-            token={token}
-            trabajadores={(info.trabajadores ?? []).map((t) => ({
-              nombre: t.nombre,
-              rut: t.rut,
-              cargo: t.cargo,
-              fechaIngreso: t.fecha_ingreso,
-            }))}
-            periodos={periodosDoc}
-          />
         </>
       ) : null}
 
