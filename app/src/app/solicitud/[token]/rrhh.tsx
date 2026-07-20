@@ -8,6 +8,7 @@ import {
 import { cargarRrhh, type RrhhInfo } from "./portal-actions";
 import { BarrasDotacion } from "./mini-charts";
 import { DocumentosRrhh } from "./documentos-rrhh";
+import { FichaTrabajador } from "./ficha-trabajador";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -67,10 +68,18 @@ function Kpi({
   );
 }
 
-export function RecursosHumanos({ token }: { token: string }) {
+export function RecursosHumanos({
+  token,
+  onSolicitarGestion,
+}: {
+  token: string;
+  onSolicitarGestion?: (trabajadorId: string) => void;
+}) {
   const [periodo, setPeriodo] = useState(periodoPorDefecto());
   const [info, setInfo] = useState<RrhhInfo | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [fichaId, setFichaId] = useState<string | null>(null);
+  const [fichaOpen, setFichaOpen] = useState(false);
 
   const recargar = useCallback(async (p: string) => {
     setCargando(true);
@@ -184,7 +193,12 @@ export function RecursosHumanos({ token }: { token: string }) {
 
           <Card className="card-soft border-transparent">
             <CardHeader>
-              <CardTitle className="text-base">Nómina activa</CardTitle>
+              <CardTitle className="flex flex-wrap items-baseline gap-2 text-base">
+                Nómina activa
+                <span className="text-xs font-normal text-muted-foreground">
+                  toca un trabajador para ver su ficha
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {info.trabajadores && info.trabajadores.length > 0 ? (
@@ -201,9 +215,14 @@ export function RecursosHumanos({ token }: { token: string }) {
                     </thead>
                     <tbody>
                       {info.trabajadores.map((t, i) => (
-                        <tr key={i} className="border-b last:border-0">
+                        <tr
+                          key={i}
+                          onClick={() => { setFichaId(t.id); setFichaOpen(true); }}
+                          className="cursor-pointer border-b transition-colors last:border-0 hover:bg-muted/40"
+                          title="Ver ficha del trabajador"
+                        >
                           <td className="py-2 pr-2">
-                            {t.nombre}
+                            <span className="font-medium text-[var(--brand-teal)]">{t.nombre}</span>
                             {t.nuevo ? (
                               <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Nuevo</span>
                             ) : null}
@@ -277,6 +296,14 @@ export function RecursosHumanos({ token }: { token: string }) {
       <p className="text-center text-[11px] text-muted-foreground">
         Período de movimientos: {nombrePeriodo(periodo)}.
       </p>
+
+      <FichaTrabajador
+        token={token}
+        trabajadorId={fichaId}
+        open={fichaOpen}
+        onOpenChange={setFichaOpen}
+        onSolicitarGestion={onSolicitarGestion}
+      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, ClipboardCopy, ListChecks } from "lucide-react";
 import { enviarSolicitud, enviarGestion } from "./actions";
@@ -148,12 +148,31 @@ function NotaMinimos() {
   );
 }
 
-export function SolicitudForm({ token, empresa }: { token: string; empresa: InfoEmpresa }) {
+export function SolicitudForm({
+  token,
+  empresa,
+  prefillTrabajadorId,
+}: {
+  token: string;
+  empresa: InfoEmpresa;
+  /** Si viene, preselecciona a ese trabajador (desde la ficha) para una gestión. */
+  prefillTrabajadorId?: string | null;
+}) {
   const [enviando, startEnviar] = useTransition();
   const [enviada, setEnviada] = useState(false);
   const [gestion, setGestion] = useState<TipoGestion>("contrato");
   // "" = sin elegir · "manual" = trabajador que no está en la lista · uuid = registrado
   const [trabajadorSel, setTrabajadorSel] = useState("");
+
+  // Preselección desde la ficha del trabajador: fija a la persona y, si estaba en
+  // "contrato" (que es para nuevas incorporaciones), cambia a "anexo" para que
+  // aparezca el selector de trabajadores registrados.
+  useEffect(() => {
+    if (!prefillTrabajadorId) return;
+    if (!empresa.trabajadores.some((t) => t.id === prefillTrabajadorId)) return;
+    setGestion((g) => (g === "contrato" ? "anexo" : g));
+    setTrabajadorSel(prefillTrabajadorId);
+  }, [prefillTrabajadorId, empresa.trabajadores]);
   const [anexoTipo, setAnexoTipo] = useState("renovacion_fijo_a_fijo");
   const [anexoHoras, setAnexoHoras] = useState("");
   const [causal, setCausal] = useState("");

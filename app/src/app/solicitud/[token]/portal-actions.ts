@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { generarDocx, fechaLarga } from "@/lib/generar-docx";
 import { nombreArchivo } from "@/lib/format";
 
@@ -380,6 +381,7 @@ export async function cargarContabilidadMes(
 
 export type DotacionRow = { area: string; n: number };
 export type TrabajadorRrhh = {
+  id: string;
   nombre: string;
   rut: string | null;
   cargo: string | null;
@@ -431,6 +433,124 @@ export async function cargarRrhh(
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true, info: data as RrhhInfo };
+}
+
+// ===================== Ficha por trabajador =====================
+
+export type FichaTrabajadorBase = {
+  id: string;
+  nombre: string | null;
+  rut: string | null;
+  rut_provisorio: boolean | null;
+  cargo: string | null;
+  sucursal: string | null;
+  tipo_contrato: string | null;
+  fecha_ingreso: string | null;
+  fecha_termino: string | null;
+  sueldo_base: number | null;
+  jornada_tipo: string | null;
+  horas_semanales: number | null;
+  afp: string | null;
+  salud: string | null;
+  correo: string | null;
+  fono: string | null;
+  comuna: string | null;
+  direccion: string | null;
+  activo: boolean | null;
+};
+export type FichaContrato = {
+  id: string;
+  cargo: string | null;
+  tipo_contrato: string | null;
+  fecha_inicio: string | null;
+  fecha_vencimiento: string | null;
+  estado: string | null;
+  documento_path: string | null;
+  created_at: string | null;
+} | null;
+export type FichaAnexo = {
+  id: string;
+  anexo_tipo: string | null;
+  anexo_detalle: string | null;
+  fecha: string | null;
+  estado: string | null;
+  documento_path: string | null;
+};
+export type FichaLicencia = {
+  id: string;
+  tipo: string | null;
+  folio: string | null;
+  dias: number | null;
+  fecha_inicio: string | null;
+  fecha_termino: string | null;
+  estado: string | null;
+  en_planilla: boolean | null;
+};
+export type FichaSolicitud = {
+  id: string;
+  fecha: string | null;
+  estado: string | null;
+  detalle?: string | null;
+  documento_path: string | null;
+};
+export type FichaLiquidacion = { periodo: string; liquido: number | null; estado: string | null };
+export type FichaTrabajador = {
+  trabajador: FichaTrabajadorBase;
+  contrato: FichaContrato;
+  anexos: FichaAnexo[];
+  licencias: FichaLicencia[];
+  amonestaciones: FichaSolicitud[];
+  permisos: FichaSolicitud[];
+  finiquitos: FichaSolicitud[];
+  liquidaciones: FichaLiquidacion[];
+  vacaciones_saldo: number | null;
+};
+
+export async function cargarFichaTrabajador(
+  token: string,
+  trabajadorId: string,
+): Promise<{ ok: boolean; ficha?: FichaTrabajador; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_ficha_trabajador", {
+    p_token: token,
+    p_trabajador_id: trabajadorId,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, ficha: data as FichaTrabajador };
+}
+
+/**
+ * Devuelve una URL firmada (1h) para un documento del trabajador. Valida contra
+ * `portal_ficha_trabajador` que el `documento_path` pertenece efectivamente a un
+ * trabajador del cliente dueño del token; firma con service role (bucket privado).
+ */
+export async function descargarDocumentoTrabajador(
+  token: string,
+  trabajadorId: string,
+  documentoPath: string,
+  nombre?: string,
+): Promise<{ ok: boolean; url?: string; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_ficha_trabajador", {
+    p_token: token,
+    p_trabajador_id: trabajadorId,
+  });
+  if (error || !data) return { ok: false, error: "No autorizado." };
+  const f = data as FichaTrabajador;
+  const paths = new Set<string>();
+  if (f.contrato?.documento_path) paths.add(f.contrato.documento_path);
+  for (const a of f.anexos ?? []) if (a.documento_path) paths.add(a.documento_path);
+  for (const s of [...(f.amonestaciones ?? []), ...(f.permisos ?? []), ...(f.finiquitos ?? [])]) {
+    if (s.documento_path) paths.add(s.documento_path);
+  }
+  if (!paths.has(documentoPath)) return { ok: false, error: "Documento no disponible." };
+
+  const svc = createServiceClient();
+  const { data: signed, error: e2 } = await svc.storage
+    .from("contratos")
+    .createSignedUrl(documentoPath, 3600, { download: nombre ?? true });
+  if (e2 || !signed) return { ok: false, error: e2?.message ?? "No se pudo generar el enlace." };
+  return { ok: true, url: signed.signedUrl };
 }
 
 // ===================== Nómina con remuneración (para Detalle remuneraciones) =====================
