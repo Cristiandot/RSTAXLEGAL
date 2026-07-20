@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Eye, Info, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Eye, Info, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
 import {
   cargarRemuneraciones,
   guardarNovedad,
@@ -64,6 +64,35 @@ const afcEmpleadorTasa = (tipo: string | null): number =>
 
 const BANDA_PREVIEW =
   "VISTA PRELIMINAR · Este documento no constituye una liquidación de sueldo. Es una estimación referencial sujeta a revisión de RS Tax & Legal.";
+
+/** Sección colapsable: muestra solo el título; al hacer clic despliega el contenido. */
+function Acordeon({
+  titulo,
+  children,
+  defaultOpen = false,
+}: {
+  titulo: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Card className="card-soft border-transparent">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-2 px-6 py-4 text-left"
+        aria-expanded={open}
+      >
+        <span className="font-heading text-base font-semibold">{titulo}</span>
+        <ChevronDown
+          className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open ? <CardContent className="space-y-3 pt-0">{children}</CardContent> : null}
+    </Card>
+  );
+}
 
 function moverPeriodo(p: string, delta: number): string {
   const [y, m] = p.split("-").map(Number);
@@ -686,16 +715,12 @@ export function DetalleRemuneraciones({
 
           {/* Módulo: bonos del mes (carga masiva por trabajador) */}
           {!cerrado ? (
-            <Card className="card-soft border-transparent">
-              <CardHeader>
-                <CardTitle className="text-base">Bonos del mes</CardTitle>
-                <CardDescription>
+            <Acordeon titulo="Bonos del mes">
+                <p className="text-sm text-muted-foreground">
                   Ponle nombre al bono y el monto por trabajador — se cargan a todos de una vez. Cada
                   bono queda como una novedad del mes (su nombre identifica la columna del período en
                   las remuneraciones).
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
+                </p>
                 <div className="flex flex-col gap-1.5 sm:max-w-sm">
                   <Label className="text-xs">Nombre del bono</Label>
                   <Input
@@ -732,22 +757,17 @@ export function DetalleRemuneraciones({
                 ) : (
                   <p className="text-sm text-muted-foreground">No hay trabajadores registrados para esta empresa.</p>
                 )}
-              </CardContent>
-            </Card>
+            </Acordeon>
           ) : null}
 
           {/* Módulo: descuentos del mes (carga masiva por trabajador) */}
           {!cerrado ? (
-            <Card className="card-soft border-transparent">
-              <CardHeader>
-                <CardTitle className="text-base">Descuentos del mes</CardTitle>
-                <CardDescription>
+            <Acordeon titulo="Descuentos del mes">
+                <p className="text-sm text-muted-foreground">
                   Ponle nombre al descuento y el monto por trabajador — se cargan a todos de una vez.
                   Cada descuento queda como una novedad del mes (su nombre identifica la columna del
                   período en las remuneraciones).
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
+                </p>
                 <div className="flex flex-col gap-1.5 sm:max-w-sm">
                   <Label className="text-xs">Nombre del descuento</Label>
                   <Input
@@ -784,21 +804,16 @@ export function DetalleRemuneraciones({
                 ) : (
                   <p className="text-sm text-muted-foreground">No hay trabajadores registrados para esta empresa.</p>
                 )}
-              </CardContent>
-            </Card>
+            </Acordeon>
           ) : null}
 
           {/* Módulo: horas en domingo y feriado (carga masiva por día) — al final */}
           {!cerrado ? (
-            <Card className="card-soft border-transparent">
-              <CardHeader>
-                <CardTitle className="text-base">Horas en domingo y feriado</CardTitle>
-                <CardDescription>
+            <Acordeon titulo="Horas en domingo y feriado">
+                <p className="text-sm text-muted-foreground">
                   Elige el día, marca a los trabajadores que trabajaron y pon las horas — se cargan a
                   todos de una vez. (El recargo lo valida el equipo según el contrato de cada uno.)
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
+                </p>
                 <div className="flex flex-col gap-1.5 sm:max-w-sm">
                   <Label className="text-xs">Día (domingo o feriado del mes)</Label>
                   <select className={selectCls} value={hdFecha} onChange={(e) => setHdFecha(e.target.value)}>
@@ -836,8 +851,7 @@ export function DetalleRemuneraciones({
                 ) : (
                   <p className="text-sm text-muted-foreground">No hay trabajadores registrados para esta empresa.</p>
                 )}
-              </CardContent>
-            </Card>
+            </Acordeon>
           ) : null}
 
           {/* Nómina activa: anticipos/bonos del mes + detalle de liquidación */}
