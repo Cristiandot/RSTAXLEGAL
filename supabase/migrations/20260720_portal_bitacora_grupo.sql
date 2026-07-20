@@ -56,7 +56,7 @@ begin
       'detalle', detalle
     ) order by fecha desc), '[]'::jsonb)
   into v_result
-  from (select * from items order by fecha desc limit 60) x;
+  from (select * from items order by fecha desc limit 300) x;
 
   return v_result;
 end
