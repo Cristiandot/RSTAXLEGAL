@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ChevronDown, ChevronLeft, ChevronRight, Eye, Info, Lock, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Eye, Info, Lock, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   cargarRemuneraciones,
   guardarNovedad,
@@ -40,6 +40,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -92,6 +99,19 @@ function Acordeon({
       {open ? <CardContent className="space-y-3 pt-0">{children}</CardContent> : null}
     </Card>
   );
+}
+
+function etiquetaTipoNovedad(tipo: string): string {
+  return TIPOS_NOVEDAD.find((t) => t.value === tipo)?.label ?? tipo;
+}
+
+/** Resumen corto del valor de una novedad para listarla en la ficha del trabajador. */
+function resumenNovedad(n: NovedadRow): string {
+  if (n.monto != null) return formatMonto(n.monto);
+  if (n.cantidad != null) return `${n.cantidad} h`;
+  if (n.fecha && n.fecha_hasta) return `${formatFecha(n.fecha)} al ${formatFecha(n.fecha_hasta)}`;
+  if (n.fecha) return formatFecha(n.fecha);
+  return "";
 }
 
 function moverPeriodo(p: string, delta: number): string {
@@ -306,50 +326,18 @@ export function DetalleRemuneraciones({
 
   const [detalleDe, setDetalleDe] = useState<TrabajadorNomina | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [dlgTipo, setDlgTipo] = useState<"anticipo" | "bono">("anticipo");
-  const [dlgMonto, setDlgMonto] = useState("");
-  const [dlgComentario, setDlgComentario] = useState("");
-
   function abrirDetalle(t: TrabajadorNomina) {
-    setDlgTipo("anticipo");
-    setDlgMonto("");
-    setDlgComentario("");
+    limpiarFormulario();
+    setTrabajadorId(t.id);
+    setTipo("hora_extra");
     setDetalleDe(t);
   }
 
-  function sumaNovedad(trabajadorId: string, t: string): number {
-    return (info?.novedades ?? [])
-      .filter((n) => n.trabajador_id === trabajadorId && n.tipo === t && n.monto != null)
-      .reduce((a, n) => a + (n.monto ?? 0), 0);
+  function novedadesTodasDe(trabajadorId: string): NovedadRow[] {
+    return (info?.novedades ?? []).filter((n) => n.trabajador_id === trabajadorId);
   }
 
-  function novedadesDe(trabajadorId: string): NovedadRow[] {
-    return (info?.novedades ?? []).filter(
-      (n) => n.trabajador_id === trabajadorId && (n.tipo === "anticipo" || n.tipo === "bono"),
-    );
-  }
-
-  function agregarMontoNovedad() {
-    if (!detalleDe) return;
-    startAccion(async () => {
-      const res = await guardarNovedad(token, {
-        trabajador_id: detalleDe.id,
-        periodo,
-        tipo: dlgTipo,
-        fecha: "",
-        fecha_hasta: "",
-        cantidad: "",
-        monto: dlgMonto,
-        comentario: dlgComentario,
-      });
-      if (res.ok) {
-        toast.success(dlgTipo === "anticipo" ? "Anticipo agregado" : "Bono agregado");
-        setDlgMonto("");
-        setDlgComentario("");
-        await recargar(periodo);
-      } else toast.error(res.error ?? "No se pudo guardar.");
-    });
-  }
+  const totalNovedades = info?.novedades?.length ?? 0;
 
   // --- carga masiva de horas en domingo/feriado ---
   const [hdFecha, setHdFecha] = useState("");
@@ -578,140 +566,8 @@ export function DetalleRemuneraciones({
             </div>
           </div>
 
-          {/* Calendario del mes + agregar/editar novedad, lado a lado */}
-          <div className="grid items-start gap-5 lg:grid-cols-2">
-            <CalendarioMes periodo={periodo} />
-          {!cerrado ? (
-            <Card className={`card-soft border-transparent ${editando ? "ring-2 ring-amber-300" : ""}`}>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  {editando ? `Corregir novedad de ${editando.trabajador}` : "Agregar novedad"}
-                </CardTitle>
-                {editando ? (
-                  <CardDescription>
-                    Estás editando un registro ya cargado. Para cambiar al
-                    trabajador, elimínalo y créalo de nuevo.
-                  </CardDescription>
-                ) : null}
-              </CardHeader>
-              <CardContent className="grid gap-3 sm:grid-cols-2">
-                {!editando ? (
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs">Trabajador</Label>
-                    <select
-                      className={selectCls}
-                      value={trabajadorId}
-                      onChange={(e) => setTrabajadorId(e.target.value)}
-                    >
-                      <option value="">— Selecciona —</option>
-                      {empresa.trabajadores.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.apellidos} {t.nombres}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs">Trabajador</Label>
-                    <Input value={editando.trabajador} readOnly className="bg-muted/40" />
-                  </div>
-                )}
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs">Tipo de novedad</Label>
-                  <select className={selectCls} value={tipo} onChange={(e) => setTipo(e.target.value)}>
-                    {(editando && !tiposForm.some((t) => t.value === tipo)
-                      ? TIPOS_NOVEDAD
-                      : tiposForm
-                    ).map((t) => (
-                      <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                  </select>
-                  {def.hint ? (
-                    <p className="text-xs text-muted-foreground">{def.hint}</p>
-                  ) : null}
-                </div>
-                {def.campos === "horas" ? (
-                  <>
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs">Fecha</Label>
-                      <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs">Horas y minutos</Label>
-                      <div className="flex items-center gap-1.5">
-                        <Input
-                          type="number" min={0} max={24} step={1} placeholder="hrs"
-                          className="w-16"
-                          value={horas} onChange={(e) => setHoras(e.target.value)}
-                          aria-label="Horas"
-                        />
-                        <span className="text-sm text-muted-foreground">h</span>
-                        <Input
-                          type="number" min={0} max={59} step={5} placeholder="min"
-                          className="w-16"
-                          value={minutos} onChange={(e) => setMinutos(e.target.value)}
-                          aria-label="Minutos"
-                        />
-                        <span className="text-sm text-muted-foreground">min</span>
-                      </div>
-                    </div>
-                  </>
-                ) : null}
-                {def.campos === "rango" ? (
-                  <>
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs">Primer día</Label>
-                      <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs">Último día</Label>
-                      <Input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
-                    </div>
-                  </>
-                ) : null}
-                {def.campos === "monto" ? (
-                  <>
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs">Monto ($)</Label>
-                      <Input
-                        type="number" min={1} placeholder="ej. 50000"
-                        value={monto} onChange={(e) => setMonto(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-xs">Fecha (opcional)</Label>
-                      <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
-                    </div>
-                  </>
-                ) : null}
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <Label className="text-xs">Comentario {tipo === "bono" ? "(qué bono es)" : "(opcional)"}</Label>
-                  <Input
-                    value={comentario} onChange={(e) => setComentario(e.target.value)}
-                    placeholder={tipo === "bono" ? "ej. Bono cliente incógnito abril" : "detalle si aplica"}
-                  />
-                </div>
-                <div className="flex gap-2 sm:col-span-2">
-                  <Button onClick={agregar} disabled={ocupado}>
-                    {editando ? <Pencil className="size-4" /> : <Plus className="size-4" />}
-                    {editando ? "Guardar corrección" : "Agregar novedad"}
-                  </Button>
-                  {editando ? (
-                    <Button variant="outline" onClick={limpiarFormulario} disabled={ocupado}>
-                      <X className="size-4" />
-                      Cancelar
-                    </Button>
-                  ) : null}
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="card-soft flex items-center justify-center rounded-xl bg-card p-6 text-center text-sm text-muted-foreground">
-              Este mes ya fue cerrado — no se cargan novedades.
-            </div>
-          )}
-          </div>
+          {/* Calendario del mes */}
+          <CalendarioMes periodo={periodo} />
 
           {/* Módulo: bonos del mes (carga masiva por trabajador) */}
           {!cerrado ? (
@@ -854,14 +710,14 @@ export function DetalleRemuneraciones({
             </Acordeon>
           ) : null}
 
-          {/* Nómina activa: anticipos/bonos del mes + detalle de liquidación */}
+          {/* Nómina — novedades del mes por trabajador (worker-first) */}
           <Card className="card-soft border-transparent">
             <CardHeader>
-              <CardTitle className="text-base">Nómina activa</CardTitle>
+              <CardTitle className="text-base">Novedades del mes por trabajador</CardTitle>
               <CardDescription>
-                Tus trabajadores activos. Abre el <strong>Detalle</strong> para ver la liquidación
-                (sueldo base, gratificación, colación, movilización y otras consideraciones) y para
-                agregar los anticipos y bonos del mes.
+                Por defecto cada trabajador va <strong>sin novedades</strong> (trabajó el mes normal).
+                Abre solo a quienes tuvieron algo —horas extra, inasistencias, bonos, descuentos,
+                anticipos— y cárgalo. Al abrir un trabajador ves también su liquidación estimada.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -872,33 +728,44 @@ export function DetalleRemuneraciones({
                       <tr className="border-b text-left text-xs text-muted-foreground">
                         <th className="py-2 pr-2 font-medium">Trabajador</th>
                         <th className="py-2 pr-2 font-medium">Contrato</th>
-                        <th className="py-2 pr-2 text-right font-medium">Anticipos</th>
-                        <th className="py-2 pr-2 text-right font-medium">Bonos</th>
+                        <th className="py-2 pr-2 font-medium">Novedades del mes</th>
                         <th className="py-2 font-medium" />
                       </tr>
                     </thead>
                     <tbody>
                       {nomina.trabajadores.map((t) => {
-                        const ant = sumaNovedad(t.id, "anticipo");
-                        const bon = sumaNovedad(t.id, "bono");
+                        const nn = novedadesTodasDe(t.id).length;
                         return (
-                          <tr key={t.id} className="border-b last:border-0">
-                            <td className="py-2 pr-2">{t.nombre}</td>
+                          <tr
+                            key={t.id}
+                            onClick={() => abrirDetalle(t)}
+                            className="cursor-pointer border-b transition-colors last:border-0 hover:bg-muted/40"
+                            title="Cargar / ver novedades del trabajador"
+                          >
+                            <td className="py-2 pr-2">
+                              <span className={`font-medium ${t.tipo_contrato === "plazo_fijo" ? "font-bold" : ""}`}>{t.nombre}</span>
+                            </td>
                             <td className="py-2 pr-2">
                               <span className={`rounded-full px-2 py-0.5 text-xs ${t.tipo_contrato === "plazo_fijo" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>
                                 {t.tipo_contrato === "plazo_fijo" ? "Plazo fijo" : t.tipo_contrato === "indefinido" ? "Indefinido" : "—"}
                               </span>
-                              {t.tipo_contrato === "plazo_fijo" && t.fecha_termino ? (
-                                <span className="block text-[11px] text-muted-foreground">vence {formatFecha(t.fecha_termino)}</span>
+                            </td>
+                            <td className="py-2 pr-2">
+                              {nn > 0 ? (
+                                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">
+                                  {nn} {nn === 1 ? "novedad" : "novedades"}
+                                </span>
                               ) : (
-                                <span className="block text-[11px] text-muted-foreground">desde {formatFecha(t.fecha_ingreso)}</span>
+                                <span className="text-xs text-muted-foreground">Sin novedades</span>
                               )}
                             </td>
-                            <td className="py-2 pr-2 text-right tabular-nums">{ant > 0 ? formatMonto(ant) : "—"}</td>
-                            <td className="py-2 pr-2 text-right tabular-nums">{bon > 0 ? formatMonto(bon) : "—"}</td>
                             <td className="py-2 text-right">
-                              <Button variant="outline" size="sm" onClick={() => abrirDetalle(t)}>
-                                <Eye className="size-3.5" /> Detalle
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); abrirDetalle(t); }}
+                              >
+                                <Pencil className="size-3.5" /> {cerrado ? "Ver" : "Cargar novedades"}
                               </Button>
                             </td>
                           </tr>
@@ -915,104 +782,186 @@ export function DetalleRemuneraciones({
             </CardContent>
           </Card>
 
-          <div className="flex flex-wrap justify-end gap-2">
-            {nomina && nomina.trabajadores.length > 0 ? (
-              <Button variant="outline" size="lg" onClick={() => setPreviewOpen(true)}>
-                <Eye className="size-4" /> Previsualizar liquidaciones
-              </Button>
-            ) : null}
-            {!cerrado ? (
-              <Button size="lg" disabled={ocupado || cargando} onClick={cerrarMes}>
-                <Lock className="size-4" />
-                Cerrar {nombrePeriodo(periodo)} y enviar a RS Tax &amp; Legal
-              </Button>
-            ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              {totalNovedades > 0
+                ? `${totalNovedades} ${totalNovedades === 1 ? "novedad cargada" : "novedades cargadas"} este mes.`
+                : "Sin novedades cargadas — si todos trabajaron normal, puedes cerrar el mes así."}
+            </p>
+            <div className="flex flex-wrap justify-end gap-2">
+              {nomina && nomina.trabajadores.length > 0 ? (
+                <Button variant="outline" size="lg" onClick={() => setPreviewOpen(true)}>
+                  <Eye className="size-4" /> Previsualizar liquidaciones
+                </Button>
+              ) : null}
+              {!cerrado ? (
+                <Button size="lg" disabled={ocupado || cargando} onClick={cerrarMes}>
+                  <Lock className="size-4" />
+                  {totalNovedades > 0
+                    ? `Cerrar ${nombrePeriodo(periodo)} y enviar`
+                    : `Cerrar ${nombrePeriodo(periodo)} sin novedades y enviar`}
+                </Button>
+              ) : null}
+            </div>
           </div>
         </>
       )}
 
-      {/* Detalle por trabajador: liquidación referencial + anticipos/bonos */}
-      <Dialog open={detalleDe !== null} onOpenChange={(o) => { if (!o) setDetalleDe(null); }}>
+      {/* Panel del trabajador: novedades del mes + liquidación referencial */}
+      <Sheet open={detalleDe !== null} onOpenChange={(o) => { if (!o) { setDetalleDe(null); limpiarFormulario(); } }}>
         {detalleDe ? (() => {
           const t = detalleDe;
           const liq = liquidacionDe(t);
           const r = t.remuneracion ?? {};
-          const movs = novedadesDe(t.id);
+          const movs = novedadesTodasDe(t.id);
           return (
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="font-heading">Liquidación · {t.nombre}</DialogTitle>
-                <DialogDescription>
-                  Mes de referencia con los indicadores Previred de {nomina?.indicadores?.periodo ?? "—"}.
-                  Referencial — la liquidación real depende de las novedades del mes.
-                </DialogDescription>
-              </DialogHeader>
+            <SheetContent side="right" className="w-full gap-0 p-0 sm:!max-w-lg">
+              <SheetHeader className="border-b border-border">
+                <SheetTitle className="font-heading text-lg">{t.nombre}</SheetTitle>
+                <SheetDescription>
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${t.tipo_contrato === "plazo_fijo" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>
+                      {t.tipo_contrato === "plazo_fijo" ? "Plazo fijo" : t.tipo_contrato === "indefinido" ? "Indefinido" : "—"}
+                    </span>
+                    Novedades de {nombrePeriodo(periodo)}
+                  </span>
+                </SheetDescription>
+              </SheetHeader>
 
-              {liq ? (
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex justify-between"><span>Sueldo base</span><span className="tabular-nums">{formatMonto(liq.sueldoBase)}</span></div>
-                  <div className="flex justify-between"><span>Gratificación legal</span><span className="tabular-nums">{formatMonto(liq.gratificacion)}</span></div>
-                  <div className="flex justify-between border-t pt-1.5 font-medium"><span>Total imponible</span><span className="tabular-nums">{formatMonto(liq.totalImponible)}</span></div>
-                  <div className="flex justify-between text-muted-foreground"><span>AFP {liq.afpNombre ?? "—"}{liq.afpTasa !== null ? ` (${liq.afpTasa.toLocaleString("es-CL")}%)` : ""}</span><span className="tabular-nums">−{formatMonto(liq.afpMonto)}</span></div>
-                  <div className="flex justify-between text-muted-foreground"><span>Salud 7%</span><span className="tabular-nums">−{formatMonto(liq.saludMonto)}</span></div>
-                  <div className="flex justify-between text-muted-foreground"><span>Seguro cesantía AFC{liq.afcMonto > 0 ? " 0,6%" : ""}</span><span className="tabular-nums">−{formatMonto(liq.afcMonto)}</span></div>
-                  <div className="flex justify-between text-muted-foreground"><span>Impuesto único</span><span className="tabular-nums">−{formatMonto(liq.impuestoUnico)}</span></div>
-                  {liq.colacion > 0 ? <div className="flex justify-between"><span>Colación (no imponible)</span><span className="tabular-nums">+{formatMonto(liq.colacion)}</span></div> : null}
-                  {liq.movilizacion > 0 ? <div className="flex justify-between"><span>Movilización (no imponible)</span><span className="tabular-nums">+{formatMonto(liq.movilizacion)}</span></div> : null}
-                  <div className="flex justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-base font-semibold text-emerald-800"><span>LÍQUIDO REFERENCIAL</span><span className="tabular-nums">{formatMonto(liq.liquido)}</span></div>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No tenemos el sueldo de este trabajador cargado para estimar la liquidación.
-                </p>
-              )}
+              <div className="flex-1 space-y-5 overflow-y-auto px-4 py-5">
+                {/* Novedades ya cargadas */}
+                <section>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Novedades cargadas
+                  </p>
+                  {movs.length > 0 ? (
+                    <ul className="space-y-1.5">
+                      {movs.map((n) => (
+                        <li key={n.id} className="flex items-start justify-between gap-2 rounded-md border border-input px-3 py-2 text-sm">
+                          <span className="min-w-0">
+                            <span className="font-medium">{etiquetaTipoNovedad(n.tipo)}</span>
+                            <span className="ml-2 tabular-nums text-muted-foreground">{resumenNovedad(n)}</span>
+                            {n.comentario ? <span className="block text-xs text-muted-foreground">{n.comentario}</span> : null}
+                          </span>
+                          {!cerrado && n.origen === "cliente" ? (
+                            <Button variant="ghost" size="icon-sm" disabled={ocupado} onClick={() => borrar(n.id)} aria-label="Eliminar">
+                              <Trash2 className="size-4 text-muted-foreground" />
+                            </Button>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Sin novedades este mes. Si trabajó normal, no cargues nada.
+                    </p>
+                  )}
+                </section>
 
-              {(Number(r.perdida_caja ?? 0) > 0 || r.observaciones) ? (
-                <div className="rounded-lg border border-sky-200 bg-sky-50 p-2.5 text-xs text-sky-800">
-                  <strong>Otras consideraciones:</strong>
-                  {Number(r.perdida_caja ?? 0) > 0 ? <span> asignación de pérdida de caja {formatMonto(Number(r.perdida_caja))}.</span> : null}
-                  {r.observaciones ? <span> {r.observaciones}</span> : null}
-                </div>
-              ) : null}
-
-              <div className="space-y-2 border-t pt-3">
-                <p className="text-sm font-medium">Anticipos y bonos de {nombrePeriodo(periodo)}</p>
-                {movs.length > 0 ? (
-                  <ul className="space-y-1 text-sm">
-                    {movs.map((n) => (
-                      <li key={n.id} className="flex items-center justify-between gap-2">
-                        <span>
-                          <span className={`rounded-full px-2 py-0.5 text-xs ${n.tipo === "anticipo" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700"}`}>{n.tipo === "anticipo" ? "Anticipo" : "Bono"}</span>
-                          <span className="ml-2 tabular-nums">{formatMonto(n.monto)}</span>
-                          {n.comentario ? <span className="text-muted-foreground"> · {n.comentario}</span> : null}
-                        </span>
-                        {!cerrado && n.origen === "cliente" ? (
-                          <Button variant="ghost" size="icon-sm" disabled={ocupado} onClick={() => borrar(n.id)} aria-label="Eliminar">
-                            <Trash2 className="size-4 text-muted-foreground" />
-                          </Button>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Sin anticipos ni bonos este mes.</p>
-                )}
+                {/* Agregar novedad (reutiliza el formulario, ya sin selector de trabajador) */}
                 {!cerrado ? (
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <select className={selectCls} value={dlgTipo} onChange={(e) => setDlgTipo(e.target.value as "anticipo" | "bono")}>
-                      <option value="anticipo">Anticipo</option>
-                      <option value="bono">Bono</option>
-                    </select>
-                    <Input type="number" min={1} placeholder="Monto $" value={dlgMonto} onChange={(e) => setDlgMonto(e.target.value)} />
-                    <Input placeholder="Comentario" value={dlgComentario} onChange={(e) => setDlgComentario(e.target.value)} />
-                    <Button onClick={agregarMontoNovedad} disabled={ocupado}><Plus className="size-4" /> Agregar</Button>
-                  </div>
+                  <section className="space-y-3 rounded-xl border border-input bg-muted/20 p-3">
+                    <p className="text-sm font-medium">Agregar novedad</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <Label className="text-xs">Tipo de novedad</Label>
+                        <select className={selectCls} value={tipo} onChange={(e) => setTipo(e.target.value)}>
+                          {tiposForm.map((tt) => (
+                            <option key={tt.value} value={tt.value}>{tt.label}</option>
+                          ))}
+                        </select>
+                        {def.hint ? <p className="text-xs text-muted-foreground">{def.hint}</p> : null}
+                      </div>
+                      {def.campos === "horas" ? (
+                        <>
+                          <div className="flex flex-col gap-1.5">
+                            <Label className="text-xs">Fecha</Label>
+                            <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <Label className="text-xs">Horas y minutos</Label>
+                            <div className="flex items-center gap-1.5">
+                              <Input type="number" min={0} max={24} step={1} placeholder="hrs" className="w-16" value={horas} onChange={(e) => setHoras(e.target.value)} aria-label="Horas" />
+                              <span className="text-sm text-muted-foreground">h</span>
+                              <Input type="number" min={0} max={59} step={5} placeholder="min" className="w-16" value={minutos} onChange={(e) => setMinutos(e.target.value)} aria-label="Minutos" />
+                              <span className="text-sm text-muted-foreground">min</span>
+                            </div>
+                          </div>
+                        </>
+                      ) : null}
+                      {def.campos === "rango" ? (
+                        <>
+                          <div className="flex flex-col gap-1.5">
+                            <Label className="text-xs">Primer día</Label>
+                            <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <Label className="text-xs">Último día</Label>
+                            <Input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} />
+                          </div>
+                        </>
+                      ) : null}
+                      {def.campos === "monto" ? (
+                        <>
+                          <div className="flex flex-col gap-1.5">
+                            <Label className="text-xs">Monto ($)</Label>
+                            <Input type="number" min={1} placeholder="ej. 50000" value={monto} onChange={(e) => setMonto(e.target.value)} />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <Label className="text-xs">Fecha (opcional)</Label>
+                            <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+                          </div>
+                        </>
+                      ) : null}
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <Label className="text-xs">Comentario {tipo === "bono" ? "(qué bono es)" : "(opcional)"}</Label>
+                        <Input value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder={tipo === "bono" ? "ej. Bono cliente incógnito abril" : "detalle si aplica"} />
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button onClick={agregar} disabled={ocupado}>
+                        <Plus className="size-4" /> Agregar novedad
+                      </Button>
+                    </div>
+                  </section>
                 ) : null}
+
+                {/* Liquidación referencial */}
+                <section>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Liquidación estimada · Previred {nomina?.indicadores?.periodo ?? "—"}
+                  </p>
+                  {liq ? (
+                    <div className="space-y-1.5 rounded-xl border border-input p-3 text-sm">
+                      <div className="flex justify-between"><span>Sueldo base</span><span className="tabular-nums">{formatMonto(liq.sueldoBase)}</span></div>
+                      <div className="flex justify-between"><span>Gratificación legal</span><span className="tabular-nums">{formatMonto(liq.gratificacion)}</span></div>
+                      <div className="flex justify-between border-t pt-1.5 font-medium"><span>Total imponible</span><span className="tabular-nums">{formatMonto(liq.totalImponible)}</span></div>
+                      <div className="flex justify-between text-muted-foreground"><span>AFP {liq.afpNombre ?? "—"}{liq.afpTasa !== null ? ` (${liq.afpTasa.toLocaleString("es-CL")}%)` : ""}</span><span className="tabular-nums">−{formatMonto(liq.afpMonto)}</span></div>
+                      <div className="flex justify-between text-muted-foreground"><span>Salud 7%</span><span className="tabular-nums">−{formatMonto(liq.saludMonto)}</span></div>
+                      <div className="flex justify-between text-muted-foreground"><span>Seguro cesantía AFC{liq.afcMonto > 0 ? " 0,6%" : ""}</span><span className="tabular-nums">−{formatMonto(liq.afcMonto)}</span></div>
+                      <div className="flex justify-between text-muted-foreground"><span>Impuesto único</span><span className="tabular-nums">−{formatMonto(liq.impuestoUnico)}</span></div>
+                      {liq.colacion > 0 ? <div className="flex justify-between"><span>Colación (no imponible)</span><span className="tabular-nums">+{formatMonto(liq.colacion)}</span></div> : null}
+                      {liq.movilizacion > 0 ? <div className="flex justify-between"><span>Movilización (no imponible)</span><span className="tabular-nums">+{formatMonto(liq.movilizacion)}</span></div> : null}
+                      <div className="flex justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-base font-semibold text-emerald-800"><span>LÍQUIDO REFERENCIAL</span><span className="tabular-nums">{formatMonto(liq.liquido)}</span></div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No tenemos el sueldo de este trabajador cargado para estimar la liquidación.
+                    </p>
+                  )}
+                  {(Number(r.perdida_caja ?? 0) > 0 || r.observaciones) ? (
+                    <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 p-2.5 text-xs text-sky-800">
+                      <strong>Otras consideraciones:</strong>
+                      {Number(r.perdida_caja ?? 0) > 0 ? <span> asignación de pérdida de caja {formatMonto(Number(r.perdida_caja))}.</span> : null}
+                      {r.observaciones ? <span> {r.observaciones}</span> : null}
+                    </div>
+                  ) : null}
+                </section>
               </div>
-            </DialogContent>
+            </SheetContent>
           );
         })() : null}
-      </Dialog>
+      </Sheet>
 
       {/* Preview de liquidaciones — estimación con banda de advertencia */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
