@@ -8,6 +8,8 @@ export type EventoCalendario = {
   fecha: string;
   clase: "causa" | "fatal" | "prosp" | "cotiz";
   texto: string;
+  /** Id de la entidad de origen (causa, cotización…) para navegar al detalle. */
+  id?: string;
 };
 
 const MESES = [
@@ -26,7 +28,13 @@ function iso(y: number, m: number, d: number): string {
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-export function CalendarioFR({ eventos }: { eventos: EventoCalendario[] }) {
+export function CalendarioFR({
+  eventos,
+  onEventoClick,
+}: {
+  eventos: EventoCalendario[];
+  onEventoClick?: (ev: EventoCalendario) => void;
+}) {
   const hoy = new Date();
   const [anio, setAnio] = useState(hoy.getFullYear());
   const [mes, setMes] = useState(hoy.getMonth());
@@ -108,15 +116,24 @@ export function CalendarioFR({ eventos }: { eventos: EventoCalendario[] }) {
               >
                 {dnum}
               </span>
-              {delDia.map((ev, j) => (
-                <span
-                  key={j}
-                  title={ev.texto}
-                  className={`mb-0.5 block truncate rounded border-l-[3px] px-1.5 py-0.5 text-[10.5px] leading-tight ${CLASE_CHIP[ev.clase]}`}
-                >
-                  {ev.texto}
-                </span>
-              ))}
+              {delDia.map((ev, j) => {
+                const chip = `mb-0.5 block w-full truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[10.5px] leading-tight ${CLASE_CHIP[ev.clase]}`;
+                return onEventoClick && ev.id ? (
+                  <button
+                    key={j}
+                    type="button"
+                    title={ev.texto}
+                    onClick={() => onEventoClick(ev)}
+                    className={`${chip} cursor-pointer hover:brightness-95 focus:outline-2 focus:outline-ring/50`}
+                  >
+                    {ev.texto}
+                  </button>
+                ) : (
+                  <span key={j} title={ev.texto} className={chip}>
+                    {ev.texto}
+                  </span>
+                );
+              })}
             </div>
           );
         })}

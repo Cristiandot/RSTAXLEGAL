@@ -79,18 +79,20 @@ export function ModuloCausas({
   const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
   const [filtroMateria, setFiltroMateria] = useState<string>("Todas");
   const [orden, setOrden] = useState<{ col: OrdenCol; dir: "asc" | "desc" } | null>(null);
+  const [resaltada, setResaltada] = useState<string | null>(null);
 
   const eventos = useMemo<EventoCalendario[]>(() => {
     const evs: EventoCalendario[] = [];
     for (const c of causas) {
       const quien = c.cliente ?? c.caratula;
       if (c.proxima_gestion_fecha)
-        evs.push({ fecha: c.proxima_gestion_fecha, clase: "causa", texto: `Gestión — ${quien}` });
+        evs.push({ fecha: c.proxima_gestion_fecha, clase: "causa", texto: `Gestión — ${quien}`, id: c.id });
       if (c.proxima_audiencia_fecha)
         evs.push({
           fecha: c.proxima_audiencia_fecha,
           clase: "causa",
           texto: `${c.proxima_audiencia_tipo ?? "Audiencia"} — ${quien}`,
+          id: c.id,
         });
     }
     return evs;
@@ -148,6 +150,24 @@ export function ModuloCausas({
         </button>
       </TableHead>
     );
+  }
+
+  /** Desde un evento del calendario: abre la causa en la tabla, la resalta y hace scroll. */
+  function irADetalle(ev: EventoCalendario) {
+    const id = ev.id;
+    if (!id) return;
+    const causa = causas.find((c) => c.id === id);
+    if (causa && filtroMateria !== "Todas" && causa.materia !== filtroMateria) {
+      setFiltroMateria("Todas");
+    }
+    setAbiertas((prev) => new Set(prev).add(id));
+    setResaltada(id);
+    window.setTimeout(() => {
+      document
+        .getElementById(`causa-${id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 60);
+    window.setTimeout(() => setResaltada((r) => (r === id ? null : r)), 2600);
   }
 
   function toggleHitos(id: string) {
@@ -230,7 +250,7 @@ export function ModuloCausas({
             { color: "bg-[var(--brand-teal,#17A2B8)]", label: "Hoy" },
           ]}
         />
-        <CalendarioFR eventos={eventos} />
+        <CalendarioFR eventos={eventos} onEventoClick={irADetalle} />
       </div>
 
       {/* ===== Registro de causas ===== */}
@@ -416,7 +436,15 @@ export function ModuloCausas({
                 const abierta = abiertas.has(c.id);
                 const hitosOrden = [...c.hitos].sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
                 return [
-                  <TableRow key={c.id}>
+                  <TableRow
+                    key={c.id}
+                    id={`causa-${c.id}`}
+                    className={
+                      resaltada === c.id
+                        ? "bg-teal-50 ring-2 ring-inset ring-[var(--brand-teal,#17A2B8)] transition-colors"
+                        : "transition-colors"
+                    }
+                  >
                     <TableCell className="align-top">
                       <div className="font-medium">{c.cliente ?? c.caratula}</div>
                       {c.cliente ? (
