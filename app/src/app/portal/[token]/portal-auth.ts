@@ -65,3 +65,24 @@ export async function cambiarPinPortal(
   const r = (data ?? {}) as { ok?: boolean; error?: string };
   return r.ok ? { ok: true } : { ok: false, error: r.error ?? "No se pudo cambiar el PIN." };
 }
+
+export type BitacoraItem = {
+  fuente: "gestion" | "requerimiento";
+  fecha: string | null;
+  tipo: string | null;
+  trabajador: string | null;
+  empresa: string | null;
+  estado: string | null;
+  canal: string | null;
+  detalle: string | null;
+};
+
+/** Bitácora de gestiones del grupo (gestiones RRHH + requerimientos WhatsApp/correo). */
+export async function cargarBitacoraGrupo(
+  token: string,
+): Promise<{ ok: boolean; items?: BitacoraItem[]; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("portal_bitacora_grupo", { p_token: token });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, items: (data ?? []) as BitacoraItem[] };
+}
