@@ -41,6 +41,9 @@ export type GuardarF29Input = {
   monto: string | null;
   ppm: string | null;
   folio: string | null;
+  // Marca manual «Declarado» aunque aún no haya folio (el folio no siempre se
+  // captura al momento de pagar). Con folio, la declaración es implícita.
+  declarado: boolean;
   pagoPor: string | null;
   fechaPagoOficina: string | null;
   fechaPagoF29: string | null;
@@ -70,21 +73,22 @@ export async function guardarF29(
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
 
-  // DECLARADO ante el SII se ata al FOLIO: el folio se obtiene al final de la
-  // declaración, así que el F29 pasa a «Declarado» recién cuando se le asigna
-  // un folio. Sin folio no puede estar declarado; si se borra el folio, se
-  // limpia la fecha de declaración (criterio Cristian 17-07-2026). Enviar el
-  // aviso NO requiere folio.
+  // DECLARADO ante el SII: con folio el estado es «Declarado» pleno; con la
+  // casilla manual y sin folio, «Declarado, folio pendiente» (lo resuelve la
+  // vista vía declarado_sin_folio). No se toca fecha_f29_presentado —quedó
+  // contaminada por flujos antiguos y ya no es la señal de declaración
+  // (criterio Cristian 20-07-2026). Enviar el aviso NO requiere declaración.
   const folio = input.folio?.trim() || null;
-  const hoy = new Date().toISOString().slice(0, 10);
-  const fechaPresentado = folio ? (input.fechaPresentado ?? hoy) : null;
+  const declarado = !!folio || input.declarado;
+  const fechaPresentado = folio ? (input.fechaPresentado ?? new Date().toISOString().slice(0, 10)) : null;
 
-  // Tampoco se marca PAGADO un F29 sin folio: no se paga lo no declarado
-  // (decisión Cristian, 17-07-2026).
-  if (input.fechaPagoF29 && input.fechaPagoF29.trim() !== "" && !folio) {
+  // No se marca PAGADO un F29 no declarado: se paga lo declarado, con folio o
+  // con la casilla «Declarado, folio pendiente» (criterio Cristian 20-07-2026).
+  if (input.fechaPagoF29 && input.fechaPagoF29.trim() !== "" && !declarado) {
     return {
       ok: false,
-      error: "No puedes marcar el F29 como pagado sin el folio del SII. Ingresa el folio primero.",
+      error:
+        "No puedes marcar el F29 como pagado sin haberlo declarado. Ingresa el folio o marca «Declarado (folio pendiente)».",
     };
   }
 
@@ -97,6 +101,9 @@ export async function guardarF29(
       monto_a_pagar: input.monto,
       ppm: input.ppm,
       folio_f29: folio,
+      // Con folio la marca es redundante (el estado lo da el folio); se guarda
+      // igual para conservar la intención si luego se borra el folio.
+      declarado_sin_folio: input.declarado,
       pago_por: input.pagoPor,
       fecha_pago_oficina: input.fechaPagoOficina,
       fecha_pago_f29: input.fechaPagoF29,
@@ -261,19 +268,24 @@ export async function enviarCorreoF29Pagado(
   const { data: row, error: errRow } = await supabase
     .from("ciclo_f29")
     .select(
-      "cliente_id, periodo, monto_a_pagar, fecha_pago_f29, folio_f29, clientes(razon_social, correo_empresa)",
+      "cliente_id, periodo, monto_a_pagar, fecha_pago_f29, folio_f29, declarado_sin_folio, clientes(razon_social, correo_empresa)",
     )
     .eq("id", cicloId)
     .single();
   if (errRow || !row) {
     return { ok: false, error: errRow?.message ?? "Ciclo F29 no encontrado." };
   }
-  // El folio es obligatorio para pagar: no se paga un F29 que no está declarado.
-  if (!row.folio_f29 || String(row.folio_f29).trim() === "") {
+  // No se paga un F29 no declarado: se admite con folio o con la casilla
+  // «Declarado, folio pendiente» (declarado_sin_folio) — criterio Cristian
+  // 20-07-2026.
+  const declarado =
+    (!!row.folio_f29 && String(row.folio_f29).trim() !== "") ||
+    row.declarado_sin_folio === true;
+  if (!declarado) {
     return {
       ok: false,
       error:
-        "No puedes marcar el F29 como pagado sin el folio del SII. Ingresa el folio primero: el F29 debe estar declarado para darlo por pagado.",
+        "No puedes marcar el F29 como pagado sin haberlo declarado. Ingresa el folio o marca «Declarado (folio pendiente)» en el formulario.",
     };
   }
   // Mismo resguardo que el aviso de F29: el comprobante no puede salir sin monto.

@@ -92,6 +92,7 @@ export type F29Row = {
   monto_a_pagar: number | string | null;
   ppm: number | string | null; // PPM pagado del período
   folio_f29: string | null;
+  declarado_sin_folio: boolean; // marca manual: declarado en el SII pero sin folio aún → estado «Declarado, folio pendiente»
   pago_por: string | null; // 'rs' | 'cliente' | null
   fecha_pago_oficina: string | null; // cuando paga RS: fecha en que el cliente pagó a la oficina
   correo_empresa: string | null; // correo del cliente (ficha) para el aviso de F29
@@ -211,10 +212,10 @@ export function claseEstado(estado: string): string {
     case "Enviado":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "Declarado":
+      return "border-indigo-200 bg-indigo-50 text-indigo-700";
+    case "Declarado, folio pendiente":
     case "Guardado y enviado":
       return "border-sky-200 bg-sky-50 text-sky-700";
-    case "Declarado":
-      return "border-indigo-200 bg-indigo-50 text-indigo-700";
     case "Sin iniciar":
       return "border-slate-200 bg-slate-100 text-slate-600";
     case "Descargando":

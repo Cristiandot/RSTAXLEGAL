@@ -58,6 +58,7 @@ const ESTADOS = [
   "Sin iniciar",
   "Pendiente presentación",
   "Guardado y enviado",
+  "Declarado, folio pendiente",
   "Declarado",
   "Fondos en RS",
   "Pagado",
@@ -335,6 +336,9 @@ export function F29Client({
       monto: get("monto"),
       ppm: get("ppm"),
       folio: get("folio"),
+      // Checkbox «Declarado (folio pendiente)»: marca declarado aunque no haya
+      // folio todavía. Con folio la declaración es implícita (lo resuelve el server).
+      declarado: fd.get("declarado") !== null,
       // pago_por quedó fuera de la UI (se ofrecen ambas formas en el aviso); se
       // conserva el valor histórico para no perder datos.
       pagoPor: ciclo.pago_por,
@@ -850,7 +854,7 @@ export function F29Client({
                     ? "Guardando y enviando aviso…"
                     : editando.fecha_correo_f29_enviado
                       ? `Guardado y enviado el ${formatFecha(editando.fecha_correo_f29_enviado.slice(0, 10))}.`
-                      : "Guarda el formulario y envía al cliente el aviso (desglose, monto y plazo). El F29 pasa a «Guardado y enviado» —no se marca como declarado ante el SII, eso ocurre al asignar el folio (paso 2)— y el correo se guarda en su ficha."}
+                      : "Guarda el formulario y envía al cliente el aviso (desglose, monto y plazo). El F29 pasa a «Guardado y enviado» —no se marca como declarado ante el SII, eso ocurre en el paso 2 (folio o casilla «Declarado»)— y el correo se guarda en su ficha."}
                 </span>
               </div>
 
@@ -866,11 +870,20 @@ export function F29Client({
                   className="w-48 bg-card"
                   defaultValue={editando.folio_f29 ?? ""}
                 />
+                <label className="flex items-center gap-2 text-sm text-indigo-900">
+                  <input
+                    type="checkbox"
+                    name="declarado"
+                    defaultChecked={editando.declarado_sin_folio}
+                    className="size-4 accent-indigo-600"
+                  />
+                  <span>Declarado (folio pendiente)</span>
+                </label>
                 <span className="text-xs text-muted-foreground">
-                  El folio se obtiene al final, cuando el F29 queda declarado en
-                  el SII. Al guardar con folio, el F29 pasa a «Declarado». No es
-                  necesario para enviar el aviso, pero sin folio no puede quedar
-                  declarado.
+                  Al guardar con folio, el F29 pasa a «Declarado». Si ya quedó
+                  declarado en el SII pero aún no tienes el folio, marca la casilla:
+                  el F29 pasa a «Declarado, folio pendiente» (para no olvidar cargar
+                  el folio después). No es necesario para enviar el aviso.
                 </span>
               </div>
 
