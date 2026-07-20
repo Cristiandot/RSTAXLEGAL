@@ -496,7 +496,6 @@ export function ModuloCausas({
                       <select
                         className={selectClase}
                         value={c.estado ?? "prospecto"}
-                        disabled={pendiente}
                         onChange={(e) =>
                           guardarCampo(c.id, { estado: e.target.value }, "Estado actualizado.")
                         }
@@ -512,23 +511,25 @@ export function ModuloCausas({
                     <TableCell className="max-w-64 align-top">
                       <div className="flex flex-col gap-1">
                         <input
+                          key={`pgf-${c.proxima_gestion_fecha ?? ""}`}
                           type="date"
-                          value={c.proxima_gestion_fecha ?? ""}
-                          disabled={pendiente}
-                          onChange={(e) =>
-                            guardarCampo(
-                              c.id,
-                              { proxima_gestion_fecha: e.target.value || null },
-                              "Próxima gestión actualizada.",
-                            )
-                          }
+                          defaultValue={c.proxima_gestion_fecha ?? ""}
+                          onBlur={(e) => {
+                            const val = e.target.value || null;
+                            if (val !== (c.proxima_gestion_fecha ?? null))
+                              guardarCampo(
+                                c.id,
+                                { proxima_gestion_fecha: val },
+                                "Próxima gestión actualizada.",
+                              );
+                          }}
                           className={inlineFecha}
                         />
                         <input
+                          key={`pgd-${c.proxima_gestion_detalle ?? ""}`}
                           type="text"
                           defaultValue={c.proxima_gestion_detalle ?? ""}
                           placeholder="detalle…"
-                          disabled={pendiente}
                           onBlur={(e) => {
                             const val = e.target.value.trim() || null;
                             if (val !== (c.proxima_gestion_detalle ?? null))
@@ -545,21 +546,22 @@ export function ModuloCausas({
                     <TableCell className="align-top">
                       <div className="flex flex-col gap-1">
                         <input
+                          key={`paf-${c.proxima_audiencia_fecha ?? ""}`}
                           type="date"
-                          value={c.proxima_audiencia_fecha ?? ""}
-                          disabled={pendiente}
-                          onChange={(e) =>
-                            guardarCampo(
-                              c.id,
-                              { proxima_audiencia_fecha: e.target.value || null },
-                              "Audiencia actualizada.",
-                            )
-                          }
+                          defaultValue={c.proxima_audiencia_fecha ?? ""}
+                          onBlur={(e) => {
+                            const val = e.target.value || null;
+                            if (val !== (c.proxima_audiencia_fecha ?? null))
+                              guardarCampo(
+                                c.id,
+                                { proxima_audiencia_fecha: val },
+                                "Audiencia actualizada.",
+                              );
+                          }}
                           className={inlineFecha}
                         />
                         <select
                           value={c.proxima_audiencia_tipo ?? ""}
-                          disabled={pendiente}
                           onChange={(e) =>
                             guardarCampo(
                               c.id,
