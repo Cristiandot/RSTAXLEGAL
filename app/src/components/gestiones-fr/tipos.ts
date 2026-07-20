@@ -76,6 +76,24 @@ export const ESTADOS_CAUSA = [
 /** Estados terminales (causa cerrada): se excluyen de plazos fatales y alertas. */
 export const ESTADOS_CAUSA_TERMINALES = ["acuerdo", "sentencia", "cerrada"] as const;
 
+/** Color por estado (hex), inspirado en la vista Causas de ClickUp. Se usa para
+ *  los badges y los encabezados de grupo. */
+export const ESTADO_COLOR: Record<string, string> = {
+  prospecto: "#64748b",
+  "inspección del trabajo": "#a1887f",
+  redacción: "#f59e0b",
+  tramitación: "#ef4444",
+  "stand by - seguimiento": "#f97316",
+  contestación: "#a855f7",
+  "audiencia preparatoria": "#6366f1",
+  "audiencia de juicio": "#3b82f6",
+  "corte apelaciones": "#0ea5e9",
+  "corte suprema": "#8b5cf6",
+  acuerdo: "#10b981",
+  sentencia: "#7c3aed",
+  cerrada: "#6b7280",
+};
+
 /** Materias, según catálogo de ClickUp. */
 export const MATERIAS_CAUSA = ["Laboral", "Familia", "Civil"] as const;
 

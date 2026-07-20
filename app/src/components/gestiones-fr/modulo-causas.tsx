@@ -1,69 +1,92 @@
 "use client";
 
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Archive, CalendarPlus, ExternalLink, Plus } from "lucide-react";
+import { Archive, ExternalLink, Plus, X } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { CalendarioFR, LeyendaCalendario, type EventoCalendario } from "./calendario";
-import { actualizarCausa, agendarEnCausa, agregarHito, crearCausa } from "./actions";
-import { ESTADOS_CAUSA, MATERIAS_CAUSA, TRIBUNALES_CAUSA, type Causa } from "./tipos";
+import { actualizarCausa, agregarHito, crearCausa } from "./actions";
+import {
+  ESTADOS_CAUSA,
+  ESTADO_COLOR,
+  MATERIAS_CAUSA,
+  TRIBUNALES_CAUSA,
+  type Causa,
+} from "./tipos";
 
 const selectClase =
   "h-8 rounded-md border border-input bg-white px-2 text-xs shadow-xs focus:outline-2 focus:outline-ring/50";
 const labelClase = "mb-1 block text-[11px] font-semibold text-muted-foreground";
-const inlineFecha =
-  "h-7 w-36 rounded-md border border-input bg-white px-1.5 text-[11px] shadow-xs focus:outline-2 focus:outline-ring/50";
-const inlineTexto =
-  "h-7 w-full min-w-40 rounded-md border border-input bg-white px-1.5 text-[11px] shadow-xs focus:outline-2 focus:outline-ring/50";
-const inlineSelect =
-  "h-7 w-full rounded-md border border-input bg-white px-1.5 text-[11px] shadow-xs focus:outline-2 focus:outline-ring/50";
+const campoInput =
+  "h-8 w-full rounded-md border border-input bg-white px-2 text-xs shadow-xs focus:outline-2 focus:outline-ring/50";
 
 const TIPOS_AUDIENCIA = ["Audiencia preparatoria", "Audiencia de juicio"];
 
-type OrdenCol =
-  | "causa"
-  | "calidad"
-  | "materia"
-  | "tribunal"
-  | "estado"
-  | "gestion"
-  | "audiencia"
-  | "hitos";
-
-/** Valor comparable de una causa según la columna. Los estados se ordenan por su
- *  posición en el ciclo procesal (no alfabético); el resto por texto/fecha/número. */
-function valorOrden(c: Causa, col: OrdenCol): string | number {
-  switch (col) {
-    case "causa":
-      return (c.cliente ?? c.caratula ?? "").toLowerCase();
-    case "calidad":
-      return (c.calidad ?? "").toLowerCase();
-    case "materia":
-      return (c.materia ?? "").toLowerCase();
-    case "tribunal":
-      return (c.tribunal ?? "").toLowerCase();
-    case "estado": {
-      const i = ESTADOS_CAUSA.indexOf(c.estado as never);
-      return i === -1 ? 999 : i;
-    }
-    case "gestion":
-      return c.proxima_gestion_fecha ?? "";
-    case "audiencia":
-      return c.proxima_audiencia_fecha ?? "";
-    case "hitos":
-      return c.hitos.length;
+/** Separa la carátula "Demandante / Demandado" (o "… con …") en sus partes. */
+function parsearPartes(caratula: string): { demandante: string; demandado: string } | null {
+  if (caratula.includes("/")) {
+    const i = caratula.indexOf("/");
+    return { demandante: caratula.slice(0, i).trim(), demandado: caratula.slice(i + 1).trim() };
   }
+  const con = caratula.match(/^(.*?)\s+con\s+(.*)$/i);
+  if (con) return { demandante: con[1].trim(), demandado: con[2].trim() };
+  return null;
+}
+
+/** Fecha más próxima entre gestión y audiencia (para ordenar dentro del grupo). */
+function proximaClave(c: Causa): string {
+  const fs = [c.proxima_audiencia_fecha, c.proxima_gestion_fecha].filter(Boolean) as string[];
+  return fs.length ? fs.sort()[0] : "";
+}
+
+function EstadoBadge({ estado, className = "" }: { estado: string | null; className?: string }) {
+  const color = (estado && ESTADO_COLOR[estado]) || "#64748b";
+  return (
+    <span
+      style={{ backgroundColor: `${color}1f`, color, borderColor: `${color}55` }}
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold capitalize ${className}`}
+    >
+      <span style={{ backgroundColor: color }} className="size-1.5 shrink-0 rounded-full" />
+      {estado ?? "—"}
+    </span>
+  );
+}
+
+function CalidadBadge({ calidad }: { calidad: string | null }) {
+  if (!calidad) return null;
+  return (
+    <Badge
+      variant="outline"
+      className={
+        calidad === "Ataque"
+          ? "border-teal-200 bg-teal-50 text-teal-700"
+          : calidad === "Defensa"
+            ? "border-violet-200 bg-violet-50 text-violet-700"
+            : ""
+      }
+    >
+      {calidad}
+    </Badge>
+  );
+}
+
+function Campo({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div>
+      <div className="text-[11px] font-semibold text-muted-foreground">{label}</div>
+      <div className="text-sm">{value ?? "—"}</div>
+    </div>
+  );
 }
 
 export function ModuloCausas({
@@ -75,12 +98,9 @@ export function ModuloCausas({
 }) {
   const [pendiente, startTransition] = useTransition();
   const [formCausa, setFormCausa] = useState(false);
-  const [formAgenda, setFormAgenda] = useState(false);
-  const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
   const [filtroMateria, setFiltroMateria] = useState<string>("Todas");
-  const [orden, setOrden] = useState<{ col: OrdenCol; dir: "asc" | "desc" } | null>(null);
-  const [resaltada, setResaltada] = useState<string | null>(null);
   const [verHistorico, setVerHistorico] = useState(false);
+  const [fichaId, setFichaId] = useState<string | null>(null);
 
   const nCerradas = useMemo(() => causas.filter((c) => c.estado === "cerrada").length, [causas]);
 
@@ -110,81 +130,37 @@ export function ModuloCausas({
     );
   }, [causas, filtroMateria, verHistorico]);
 
-  const causasOrdenadas = useMemo(() => {
-    if (!orden) return causasFiltradas;
-    const { col, dir } = orden;
-    return [...causasFiltradas].sort((a, b) => {
-      const va = valorOrden(a, col);
-      const vb = valorOrden(b, col);
-      // Valores vacíos (sin fecha, sin dato) siempre al final, sin importar la dirección.
-      const aVacio = va === "";
-      const bVacio = vb === "";
-      if (aVacio && bVacio) return 0;
-      if (aVacio) return 1;
-      if (bVacio) return -1;
-      const cmp =
-        typeof va === "number" && typeof vb === "number"
-          ? va - vb
-          : String(va) < String(vb)
-            ? -1
-            : String(va) > String(vb)
-              ? 1
-              : 0;
-      return dir === "asc" ? cmp : -cmp;
-    });
-  }, [causasFiltradas, orden]);
-
-  function toggleOrden(col: OrdenCol) {
-    setOrden((prev) =>
-      prev?.col === col ? { col, dir: prev.dir === "asc" ? "desc" : "asc" } : { col, dir: "asc" },
-    );
-  }
-
-  function renderTh(col: OrdenCol, label: ReactNode, className?: string): ReactNode {
-    const activo = orden?.col === col;
-    return (
-      <TableHead className={className}>
-        <button
-          type="button"
-          onClick={() => toggleOrden(col)}
-          className="inline-flex items-center gap-1 hover:text-foreground"
-          title="Ordenar"
-        >
-          {label}
-          <span className={`text-[10px] ${activo ? "text-foreground" : "text-muted-foreground/50"}`}>
-            {activo ? (orden!.dir === "asc" ? "▲" : "▼") : "↕"}
-          </span>
-        </button>
-      </TableHead>
-    );
-  }
-
-  /** Desde un evento del calendario: abre la causa en la tabla, la resalta y hace scroll. */
-  function irADetalle(ev: EventoCalendario) {
-    const id = ev.id;
-    if (!id) return;
-    const causa = causas.find((c) => c.id === id);
-    if (causa && filtroMateria !== "Todas" && causa.materia !== filtroMateria) {
-      setFiltroMateria("Todas");
+  /** Causas agrupadas por estado, en orden del ciclo procesal. */
+  const grupos = useMemo(() => {
+    const map = new Map<string, Causa[]>();
+    for (const c of causasFiltradas) {
+      const e = c.estado ?? "prospecto";
+      const arr = map.get(e);
+      if (arr) arr.push(c);
+      else map.set(e, [c]);
     }
-    setAbiertas((prev) => new Set(prev).add(id));
-    setResaltada(id);
-    window.setTimeout(() => {
-      document
-        .getElementById(`causa-${id}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 60);
-    window.setTimeout(() => setResaltada((r) => (r === id ? null : r)), 2600);
-  }
+    const posicion = (e: string) => {
+      const i = ESTADOS_CAUSA.indexOf(e as never);
+      return i === -1 ? 999 : i;
+    };
+    return [...map.entries()]
+      .sort((a, b) => posicion(a[0]) - posicion(b[0]))
+      .map(([estado, items]) => ({
+        estado,
+        items: items.sort((x, y) => {
+          const fx = proximaClave(x);
+          const fy = proximaClave(y);
+          if (fx && fy && fx !== fy) return fx < fy ? -1 : 1;
+          if (fx && !fy) return -1;
+          if (!fx && fy) return 1;
+          return (x.cliente ?? x.caratula).localeCompare(y.cliente ?? y.caratula);
+        }),
+      }));
+  }, [causasFiltradas]);
 
-  function toggleHitos(id: string) {
-    setAbiertas((prev) => {
-      const s = new Set(prev);
-      if (s.has(id)) s.delete(id);
-      else s.add(id);
-      return s;
-    });
-  }
+  const ficha = fichaId ? (causas.find((c) => c.id === fichaId) ?? null) : null;
+  const partes = ficha ? parsearPartes(ficha.caratula) : null;
+  const hitosFicha = ficha ? [...ficha.hitos].sort((a, b) => (a.fecha < b.fecha ? -1 : 1)) : [];
 
   function ejecutar(fn: () => Promise<{ ok: boolean; error?: string }>, exito: string) {
     startTransition(async () => {
@@ -224,20 +200,6 @@ export function ModuloCausas({
     setFormCausa(false);
   }
 
-  function enviarAgenda(form: HTMLFormElement) {
-    const fd = new FormData(form);
-    ejecutar(
-      () =>
-        agendarEnCausa(fd.get("causa") as string, {
-          tipo: (fd.get("tipo") as "audiencia" | "gestion") ?? "gestion",
-          fecha: (fd.get("fecha") as string) ?? "",
-          detalle: (fd.get("detalle") as string) ?? "",
-        }),
-      "Agendado y registrado en la bitácora.",
-    );
-    setFormAgenda(false);
-  }
-
   function enviarHito(causaId: string, form: HTMLFormElement) {
     const fd = new FormData(form);
     ejecutar(
@@ -257,15 +219,14 @@ export function ModuloCausas({
             { color: "bg-[var(--brand-teal,#17A2B8)]", label: "Hoy" },
           ]}
         />
-        <CalendarioFR eventos={eventos} onEventoClick={irADetalle} />
+        <CalendarioFR eventos={eventos} onEventoClick={(ev) => ev.id && setFichaId(ev.id)} />
       </div>
 
-      {/* ===== Registro de causas ===== */}
+      {/* ===== Causas agrupadas por estado ===== */}
       <div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold">
-            {verHistorico ? "Histórico — causas cerradas" : "Registro de causas"} (
-            {causasOrdenadas.length})
+            {verHistorico ? "Histórico — causas cerradas" : "Causas"} ({causasFiltradas.length})
           </h3>
           <select
             value={filtroMateria}
@@ -286,10 +247,6 @@ export function ModuloCausas({
           >
             <Archive className="size-4" />
             {verHistorico ? "Ver activas" : `Histórico (${nCerradas})`}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setFormAgenda((v) => !v)}>
-            <CalendarPlus className="size-4" />
-            Agendar audiencia / gestión
           </Button>
           <Button size="sm" onClick={() => setFormCausa((v) => !v)}>
             <Plus className="size-4" />
@@ -378,284 +335,292 @@ export function ModuloCausas({
           </form>
         ) : null}
 
-        {formAgenda ? (
-          <form
-            className="mb-4 rounded-xl border border-dashed border-[var(--brand-teal,#17A2B8)] bg-muted/30 p-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              enviarAgenda(e.currentTarget);
-            }}
-          >
-            <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <label className={labelClase}>Causa</label>
-                <select name="causa" className={`${selectClase} w-full`}>
-                  {causas.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.cliente ?? c.caratula}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClase}>Tipo</label>
-                <select name="tipo" className={`${selectClase} w-full`} defaultValue="audiencia">
-                  <option value="audiencia">Audiencia</option>
-                  <option value="gestion">Gestión / plazo</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClase}>Fecha</label>
-                <Input name="fecha" type="date" required />
-              </div>
-              <div>
-                <label className={labelClase}>Detalle</label>
-                <Input name="detalle" required placeholder="Audiencia preparatoria 10:00" />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button type="submit" size="sm" disabled={pendiente}>
-                Agendar
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setFormAgenda(false)}>
-                Cancelar
-              </Button>
-            </div>
-          </form>
-        ) : null}
-
-        <div className="overflow-x-auto rounded-xl border bg-white">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {renderTh("causa", "Causa")}
-                {renderTh("calidad", "Calidad")}
-                {renderTh("materia", "Materia")}
-                {renderTh("tribunal", "Tribunal / RIT")}
-                {renderTh("estado", "Estado")}
-                {renderTh("gestion", "Próxima gestión")}
-                {renderTh("audiencia", "Audiencia")}
-                {renderTh("hitos", "Hitos")}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {causasOrdenadas.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
-                    {causas.length === 0
-                      ? "Sin causas registradas."
-                      : verHistorico
-                        ? "Sin causas cerradas en el histórico."
-                        : "Ninguna causa activa en esta vista."}
-                  </TableCell>
-                </TableRow>
-              ) : null}
-              {causasOrdenadas.map((c) => {
-                const abierta = abiertas.has(c.id);
-                const hitosOrden = [...c.hitos].sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
-                return [
-                  <TableRow
-                    key={c.id}
-                    id={`causa-${c.id}`}
-                    className={
-                      resaltada === c.id
-                        ? "bg-teal-50 ring-2 ring-inset ring-[var(--brand-teal,#17A2B8)] transition-colors"
-                        : "transition-colors"
-                    }
+        {causasFiltradas.length === 0 ? (
+          <div className="rounded-xl border bg-white py-10 text-center text-sm text-muted-foreground">
+            {causas.length === 0
+              ? "Sin causas registradas."
+              : verHistorico
+                ? "Sin causas cerradas en el histórico."
+                : "Ninguna causa activa en esta vista."}
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {grupos.map(({ estado, items }) => {
+              const color = ESTADO_COLOR[estado] ?? "#64748b";
+              return (
+                <div key={estado}>
+                  <div
+                    style={{ borderColor: color, backgroundColor: `${color}12` }}
+                    className="mb-2 flex items-center gap-2 rounded-lg border-l-4 px-3 py-1.5"
                   >
-                    <TableCell className="align-top">
-                      <div className="font-medium">{c.cliente ?? c.caratula}</div>
-                      {c.cliente ? (
-                        <div className="text-xs text-muted-foreground">{c.caratula}</div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="align-top">
-                      <Badge
-                        variant="outline"
-                        className={
-                          c.calidad === "Ataque"
-                            ? "border-teal-200 bg-teal-50 text-teal-700"
-                            : c.calidad === "Defensa"
-                              ? "border-violet-200 bg-violet-50 text-violet-700"
-                              : ""
-                        }
-                      >
-                        {c.calidad ?? "—"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="align-top text-sm">{c.materia ?? "—"}</TableCell>
-                    <TableCell className="max-w-56 align-top text-xs">
-                      <div className="truncate" title={c.tribunal ?? undefined}>
-                        {c.tribunal ?? "—"}
-                      </div>
-                      {c.rit_rol ? (
-                        <div className="text-muted-foreground">{c.rit_rol}</div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="align-top">
-                      <select
-                        className={selectClase}
-                        value={c.estado ?? "prospecto"}
-                        onChange={(e) =>
-                          guardarCampo(c.id, { estado: e.target.value }, "Estado actualizado.")
-                        }
-                      >
-                        {ESTADOS_CAUSA.map((e) => (
-                          <option key={e}>{e}</option>
-                        ))}
-                        {c.estado && !ESTADOS_CAUSA.includes(c.estado as never) ? (
-                          <option>{c.estado}</option>
-                        ) : null}
-                      </select>
-                    </TableCell>
-                    <TableCell className="max-w-64 align-top">
-                      <div className="flex flex-col gap-1">
-                        <input
-                          key={`pgf-${c.proxima_gestion_fecha ?? ""}`}
-                          type="date"
-                          defaultValue={c.proxima_gestion_fecha ?? ""}
-                          onBlur={(e) => {
-                            const val = e.target.value || null;
-                            if (val !== (c.proxima_gestion_fecha ?? null))
-                              guardarCampo(
-                                c.id,
-                                { proxima_gestion_fecha: val },
-                                "Próxima gestión actualizada.",
-                              );
-                          }}
-                          className={inlineFecha}
-                        />
-                        <input
-                          key={`pgd-${c.proxima_gestion_detalle ?? ""}`}
-                          type="text"
-                          defaultValue={c.proxima_gestion_detalle ?? ""}
-                          placeholder="detalle…"
-                          onBlur={(e) => {
-                            const val = e.target.value.trim() || null;
-                            if (val !== (c.proxima_gestion_detalle ?? null))
-                              guardarCampo(
-                                c.id,
-                                { proxima_gestion_detalle: val },
-                                "Detalle de gestión actualizado.",
-                              );
-                          }}
-                          className={inlineTexto}
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell className="align-top">
-                      <div className="flex flex-col gap-1">
-                        <input
-                          key={`paf-${c.proxima_audiencia_fecha ?? ""}`}
-                          type="date"
-                          defaultValue={c.proxima_audiencia_fecha ?? ""}
-                          onBlur={(e) => {
-                            const val = e.target.value || null;
-                            if (val !== (c.proxima_audiencia_fecha ?? null))
-                              guardarCampo(
-                                c.id,
-                                { proxima_audiencia_fecha: val },
-                                "Audiencia actualizada.",
-                              );
-                          }}
-                          className={inlineFecha}
-                        />
-                        <select
-                          value={c.proxima_audiencia_tipo ?? ""}
-                          onChange={(e) =>
-                            guardarCampo(
-                              c.id,
-                              { proxima_audiencia_tipo: e.target.value || null },
-                              "Audiencia actualizada.",
-                            )
-                          }
-                          className={inlineSelect}
+                    <span style={{ backgroundColor: color }} className="size-2 shrink-0 rounded-full" />
+                    <span className="text-sm font-semibold capitalize">{estado}</span>
+                    <span className="text-xs text-muted-foreground">· {items.length}</span>
+                  </div>
+                  <div className="overflow-hidden rounded-xl border bg-white">
+                    {items.map((c) => {
+                      const prox = proximaClave(c);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setFichaId(c.id)}
+                          className="flex w-full items-center gap-3 border-b px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/50"
                         >
-                          <option value="">— tipo —</option>
-                          {TIPOS_AUDIENCIA.map((t) => (
-                            <option key={t}>{t}</option>
-                          ))}
-                          {c.proxima_audiencia_tipo &&
-                          !TIPOS_AUDIENCIA.includes(c.proxima_audiencia_tipo) ? (
-                            <option>{c.proxima_audiencia_tipo}</option>
-                          ) : null}
-                        </select>
-                      </div>
-                    </TableCell>
-                    <TableCell className="align-top">
-                      <button
-                        type="button"
-                        onClick={() => toggleHitos(c.id)}
-                        className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-teal-700 hover:bg-teal-100"
-                      >
-                        📌 {c.hitos.length} {abierta ? "▴" : "▾"}
-                      </button>
-                    </TableCell>
-                  </TableRow>,
-                  abierta ? (
-                    <TableRow key={`${c.id}-hitos`} className="hover:bg-transparent">
-                      <TableCell colSpan={8} className="bg-muted/30">
-                        <div className="my-2 ml-1 border-l-[3px] border-[var(--brand-teal,#17A2B8)] py-1 pl-4">
-                          <div className="mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                            Bitácora de hitos — {c.cliente ?? c.caratula}
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium">{c.cliente ?? c.caratula}</div>
+                            <div className="truncate text-[11px] text-muted-foreground">
+                              {[c.rit_rol, c.tribunal].filter(Boolean).join(" · ") || "—"}
+                            </div>
                           </div>
-                          {hitosOrden.length === 0 ? (
-                            <p className="text-xs text-muted-foreground italic">
-                              Sin hitos registrados todavía.
-                            </p>
-                          ) : (
-                            hitosOrden.map((h) => (
-                              <div key={h.id} className="flex gap-3 py-0.5 text-xs">
-                                <span className="w-20 shrink-0 font-bold text-teal-700">
-                                  {formatFecha(h.fecha)}
-                                </span>
-                                <span>{h.detalle}</span>
-                              </div>
-                            ))
-                          )}
-                          <form
-                            className="mt-2 flex flex-wrap items-center gap-2"
-                            onSubmit={(e) => {
-                              e.preventDefault();
-                              enviarHito(c.id, e.currentTarget);
-                            }}
-                          >
-                            <Input name="fecha" type="date" required className="h-8 w-36 text-xs" />
-                            <Input
-                              name="detalle"
-                              required
-                              placeholder="Demanda presentada · Notificación · Sentencia…"
-                              className="h-8 min-w-56 flex-1 text-xs"
-                            />
-                            <Button type="submit" size="sm" disabled={pendiente}>
-                              + Agregar hito
-                            </Button>
-                          </form>
-                          {c.carpeta_sharepoint ? (
-                            <a
-                              href={c.carpeta_sharepoint}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="mt-2 inline-flex items-center gap-1 text-xs text-[var(--brand-teal,#17A2B8)] hover:underline"
-                            >
-                              <ExternalLink className="size-3.5" />
-                              Carpeta SharePoint
-                            </a>
+                          <CalidadBadge calidad={c.calidad} />
+                          <span className="hidden w-14 shrink-0 text-xs text-muted-foreground sm:block">
+                            {c.materia ?? ""}
+                          </span>
+                          {prox ? (
+                            <span className="hidden shrink-0 items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium sm:inline-flex">
+                              📅 {formatFecha(prox)}
+                            </span>
                           ) : null}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : null,
-                ];
-              })}
-            </TableBody>
-          </Table>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Estados y catálogos alineados con la vista Causas de ClickUp. La fecha de próxima gestión
-          y de audiencia se editan directo en la tabla.
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
+                            📌 {c.hitos.length}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <p className="mt-3 text-xs text-muted-foreground">
+          Haz clic en una causa para abrir su ficha; las causas se agrupan por estado.
         </p>
       </div>
+
+      {/* ===== Ficha de causa ===== */}
+      <Sheet open={!!fichaId} onOpenChange={(o) => !o && setFichaId(null)}>
+        <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:!max-w-lg">
+          {ficha ? (
+            <>
+              <SheetHeader className="border-b">
+                <div className="flex items-start justify-between gap-2">
+                  <SheetTitle className="text-base leading-snug">
+                    {ficha.cliente ?? ficha.caratula}
+                  </SheetTitle>
+                  <button
+                    type="button"
+                    onClick={() => setFichaId(null)}
+                    className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
+                    aria-label="Cerrar"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+                <SheetDescription className="sr-only">Ficha de la causa</SheetDescription>
+                <div className="flex flex-wrap items-center gap-2">
+                  <EstadoBadge estado={ficha.estado} />
+                  <CalidadBadge calidad={ficha.calidad} />
+                  {ficha.materia ? (
+                    <span className="text-xs text-muted-foreground">{ficha.materia}</span>
+                  ) : null}
+                </div>
+              </SheetHeader>
+
+              <div className="space-y-6 p-4">
+                {/* Intervinientes */}
+                <section>
+                  <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Intervinientes
+                  </h4>
+                  {partes ? (
+                    <div className="grid grid-cols-1 gap-2">
+                      <div className="rounded-lg border bg-muted/30 px-3 py-2">
+                        <div className="text-[11px] font-semibold text-muted-foreground">
+                          Demandante {ficha.calidad === "Ataque" ? "· cliente" : ""}
+                        </div>
+                        <div className="text-sm">{partes.demandante}</div>
+                      </div>
+                      <div className="rounded-lg border bg-muted/30 px-3 py-2">
+                        <div className="text-[11px] font-semibold text-muted-foreground">
+                          Demandado {ficha.calidad === "Defensa" ? "· cliente" : ""}
+                        </div>
+                        <div className="text-sm">{partes.demandado}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                      {ficha.caratula}
+                    </div>
+                  )}
+                </section>
+
+                {/* Datos */}
+                <section className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  <Campo label="Materia" value={ficha.materia} />
+                  <Campo label="Calidad" value={ficha.calidad} />
+                  <div className="col-span-2">
+                    <Campo label="Tribunal" value={ficha.tribunal} />
+                  </div>
+                  <Campo label="RIT / ROL" value={ficha.rit_rol} />
+                  <div>
+                    <label className={labelClase}>Estado</label>
+                    <select
+                      value={ficha.estado ?? "prospecto"}
+                      onChange={(e) =>
+                        guardarCampo(ficha.id, { estado: e.target.value }, "Estado actualizado.")
+                      }
+                      className={campoInput}
+                    >
+                      {ESTADOS_CAUSA.map((e) => (
+                        <option key={e}>{e}</option>
+                      ))}
+                      {ficha.estado && !ESTADOS_CAUSA.includes(ficha.estado as never) ? (
+                        <option>{ficha.estado}</option>
+                      ) : null}
+                    </select>
+                  </div>
+                </section>
+
+                {/* Agenda editable */}
+                <section>
+                  <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Agenda
+                  </h4>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className={labelClase}>Próxima gestión</label>
+                      <input
+                        key={`pgf-${ficha.id}-${ficha.proxima_gestion_fecha ?? ""}`}
+                        type="date"
+                        defaultValue={ficha.proxima_gestion_fecha ?? ""}
+                        onBlur={(e) => {
+                          const val = e.target.value || null;
+                          if (val !== (ficha.proxima_gestion_fecha ?? null))
+                            guardarCampo(
+                              ficha.id,
+                              { proxima_gestion_fecha: val },
+                              "Próxima gestión actualizada.",
+                            );
+                        }}
+                        className={campoInput}
+                      />
+                      <input
+                        key={`pgd-${ficha.id}-${ficha.proxima_gestion_detalle ?? ""}`}
+                        type="text"
+                        defaultValue={ficha.proxima_gestion_detalle ?? ""}
+                        placeholder="detalle (comparendo, contestación…)"
+                        onBlur={(e) => {
+                          const val = e.target.value.trim() || null;
+                          if (val !== (ficha.proxima_gestion_detalle ?? null))
+                            guardarCampo(
+                              ficha.id,
+                              { proxima_gestion_detalle: val },
+                              "Detalle de gestión actualizado.",
+                            );
+                        }}
+                        className={`${campoInput} mt-1`}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClase}>Próxima audiencia</label>
+                      <input
+                        key={`paf-${ficha.id}-${ficha.proxima_audiencia_fecha ?? ""}`}
+                        type="date"
+                        defaultValue={ficha.proxima_audiencia_fecha ?? ""}
+                        onBlur={(e) => {
+                          const val = e.target.value || null;
+                          if (val !== (ficha.proxima_audiencia_fecha ?? null))
+                            guardarCampo(
+                              ficha.id,
+                              { proxima_audiencia_fecha: val },
+                              "Audiencia actualizada.",
+                            );
+                        }}
+                        className={campoInput}
+                      />
+                      <select
+                        value={ficha.proxima_audiencia_tipo ?? ""}
+                        onChange={(e) =>
+                          guardarCampo(
+                            ficha.id,
+                            { proxima_audiencia_tipo: e.target.value || null },
+                            "Audiencia actualizada.",
+                          )
+                        }
+                        className={`${campoInput} mt-1`}
+                      >
+                        <option value="">— tipo —</option>
+                        {TIPOS_AUDIENCIA.map((t) => (
+                          <option key={t}>{t}</option>
+                        ))}
+                        {ficha.proxima_audiencia_tipo &&
+                        !TIPOS_AUDIENCIA.includes(ficha.proxima_audiencia_tipo) ? (
+                          <option>{ficha.proxima_audiencia_tipo}</option>
+                        ) : null}
+                      </select>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Bitácora de hitos */}
+                <section>
+                  <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Bitácora de hitos
+                  </h4>
+                  <div className="border-l-[3px] border-[var(--brand-teal,#17A2B8)] pl-3">
+                    {hitosFicha.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">
+                        Sin hitos registrados todavía.
+                      </p>
+                    ) : (
+                      hitosFicha.map((h) => (
+                        <div key={h.id} className="flex gap-3 py-0.5 text-xs">
+                          <span className="w-20 shrink-0 font-bold text-teal-700">
+                            {formatFecha(h.fecha)}
+                          </span>
+                          <span>{h.detalle}</span>
+                        </div>
+                      ))
+                    )}
+                    <form
+                      className="mt-2 flex flex-wrap items-center gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        enviarHito(ficha.id, e.currentTarget);
+                      }}
+                    >
+                      <Input name="fecha" type="date" required className="h-8 w-36 text-xs" />
+                      <Input
+                        name="detalle"
+                        required
+                        placeholder="Demanda presentada · Notificación…"
+                        className="h-8 min-w-48 flex-1 text-xs"
+                      />
+                      <Button type="submit" size="sm" disabled={pendiente}>
+                        + Hito
+                      </Button>
+                    </form>
+                  </div>
+                </section>
+
+                {ficha.carpeta_sharepoint ? (
+                  <a
+                    href={ficha.carpeta_sharepoint}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-[var(--brand-teal,#17A2B8)] hover:underline"
+                  >
+                    <ExternalLink className="size-3.5" />
+                    Carpeta SharePoint
+                  </a>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
