@@ -6,7 +6,7 @@ import { Check, Plus, Trash2 } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { crearPendiente, eliminarPendiente, togglePendiente } from "./actions";
+import { crearPendiente, eliminarPendiente, terminarRequerimiento, togglePendiente } from "./actions";
 import {
   AREAS_PENDIENTE,
   AREA_PENDIENTE_LABEL,
@@ -31,10 +31,14 @@ const AREA_COLOR: Record<string, string> = {
   otro: "#64748b",
 };
 
-function hoyIso(): string {
+function isoMasDias(n: number): string {
   const d = new Date();
+  d.setDate(d.getDate() + n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+const hoyIso = () => isoMasDias(0);
+const VENTANA_DIAS = 10;
 
 function AreaTag({ area }: { area: string }) {
   const color = AREA_COLOR[area] ?? "#64748b";
@@ -78,6 +82,7 @@ export function ModuloPendientes({
 }) {
   const [pendiente, startTransition] = useTransition();
   const [form, setForm] = useState(false);
+  const [mostrarTodos, setMostrarTodos] = useState(false);
 
   const manualesPend = useMemo(() => pendientes.filter((p) => !p.hecho), [pendientes]);
   const manualesHechos = useMemo(() => pendientes.filter((p) => p.hecho), [pendientes]);
@@ -108,6 +113,15 @@ export function ModuloPendientes({
     }
     return items.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
   }, [causas, gestiones, contactos, cotizaciones]);
+
+  /** Por defecto solo lo que vence en los próximos 10 días (incluye vencidos); el resto se oculta. */
+  const limite = isoMasDias(VENTANA_DIAS);
+  const derivadosVentana = useMemo(
+    () => derivados.filter((d) => d.fecha <= limite),
+    [derivados, limite],
+  );
+  const derivadosVisibles = mostrarTodos ? derivados : derivadosVentana;
+  const ocultos = derivados.length - derivadosVentana.length;
 
   function ejecutar(fn: () => Promise<{ ok: boolean; error?: string }>, exito: string) {
     startTransition(async () => {
@@ -204,10 +218,10 @@ export function ModuloPendientes({
                   type="button"
                   onClick={() => ejecutar(() => togglePendiente(p.id, true), "Marcado como hecho.")}
                   disabled={pendiente}
-                  className="flex size-5 shrink-0 items-center justify-center rounded border border-input hover:bg-muted"
-                  title="Marcar como hecho"
+                  className="group flex size-5 shrink-0 items-center justify-center rounded border border-input hover:border-teal-500 hover:bg-muted"
+                  title="Dar por terminado"
                 >
-                  <Check className="size-3.5 text-transparent" />
+                  <Check className="size-3.5 text-muted-foreground/25 group-hover:text-teal-600" />
                 </button>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{p.titulo}</div>
@@ -280,7 +294,20 @@ export function ModuloPendientes({
           ) : (
             requerimientos.map((r) => (
               <div key={r.id} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
-                <span style={{ backgroundColor: AREA_COLOR.requerimiento }} className="size-2 shrink-0 rounded-full" />
+                <button
+                  type="button"
+                  onClick={() =>
+                    ejecutar(
+                      () => terminarRequerimiento(r.id),
+                      "Requerimiento cerrado (también en la bandeja).",
+                    )
+                  }
+                  disabled={pendiente}
+                  className="group flex size-5 shrink-0 items-center justify-center rounded border border-input hover:border-teal-500 hover:bg-muted"
+                  title="Dar por terminado (cierra también en la bandeja común)"
+                >
+                  <Check className="size-3.5 text-muted-foreground/25 group-hover:text-teal-600" />
+                </button>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{r.titulo}</div>
                   {r.detalle ? (
@@ -290,6 +317,7 @@ export function ModuloPendientes({
                 {r.canal ? (
                   <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:block">{r.canal}</span>
                 ) : null}
+                <AreaTag area="requerimiento" />
                 <Fecha fecha={r.plazo} />
               </div>
             ))
@@ -302,14 +330,26 @@ export function ModuloPendientes({
 
       {/* ===== Vencimientos derivados de mis áreas ===== */}
       <section>
-        <h3 className="mb-2 text-sm font-semibold">Vencimientos de mis áreas ({derivados.length})</h3>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h3 className="mr-auto text-sm font-semibold">
+            Vencimientos de mis áreas ({derivadosVisibles.length}
+            {!mostrarTodos && ocultos > 0 ? ` de ${derivados.length}` : ""})
+          </h3>
+          {ocultos > 0 ? (
+            <Button variant="outline" size="sm" onClick={() => setMostrarTodos((v) => !v)}>
+              {mostrarTodos ? `Próximos ${VENTANA_DIAS} días` : `Ver todos (+${ocultos})`}
+            </Button>
+          ) : null}
+        </div>
         <div className="overflow-hidden rounded-xl border bg-white">
-          {derivados.length === 0 ? (
+          {derivadosVisibles.length === 0 ? (
             <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-              Nada agendado en causas, gestiones ni prospección.
+              {derivados.length === 0
+                ? "Nada agendado en causas, gestiones ni prospección."
+                : `Nada vence en los próximos ${VENTANA_DIAS} días.`}
             </p>
           ) : (
-            derivados.map((d) => (
+            derivadosVisibles.map((d) => (
               <div key={d.key} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
                 <span style={{ backgroundColor: AREA_COLOR[d.area] }} className="size-2 shrink-0 rounded-full" />
                 <div className="min-w-0 flex-1">
@@ -323,7 +363,8 @@ export function ModuloPendientes({
           )}
         </div>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          Se arma solo con las próximas fechas de cada área; edítalas en su pestaña.
+          Muestra los próximos {VENTANA_DIAS} días (y lo vencido); el resto queda oculto. Se arma solo
+          con las próximas fechas de cada área; edítalas en su pestaña.
         </p>
       </section>
     </div>

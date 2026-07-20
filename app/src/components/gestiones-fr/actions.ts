@@ -252,6 +252,18 @@ export async function eliminarPendiente(id: string): Promise<Resultado> {
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
+/** Cierra un requerimiento de la bandeja común (tareas_oficina) desde Pendientes.
+ *  Mismo mecanismo que la bandeja: estado='terminada' (el trigger estampa resuelto_at),
+ *  por lo que también queda cerrado allá. */
+export async function terminarRequerimiento(id: string): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tareas_oficina")
+    .update({ estado: "terminada" })
+    .eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
 // ===================== Prospección =====================
 
 export async function crearContacto(input: {
