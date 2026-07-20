@@ -4,13 +4,15 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import Image from "next/image";
 import {
   Building2, Home, LayoutGrid, KeyRound, Loader2, Check, ChevronDown, Pencil,
+  History, FileText, MessageCircle, Mail,
 } from "lucide-react";
 import { PortalCliente } from "@/app/solicitud/[token]/portal";
 import { TesoreriaBotonGrupo } from "@/app/solicitud/[token]/tesoreria-boton";
 import { DatosEmpresa } from "@/app/solicitud/[token]/datos-empresa";
 import { cargarEmpresaDetalle } from "@/app/solicitud/[token]/datos-actions";
 import { type InfoEmpresa } from "@/app/solicitud/[token]/solicitud-form";
-import { cambiarPinPortal } from "./portal-auth";
+import { formatFecha } from "@/lib/format";
+import { cambiarPinPortal, cargarBitacoraGrupo, type BitacoraItem } from "./portal-auth";
 
 export type EmpresaMeta = {
   token: string;
@@ -40,11 +42,14 @@ export function PortalGrupo({
   grupo,
   empresas,
   slug,
+  grupoToken,
 }: {
   grupo: string;
   empresas: EmpresaCargada[];
   /** Slug del portal (si se entró por link con PIN). Habilita "Cambiar PIN". */
   slug?: string | null;
+  /** Token del grupo (para cargar la bitácora de gestiones). */
+  grupoToken?: string | null;
 }) {
   // Orden: empresas primero (como vienen, alfabético), casa particular al final.
   const ordenadas = [
@@ -118,7 +123,7 @@ export function PortalGrupo({
       </div>
 
       {sel === "todas" ? (
-        <TablaEmpresas empresas={ordenadas} />
+        <TablaEmpresas empresas={ordenadas} grupoToken={grupoToken} />
       ) : (
         <PortalCliente
           key={ordenadas[sel].meta.token}
@@ -266,7 +271,7 @@ function barPct(pct: number): string {
  * mediante el editor DatosEmpresa. Es el único lugar donde el cliente ingresa o
  * modifica información de sus empresas.
  */
-function TablaEmpresas({ empresas }: { empresas: EmpresaCargada[] }) {
+function TablaEmpresas({ empresas, grupoToken }: { empresas: EmpresaCargada[]; grupoToken?: string | null }) {
   const [pcts, setPcts] = useState<Record<string, number | null>>({});
   const [abierta, setAbierta] = useState<string | null>(null);
 
@@ -283,7 +288,8 @@ function TablaEmpresas({ empresas }: { empresas: EmpresaCargada[] }) {
   const cols = "sm:grid sm:grid-cols-[1fr_150px_170px_110px] sm:items-center";
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-6">
+      <div className="space-y-2">
       {/* Cabecera (solo desde sm) */}
       <div className={`hidden gap-3 px-4 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground ${cols}`}>
         <span>Empresa</span>
@@ -353,6 +359,104 @@ function TablaEmpresas({ empresas }: { empresas: EmpresaCargada[] }) {
           </div>
         );
       })}
+      </div>
+      {grupoToken ? <BitacoraGestiones token={grupoToken} /> : null}
+    </div>
+  );
+}
+
+const ETIQUETA_GESTION: Record<string, string> = {
+  contrato: "Contrato nuevo",
+  anexo: "Anexo de contrato",
+  amonestacion: "Amonestación",
+  finiquito: "Finiquito",
+  permiso: "Permiso",
+  vacaciones: "Vacaciones",
+};
+function etiquetaGestion(tipo: string | null): string {
+  if (!tipo) return "Gestión";
+  return ETIQUETA_GESTION[tipo] ?? tipo.charAt(0).toUpperCase() + tipo.slice(1);
+}
+function canalLabel(canal: string | null): string {
+  if (!canal) return "Requerimiento";
+  if (/wa|whats/i.test(canal)) return "WhatsApp";
+  if (/mail|correo|email/i.test(canal)) return "Correo";
+  return canal;
+}
+
+/** Bitácora del grupo (vista "Todas"): gestiones RRHH + requerimientos, más recientes primero. */
+function BitacoraGestiones({ token }: { token: string }) {
+  const [items, setItems] = useState<BitacoraItem[] | null>(null);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    let vivo = true;
+    setCargando(true);
+    cargarBitacoraGrupo(token).then((r) => {
+      if (!vivo) return;
+      setItems(r.ok && r.items ? r.items : []);
+      setCargando(false);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [token]);
+
+  return (
+    <div className="card-soft rounded-xl bg-card p-5">
+      <div className="mb-1 flex items-center gap-2">
+        <History className="size-4 text-[var(--brand-teal)]" />
+        <h2 className="font-heading text-base font-semibold">Bitácora de gestiones</h2>
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Lo que hemos gestionado para tus empresas — solicitudes laborales y requerimientos, del más reciente al más antiguo.
+      </p>
+      {cargando ? (
+        <p className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Cargando…
+        </p>
+      ) : !items || items.length === 0 ? (
+        <p className="py-2 text-sm text-muted-foreground">
+          Aún no hay gestiones registradas para tus empresas.
+        </p>
+      ) : (
+        <ul className="space-y-2.5">
+          {items.map((it, i) => (
+            <li key={i} className="flex items-start gap-3 border-b border-border pb-2.5 last:border-0 last:pb-0">
+              <span className="mt-0.5 shrink-0 text-[var(--brand-teal)]">
+                {it.fuente === "requerimiento" ? (
+                  canalLabel(it.canal) === "WhatsApp" ? <MessageCircle className="size-4" /> : <Mail className="size-4" />
+                ) : (
+                  <FileText className="size-4" />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span className="font-medium">
+                    {it.fuente === "requerimiento" ? it.tipo : etiquetaGestion(it.tipo)}
+                  </span>
+                  {it.trabajador ? <span className="text-sm text-muted-foreground">· {it.trabajador}</span> : null}
+                  {it.empresa ? <span className="text-xs text-muted-foreground">· {it.empresa}</span> : null}
+                  {it.fuente === "requerimiento" ? (
+                    <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] text-sky-800">{canalLabel(it.canal)}</span>
+                  ) : null}
+                  {it.estado ? (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
+                      {it.estado.replace(/_/g, " ")}
+                    </span>
+                  ) : null}
+                </div>
+                {it.detalle ? (
+                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{it.detalle}</p>
+                ) : null}
+              </div>
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                {it.fecha ? formatFecha(it.fecha.slice(0, 10)) : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
