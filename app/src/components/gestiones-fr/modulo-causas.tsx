@@ -32,6 +32,9 @@ const campoInput =
 
 const TIPOS_AUDIENCIA = ["Audiencia preparatoria", "Audiencia de juicio"];
 
+/** Pestañas de materia: "Todas" + el catálogo de materias. */
+const TABS_MATERIA = ["Todas", ...MATERIAS_CAUSA] as const;
+
 /** Separa la carátula "Demandante / Demandado" (o "… con …") en sus partes. */
 function parsearPartes(caratula: string): { demandante: string; demandado: string } | null {
   if (caratula.includes("/")) {
@@ -103,6 +106,16 @@ export function ModuloCausas({
   const [fichaId, setFichaId] = useState<string | null>(null);
 
   const nCerradas = useMemo(() => causas.filter((c) => c.estado === "cerrada").length, [causas]);
+
+  /** Conteo por materia dentro de la vista actual (activas u histórico), para las pestañas. */
+  const conteoPorMateria = useMemo(() => {
+    const base = causas.filter((c) =>
+      verHistorico ? c.estado === "cerrada" : c.estado !== "cerrada",
+    );
+    const conteo: Record<string, number> = { Todas: base.length, Laboral: 0, Familia: 0, Civil: 0 };
+    for (const c of base) if (c.materia && c.materia in conteo) conteo[c.materia] += 1;
+    return conteo;
+  }, [causas, verHistorico]);
 
   const eventos = useMemo<EventoCalendario[]>(() => {
     const evs: EventoCalendario[] = [];
@@ -224,25 +237,13 @@ export function ModuloCausas({
 
       {/* ===== Causas agrupadas por estado ===== */}
       <div>
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h3 className="mr-auto text-sm font-semibold">
             {verHistorico ? "Histórico — causas cerradas" : "Causas"} ({causasFiltradas.length})
           </h3>
-          <select
-            value={filtroMateria}
-            onChange={(e) => setFiltroMateria(e.target.value)}
-            className={selectClase}
-            title="Filtrar por materia"
-          >
-            <option value="Todas">Todas las materias</option>
-            {MATERIAS_CAUSA.map((m) => (
-              <option key={m}>{m}</option>
-            ))}
-          </select>
           <Button
             variant={verHistorico ? "default" : "outline"}
             size="sm"
-            className="mr-auto"
             onClick={() => setVerHistorico((v) => !v)}
           >
             <Archive className="size-4" />
@@ -252,6 +253,30 @@ export function ModuloCausas({
             <Plus className="size-4" />
             Nueva causa
           </Button>
+        </div>
+
+        {/* Pestañas por materia */}
+        <div className="mb-4 flex flex-wrap gap-1 border-b">
+          {TABS_MATERIA.map((t) => {
+            const activo = filtroMateria === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setFiltroMateria(t)}
+                className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                  activo
+                    ? "border-[var(--brand-teal,#17A2B8)] text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t}
+                <span className="ml-1 text-xs text-muted-foreground">
+                  ({conteoPorMateria[t] ?? 0})
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {formCausa ? (
