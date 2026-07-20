@@ -268,11 +268,13 @@ export function RecursosHumanos({
                         <tr
                           key={t.id}
                           onClick={() => { setFichaId(t.id); setFichaOpen(true); }}
-                          className="cursor-pointer border-b transition-colors last:border-0 hover:bg-muted/40"
+                          className={`cursor-pointer border-b transition-colors last:border-0 hover:bg-muted/40 ${
+                            t.tipo_contrato === "plazo_fijo" ? "font-bold" : ""
+                          }`}
                           title="Ver ficha del trabajador"
                         >
                           <td className="py-2 pr-2">
-                            <span className="font-medium text-[var(--brand-teal)]">{t.nombre}</span>
+                            <span className={`text-[var(--brand-teal)] ${t.tipo_contrato === "plazo_fijo" ? "font-bold" : "font-medium"}`}>{t.nombre}</span>
                             {t.nuevo ? (
                               <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Nuevo</span>
                             ) : null}
