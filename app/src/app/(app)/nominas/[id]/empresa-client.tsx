@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Search, Users, Plus, X } from "lucide-react";
+import {
+  ArrowLeft, Search, Users, Plus, X, Upload, Download, FileText, Trash2, Clock, CheckCircle2,
+} from "lucide-react";
 import { RutCopiable } from "@/components/rut-copiable";
 import { TextoCopiable } from "@/components/texto-copiable";
 import { Progreso } from "@/components/progreso";
@@ -24,6 +26,15 @@ import {
   type TrabajadorFichaRow,
   type CargaFamiliar,
 } from "../actions";
+import {
+  listarDocumentosTrabajador,
+  subirDocumentoTrabajador,
+  subirDocumentoFirmado,
+  marcarDocumentoFirmado,
+  urlDocumentoTrabajador,
+  eliminarDocumentoTrabajador,
+  type DocTrabajador,
+} from "./documentos-actions";
 
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -72,10 +83,13 @@ function faltanObligatorios(
 }
 
 function Dato({ label, valor }: { label: string; valor: string | null }) {
+  const falta = !valor || valor.trim() === "";
   return (
     <div>
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-sm">{valor || "—"}</div>
+      <div className={`text-sm ${falta ? "font-medium text-red-600" : ""}`}>
+        {falta ? "Falta" : valor}
+      </div>
     </div>
   );
 }
@@ -236,6 +250,227 @@ function CargasCard({
   );
 }
 
+const TIPOS_DOC: { value: string; label: string; firma: boolean }[] = [
+  { value: "contrato", label: "Contrato de trabajo", firma: true },
+  { value: "anexo", label: "Anexo de contrato", firma: true },
+  { value: "finiquito", label: "Finiquito", firma: true },
+  { value: "liquidacion", label: "Liquidación de sueldo", firma: false },
+  { value: "amonestacion", label: "Amonestación", firma: false },
+  { value: "otro", label: "Otro documento", firma: false },
+];
+const labelTipoDoc = (t: string) => TIPOS_DOC.find((x) => x.value === t)?.label ?? t;
+
+/**
+ * Documentos del trabajador (panel interno): la oficina sube contratos,
+ * liquidaciones, anexos, etc., con una reseña pre-llenada. Los que requieren
+ * firma quedan pendientes hasta que se sube la copia firmada de vuelta.
+ */
+function DocumentosCard({
+  clienteId,
+  trabajador,
+}: {
+  clienteId: string;
+  trabajador: TrabajadorFichaRow;
+}) {
+  const [docs, setDocs] = useState<DocTrabajador[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [tipo, setTipo] = useState("contrato");
+  const [resena, setResena] = useState("");
+  const [requiereFirma, setRequiereFirma] = useState(true);
+  const [subiendo, start] = useTransition();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const plantilla = (tp: string) =>
+    `${labelTipoDoc(tp)} — ${trabajador.nombre} — ${new Date().toLocaleDateString("es-CL")}`;
+
+  const cargar = () => {
+    setCargando(true);
+    listarDocumentosTrabajador(trabajador.id).then((r) => {
+      setDocs(r.ok && r.docs ? r.docs : []);
+      setCargando(false);
+    });
+  };
+  useEffect(() => {
+    setTipo("contrato");
+    setResena(plantilla("contrato"));
+    setRequiereFirma(true);
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trabajador.id]);
+
+  function cambiarTipo(tp: string) {
+    setTipo(tp);
+    setResena(plantilla(tp));
+    setRequiereFirma(TIPOS_DOC.find((x) => x.value === tp)?.firma ?? false);
+  }
+
+  function subir() {
+    const file = fileRef.current?.files?.[0];
+    if (!file) { toast.error("Selecciona un archivo."); return; }
+    const fd = new FormData();
+    fd.set("cliente_id", clienteId);
+    fd.set("trabajador_id", trabajador.id);
+    fd.set("tipo", tipo);
+    fd.set("resena", resena);
+    fd.set("requiere_firma", String(requiereFirma));
+    fd.set("archivo", file);
+    start(async () => {
+      const r = await subirDocumentoTrabajador(fd);
+      if (r.ok) {
+        toast.success(requiereFirma ? "Documento subido — queda pendiente de firma" : "Documento subido");
+        if (fileRef.current) fileRef.current.value = "";
+        cargar();
+      } else toast.error(r.error ?? "No se pudo subir.");
+    });
+  }
+
+  function descargar(path: string, nombre: string) {
+    start(async () => {
+      const r = await urlDocumentoTrabajador(path, nombre);
+      if (r.ok && r.url) {
+        const a = document.createElement("a");
+        a.href = r.url;
+        a.click();
+      } else toast.error(r.error ?? "No se pudo descargar.");
+    });
+  }
+
+  function firmarConArchivo(id: string, file: File) {
+    const fd = new FormData();
+    fd.set("id", id);
+    fd.set("trabajador_id", trabajador.id);
+    fd.set("archivo", file);
+    start(async () => {
+      const r = await subirDocumentoFirmado(fd);
+      if (r.ok) { toast.success("Copia firmada guardada"); cargar(); }
+      else toast.error(r.error ?? "No se pudo subir la copia firmada.");
+    });
+  }
+
+  function marcar(id: string) {
+    start(async () => {
+      const r = await marcarDocumentoFirmado(id);
+      if (r.ok) { toast.success("Marcado como firmado"); cargar(); }
+      else toast.error(r.error ?? "Error.");
+    });
+  }
+
+  function eliminar(id: string) {
+    if (!window.confirm("¿Eliminar este documento?")) return;
+    start(async () => {
+      const r = await eliminarDocumentoTrabajador(id);
+      if (r.ok) { toast.success("Documento eliminado"); cargar(); }
+      else toast.error(r.error ?? "Error al eliminar.");
+    });
+  }
+
+  const pendientes = docs.filter((d) => d.estado_firma === "pendiente");
+
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+        <FileText className="size-4 text-[var(--brand-teal)]" /> Documentos del trabajador
+      </div>
+
+      {pendientes.length > 0 ? (
+        <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-2.5">
+          <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-amber-900">
+            <Clock className="size-3.5" /> Pendientes de que vuelvan firmados ({pendientes.length})
+          </p>
+          <ul className="space-y-1.5">
+            {pendientes.map((d) => (
+              <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="min-w-0">
+                  <span className="font-medium">{labelTipoDoc(d.tipo)}</span>
+                  {d.resena ? <span className="block truncate text-xs text-amber-800">{d.resena}</span> : null}
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <label className="inline-flex cursor-pointer items-center gap-1 text-xs font-medium text-[var(--brand-teal)]">
+                    <Upload className="size-3.5" /> Subir firmado
+                    <input
+                      type="file" className="hidden" disabled={subiendo}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) firmarConArchivo(d.id, f); e.target.value = ""; }}
+                    />
+                  </label>
+                  <button type="button" onClick={() => marcar(d.id)} disabled={subiendo}
+                    className="text-xs text-muted-foreground hover:text-foreground">Marcar firmado</button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <select className={selectCls} value={tipo} onChange={(e) => cambiarTipo(e.target.value)}>
+          {TIPOS_DOC.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+        <input
+          ref={fileRef} type="file"
+          className="text-sm file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
+        />
+        <textarea
+          value={resena} onChange={(e) => setResena(e.target.value)} rows={2}
+          placeholder="Reseña del documento"
+          className="rounded-md border border-input bg-card px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring sm:col-span-2"
+        />
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <input type="checkbox" checked={requiereFirma} onChange={(e) => setRequiereFirma(e.target.checked)} />
+          Requiere firma (queda pendiente hasta que vuelva firmado)
+        </label>
+        <div className="flex justify-end">
+          <Button onClick={subir} disabled={subiendo}><Upload className="size-4" /> Subir documento</Button>
+        </div>
+      </div>
+
+      <div className="mt-3 border-t pt-2">
+        {cargando ? (
+          <p className="py-2 text-xs text-muted-foreground">Cargando…</p>
+        ) : docs.length === 0 ? (
+          <p className="py-2 text-xs text-muted-foreground">Aún no hay documentos cargados.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {docs.map((d) => (
+              <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                <span className="min-w-0">
+                  <span className="font-medium">{labelTipoDoc(d.tipo)}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">{formatFecha(d.created_at.slice(0, 10))}</span>
+                  {d.estado_firma === "pendiente" ? (
+                    <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-800">Pendiente firma</span>
+                  ) : d.estado_firma === "firmado" ? (
+                    <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-700">
+                      <CheckCircle2 className="size-3" /> Firmado
+                    </span>
+                  ) : null}
+                  {d.resena ? <span className="block truncate text-xs text-muted-foreground">{d.resena}</span> : null}
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  <button type="button" disabled={subiendo}
+                    onClick={() => descargar(d.documento_path, `${labelTipoDoc(d.tipo)} - ${trabajador.nombre}`)}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-[var(--brand-teal)]">
+                    <Download className="size-3.5" /> Ver
+                  </button>
+                  {d.documento_firmado_path ? (
+                    <button type="button" disabled={subiendo}
+                      onClick={() => descargar(d.documento_firmado_path!, `${labelTipoDoc(d.tipo)} firmado - ${trabajador.nombre}`)}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                      <Download className="size-3.5" /> Firmado
+                    </button>
+                  ) : null}
+                  <button type="button" onClick={() => eliminar(d.id)} disabled={subiendo} aria-label="Eliminar"
+                    className="text-muted-foreground hover:text-red-600">
+                    <Trash2 className="size-4" />
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function EmpresaNominaClient({
   empresa,
   fichas,
@@ -337,7 +572,11 @@ export function EmpresaNominaClient({
           <div>
             <div className="text-xs text-muted-foreground">Correo contacto</div>
             <div className="text-sm">
-              <TextoCopiable texto={empresa.contacto_correo} etiqueta="Correo" />
+              {empresa.contacto_correo ? (
+                <TextoCopiable texto={empresa.contacto_correo} etiqueta="Correo" />
+              ) : (
+                <span className="font-medium text-red-600">Falta</span>
+              )}
             </div>
           </div>
           <div>
@@ -494,9 +733,9 @@ export function EmpresaNominaClient({
                         };
                         return (
                           <div key={def.campo} className="flex flex-col gap-1">
-                            <div className="text-xs text-muted-foreground">
+                            <div className={`text-xs ${def.obligatorio && v === null ? "font-medium text-red-600" : "text-muted-foreground"}`}>
                               {def.etiqueta}
-                              {def.obligatorio && v === null ? " *" : ""}
+                              {def.obligatorio && v === null ? " · falta" : ""}
                             </div>
                             <CampoConValor
                               item={item}
@@ -524,6 +763,8 @@ export function EmpresaNominaClient({
               })}
 
               <CargasCard trabajador={sel} onCambio={recargar} />
+
+              <DocumentosCard clienteId={empresa.id} trabajador={sel} />
             </div>
           ) : null}
         </div>
