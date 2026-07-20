@@ -98,3 +98,95 @@ export async function guardarCredencial(
   revalidatePath("/f29");
   return { ok: true };
 }
+
+// ─── Otros accesos (tabla credenciales_extra) ────────────────────────────────
+// Accesos sin columna estándar en `clientes` (ERP, KAME, banco, correo, CCAF,
+// IST, accesos alternativos, etc.). La clave nunca viaja en la carga inicial:
+// se pide con revelarCredencialExtra (auditada como el resto).
+
+export type CampoExtra = "sistema" | "usuario" | "clave" | "url" | "notas";
+
+/** Devuelve la clave real de un acceso extra (revelar/copiar), auditada. */
+export async function revelarCredencialExtra(
+  id: string,
+  accion: "revelar" | "copiar" = "revelar",
+): Promise<{ ok: boolean; valor?: string | null; error?: string }> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("credenciales_extra")
+    .select("cliente_id, clave")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "Acceso no encontrado." };
+
+  await supabase.rpc("registrar_revelacion_credencial", {
+    p_cliente_id: data.cliente_id,
+    p_campo: `extra:${id}`,
+    p_accion: accion,
+  });
+
+  return { ok: true, valor: data.clave ?? null };
+}
+
+/** Crea un acceso extra para una empresa. `sistema` es obligatorio. */
+export async function crearCredencialExtra(
+  clienteId: string,
+  datos: { sistema: string; usuario?: string; clave?: string; url?: string; notas?: string },
+): Promise<{ ok: boolean; error?: string }> {
+  const sistema = datos.sistema.trim();
+  if (!sistema) return { ok: false, error: "El sistema es obligatorio." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("credenciales_extra").insert({
+    cliente_id: clienteId,
+    sistema,
+    usuario: datos.usuario?.trim() || null,
+    clave: datos.clave?.trim() || null,
+    url: datos.url?.trim() || null,
+    notas: datos.notas?.trim() || null,
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/credenciales");
+  revalidatePath("/empresas");
+  return { ok: true };
+}
+
+/** Actualiza campos de un acceso extra. Strings vacíos borran el campo. */
+export async function guardarCredencialExtra(
+  id: string,
+  datos: Partial<Record<CampoExtra, string>>,
+): Promise<{ ok: boolean; error?: string }> {
+  const patch: Record<string, string | null> = { updated_at: new Date().toISOString() };
+  for (const [k, v] of Object.entries(datos)) {
+    if (k === "sistema") {
+      const s = (v ?? "").trim();
+      if (!s) return { ok: false, error: "El sistema es obligatorio." };
+      patch.sistema = s;
+    } else {
+      patch[k] = (v ?? "").trim() || null;
+    }
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("credenciales_extra").update(patch).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/credenciales");
+  revalidatePath("/empresas");
+  return { ok: true };
+}
+
+/** Elimina un acceso extra. */
+export async function eliminarCredencialExtra(
+  id: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("credenciales_extra").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/credenciales");
+  revalidatePath("/empresas");
+  return { ok: true };
+}

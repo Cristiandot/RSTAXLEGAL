@@ -6,7 +6,7 @@ export const metadata = { title: "Credenciales — RS Tax & Legal" };
 export default async function CredencialesPage() {
   const supabase = await createClient();
 
-  const [grupRes, cliRes] = await Promise.all([
+  const [grupRes, cliRes, extraRes] = await Promise.all([
     supabase.from("grupos_cliente").select("id, codigo, nombre"),
     supabase
       .from("clientes")
@@ -15,11 +15,30 @@ export default async function CredencialesPage() {
       )
       .order("credencial_fijada", { ascending: false })
       .order("razon_social"),
+    // Otros accesos: la clave se reduce a booleano; el valor sale vía revelarCredencialExtra.
+    supabase
+      .from("credenciales_extra")
+      .select("id, cliente_id, sistema, usuario, clave, url, notas")
+      .order("sistema"),
   ]);
 
   const grupos = new Map(
     (grupRes.data ?? []).map((g) => [g.id, `${g.codigo} — ${g.nombre}`]),
   );
+
+  const extrasPorCliente = new Map<string, CredencialRow["extras"]>();
+  for (const e of extraRes.data ?? []) {
+    const lista = extrasPorCliente.get(e.cliente_id) ?? [];
+    lista.push({
+      id: e.id,
+      sistema: e.sistema,
+      usuario: e.usuario,
+      url: e.url,
+      notas: e.notas,
+      tieneClave: Boolean(e.clave),
+    });
+    extrasPorCliente.set(e.cliente_id, lista);
+  }
 
   // Las claves NO se mandan al navegador: acá se reducen a un booleano y el
   // valor real solo sale vía la server action revelarCredencial (auditada).
@@ -42,13 +61,19 @@ export default async function CredencialesPage() {
     activo: c.activo ?? true,
     grupo: c.grupo_id ? (grupos.get(c.grupo_id) ?? null) : null,
     fijada: Boolean(c.credencial_fijada),
+    extras: extrasPorCliente.get(c.id) ?? [],
   }));
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 pb-10 sm:px-6">
       <CredencialesClient
         filas={filas}
-        errorCarga={grupRes.error?.message ?? cliRes.error?.message ?? null}
+        errorCarga={
+          grupRes.error?.message ??
+          cliRes.error?.message ??
+          extraRes.error?.message ??
+          null
+        }
       />
     </main>
   );

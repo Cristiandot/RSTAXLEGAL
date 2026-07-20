@@ -1,12 +1,34 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { KeyRound, Pin, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import {
+  Check,
+  ClipboardCopy,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Pencil,
+  Pin,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
+import {
+  crearCredencialExtra,
+  eliminarCredencialExtra,
+  guardarCredencialExtra,
+  revelarCredencialExtra,
+} from "./actions";
 import { ClaveCell, RutPreviredCell } from "@/components/credencial-celdas";
 import { RutCopiable } from "@/components/rut-copiable";
 import { ThSort } from "@/components/th-sort";
 import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -42,6 +64,17 @@ export type CredencialRow = {
   activo: boolean;
   grupo: string | null; // "A.4 — Red Barrera"
   fijada: boolean; // fijada arriba (claves de la oficina, p. ej. el contador)
+  extras: ExtraCred[]; // accesos sin columna estándar (credenciales_extra)
+};
+
+/** Acceso extra (tabla credenciales_extra). La clave no viaja: solo el booleano. */
+export type ExtraCred = {
+  id: string;
+  sistema: string;
+  usuario: string | null;
+  url: string | null;
+  notas: string | null;
+  tieneClave: boolean;
 };
 
 export function CredencialesClient({
@@ -395,6 +428,330 @@ function CredencialDetalle({ fila }: { fila: CredencialRow }) {
           />
         </CampoClave>
       </BloqueCredencial>
+
+      <OtrosAccesos clienteId={fila.id} extras={fila.extras} />
+    </div>
+  );
+}
+
+/** Sección "Otros accesos": lista los credenciales_extra de la empresa, con
+ * agregar / editar / eliminar. Cada clave se oculta y se revela auditada. */
+function OtrosAccesos({
+  clienteId,
+  extras,
+}: {
+  clienteId: string;
+  extras: ExtraCred[];
+}) {
+  const router = useRouter();
+  const [agregando, setAgregando] = useState(false);
+
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div>
+          <span className="text-sm font-semibold">Otros accesos</span>
+          <span className="ml-2 text-xs text-muted-foreground">
+            ERP, banco, correo, CCAF/mutual, accesos alternativos…
+          </span>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={() => setAgregando(true)}
+        >
+          <Plus className="size-3.5" />
+          Agregar
+        </Button>
+      </div>
+
+      {extras.length === 0 && !agregando ? (
+        <p className="text-xs text-muted-foreground">
+          Sin otros accesos registrados.
+        </p>
+      ) : null}
+
+      <div className="space-y-2">
+        {extras.map((e) => (
+          <ExtraRow key={e.id} extra={e} />
+        ))}
+        {agregando ? (
+          <ExtraForm
+            clienteId={clienteId}
+            onDone={() => {
+              setAgregando(false);
+              router.refresh();
+            }}
+            onCancel={() => setAgregando(false)}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Una fila de acceso extra en modo lectura (con revelar/copiar) o edición. */
+function ExtraRow({ extra }: { extra: ExtraCred }) {
+  const router = useRouter();
+  const [editando, setEditando] = useState(false);
+  const [valorClave, setValorClave] = useState<string | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+
+  async function traer(accion: "revelar" | "copiar"): Promise<string | null> {
+    if (valorClave !== null) return valorClave;
+    const res = await revelarCredencialExtra(extra.id, accion);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo obtener la clave.");
+      return null;
+    }
+    setValorClave(res.valor ?? "");
+    return res.valor ?? "";
+  }
+
+  async function ver() {
+    if (visible) {
+      setVisible(false);
+      return;
+    }
+    setOcupado(true);
+    const v = await traer("revelar");
+    setOcupado(false);
+    if (v !== null) setVisible(true);
+  }
+
+  async function copiar() {
+    setOcupado(true);
+    const v = await traer("copiar");
+    setOcupado(false);
+    if (!v) {
+      toast.info(`${extra.sistema} no tiene clave guardada.`);
+      return;
+    }
+    navigator.clipboard.writeText(v);
+    toast.success(`Clave de ${extra.sistema} copiada`);
+  }
+
+  async function eliminar() {
+    if (!confirm(`¿Eliminar el acceso "${extra.sistema}"?`)) return;
+    setOcupado(true);
+    const res = await eliminarCredencialExtra(extra.id);
+    setOcupado(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo eliminar.");
+      return;
+    }
+    toast.success("Acceso eliminado");
+    router.refresh();
+  }
+
+  async function abrirEdicion() {
+    setOcupado(true);
+    const v = extra.tieneClave ? await traer("revelar") : "";
+    setOcupado(false);
+    if (v === null) return;
+    setEditando(true);
+  }
+
+  if (editando) {
+    return (
+      <ExtraForm
+        clienteId=""
+        extra={extra}
+        claveInicial={valorClave ?? ""}
+        onDone={() => {
+          setEditando(false);
+          router.refresh();
+        }}
+        onCancel={() => setEditando(false)}
+      />
+    );
+  }
+
+  return (
+    <div className="rounded-md border bg-card/50 p-2 text-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium">{extra.sistema}</span>
+        <div className="flex items-center gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={ocupado}
+            aria-label="Editar acceso"
+            onClick={abrirEdicion}
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={ocupado}
+            aria-label="Eliminar acceso"
+            onClick={eliminar}
+          >
+            <Trash2 className="size-3.5 text-destructive" />
+          </Button>
+        </div>
+      </div>
+      <div className="mt-1 grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground">Usuario:</span>
+          {extra.usuario ? <RutCopiable rut={extra.usuario} /> : <span>—</span>}
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-muted-foreground">Clave:</span>
+          {extra.tieneClave ? (
+            <>
+              <span className="font-mono tracking-wider select-all">
+                {visible && valorClave !== null ? valorClave : "••••••••"}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                disabled={ocupado}
+                aria-label={visible ? "Ocultar clave" : "Ver clave"}
+                onClick={ver}
+              >
+                {visible ? (
+                  <EyeOff className="size-3.5" />
+                ) : (
+                  <Eye className="size-3.5" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                disabled={ocupado}
+                aria-label="Copiar clave"
+                onClick={copiar}
+              >
+                <ClipboardCopy className="size-3.5" />
+              </Button>
+            </>
+          ) : (
+            <span>—</span>
+          )}
+        </div>
+        {extra.url ? (
+          <div className="flex items-center gap-1 sm:col-span-2">
+            <span className="text-muted-foreground">URL:</span>
+            <a
+              href={extra.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[var(--brand-teal)] hover:underline"
+            >
+              {extra.url}
+              <ExternalLink className="size-3" />
+            </a>
+          </div>
+        ) : null}
+        {extra.notas ? (
+          <div className="text-muted-foreground sm:col-span-2">
+            {extra.notas}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** Formulario de acceso extra: crea (sin `extra`) o edita (con `extra`). */
+function ExtraForm({
+  clienteId,
+  extra,
+  claveInicial = "",
+  onDone,
+  onCancel,
+}: {
+  clienteId: string;
+  extra?: ExtraCred;
+  claveInicial?: string;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const [sistema, setSistema] = useState(extra?.sistema ?? "");
+  const [usuario, setUsuario] = useState(extra?.usuario ?? "");
+  const [clave, setClave] = useState(claveInicial);
+  const [url, setUrl] = useState(extra?.url ?? "");
+  const [notas, setNotas] = useState(extra?.notas ?? "");
+  const [ocupado, setOcupado] = useState(false);
+
+  async function guardar() {
+    if (!sistema.trim()) {
+      toast.error("El sistema es obligatorio.");
+      return;
+    }
+    setOcupado(true);
+    const res = extra
+      ? await guardarCredencialExtra(extra.id, { sistema, usuario, clave, url, notas })
+      : await crearCredencialExtra(clienteId, { sistema, usuario, clave, url, notas });
+    setOcupado(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "No se pudo guardar.");
+      return;
+    }
+    toast.success(extra ? "Acceso actualizado" : "Acceso agregado");
+    onDone();
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border bg-card p-2">
+      <Input
+        autoFocus
+        className="h-8 text-xs"
+        placeholder="Sistema (ERP, banco, correo…) *"
+        value={sistema}
+        onChange={(e) => setSistema(e.target.value)}
+      />
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Input
+          className="h-8 text-xs"
+          placeholder="Usuario / RUT"
+          value={usuario}
+          onChange={(e) => setUsuario(e.target.value)}
+        />
+        <Input
+          className="h-8 font-mono text-xs"
+          placeholder="Clave"
+          value={clave}
+          onChange={(e) => setClave(e.target.value)}
+        />
+      </div>
+      <Input
+        className="h-8 text-xs"
+        placeholder="URL"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+      />
+      <Input
+        className="h-8 text-xs"
+        placeholder="Notas"
+        value={notas}
+        onChange={(e) => setNotas(e.target.value)}
+      />
+      <div className="flex justify-end gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          disabled={ocupado}
+          onClick={onCancel}
+        >
+          <X className="size-3.5" />
+          Cancelar
+        </Button>
+        <Button
+          size="sm"
+          className="h-7 px-2 text-xs"
+          disabled={ocupado}
+          onClick={guardar}
+        >
+          <Check className="size-3.5" />
+          Guardar
+        </Button>
+      </div>
     </div>
   );
 }
