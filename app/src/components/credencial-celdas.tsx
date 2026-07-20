@@ -206,13 +206,18 @@ export function ClaveCell({
   );
 }
 
-/** RUT Previred: visible (no es secreto), copiable y editable en línea. */
+/** RUT de usuario (Previred o Mutual): visible (no es secreto), copiable y
+ * editable en línea. `campo` decide qué columna se guarda. */
 export function RutPreviredCell({
   clienteId,
   valorInicial,
+  campo = "previred_rut",
+  etiqueta = "RUT Previred",
 }: {
   clienteId: string;
   valorInicial: string | null;
+  campo?: CampoCredencial;
+  etiqueta?: string;
 }) {
   const router = useRouter();
   const [editando, setEditando] = useState(false);
@@ -221,18 +226,14 @@ export function RutPreviredCell({
 
   async function guardar() {
     setOcupado(true);
-    const res = await guardarCredencial(
-      clienteId,
-      "previred_rut" as CampoCredencial,
-      borrador,
-    );
+    const res = await guardarCredencial(clienteId, campo, borrador);
     setOcupado(false);
     if (!res.ok) {
       toast.error(res.error ?? "No se pudo guardar.");
       return;
     }
     setEditando(false);
-    toast.success("RUT Previred actualizado");
+    toast.success(`${etiqueta} actualizado`);
     router.refresh();
   }
 
@@ -248,7 +249,7 @@ export function RutPreviredCell({
             if (e.key === "Enter") guardar();
             if (e.key === "Escape") setEditando(false);
           }}
-          aria-label="RUT Previred"
+          aria-label={etiqueta}
         />
         <Button variant="ghost" size="icon-sm" disabled={ocupado} aria-label="Guardar" onClick={guardar}>
           <Check className="size-4 text-emerald-600" />
@@ -272,7 +273,7 @@ export function RutPreviredCell({
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label="Editar RUT Previred"
+        aria-label={`Editar ${etiqueta}`}
         onClick={() => {
           setBorrador(valorInicial ?? "");
           setEditando(true);

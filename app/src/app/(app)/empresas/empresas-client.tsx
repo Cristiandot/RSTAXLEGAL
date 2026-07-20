@@ -77,6 +77,9 @@ export type EmpresaFichaRow = {
   previred_rut: string | null;
   tiene_clave_sii: boolean;
   tiene_clave_previred: boolean;
+  mutual_institucion: string | null;
+  mutual_rut: string | null;
+  tiene_clave_mutual: boolean;
   socios: Socio[];
   /** Correos adicionales: todo envío al cliente va con copia a esta lista. */
   correos_adicionales: string[];
@@ -297,8 +300,8 @@ function AccesosCard({ empresa }: { empresa: EmpresaFichaRow }) {
     <div className="rounded-lg border p-3">
       <div className="mb-1 text-sm font-semibold">Accesos</div>
       <p className="mb-2 text-xs text-muted-foreground">
-        Claves SII y Previred. Ver o copiar una clave queda auditado; la vista
-        completa de la cartera está en Credenciales.
+        Claves SII, Previred y Mutual. Ver o copiar una clave queda auditado;
+        la vista completa de la cartera está en Credenciales.
       </p>
       <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
@@ -332,6 +335,27 @@ function AccesosCard({ empresa }: { empresa: EmpresaFichaRow }) {
             etiqueta="Clave Previred"
             razonSocial={empresa.razon_social}
             tiene={empresa.tiene_clave_previred}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">
+            RUT Mutual{empresa.mutual_institucion ? ` (${empresa.mutual_institucion})` : ""}
+          </div>
+          <RutPreviredCell
+            clienteId={empresa.id}
+            valorInicial={empresa.mutual_rut}
+            campo="mutual_rut"
+            etiqueta="RUT Mutual"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">Clave Mutual</div>
+          <ClaveCell
+            clienteId={empresa.id}
+            campo="mutual_clave"
+            etiqueta="Clave Mutual"
+            razonSocial={empresa.razon_social}
+            tiene={empresa.tiene_clave_mutual}
           />
         </div>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { KeyRound, Pin, Search } from "lucide-react";
 import { ClaveCell, RutPreviredCell } from "@/components/credencial-celdas";
 import { RutCopiable } from "@/components/rut-copiable";
@@ -8,6 +8,13 @@ import { ThSort } from "@/components/th-sort";
 import { comparar, ordenarPorGrupo, type Orden } from "@/lib/ordenar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -23,6 +30,11 @@ export type CredencialRow = {
   previredRut: string | null; // usuario Previred
   tieneClaveSii: boolean;
   tieneClavePrevired: boolean;
+  mutualInstitucion: string | null; // "ACHS" | "IST" | "Mutual de Seguridad" | null
+  mutualRut: string | null; // usuario del portal de la mutual
+  tieneClaveMutual: boolean;
+  afcRut: string | null; // usuario AFC (cesantía)
+  tieneClaveAfc: boolean;
   activo: boolean;
   grupo: string | null; // "A.4 — Red Barrera"
   fijada: boolean; // fijada arriba (claves de la oficina, p. ej. el contador)
@@ -38,13 +50,18 @@ export function CredencialesClient({
   const [buscar, setBuscar] = useState("");
   const [verInactivas, setVerInactivas] = useState(false);
   const [orden, setOrden] = useState<Orden>(null);
+  const [selId, setSelId] = useState<string | null>(null);
+  const sel = useMemo(
+    () => (selId ? (filas.find((f) => f.id === selId) ?? null) : null),
+    [selId, filas],
+  );
 
   const filtradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
     const out = filas.filter((f) => {
       if (!verInactivas && !f.activo) return false;
       if (!q) return true;
-      return `${f.razonSocial} ${f.rut ?? ""} ${f.previredRut ?? ""} ${f.grupo ?? ""}`
+      return `${f.razonSocial} ${f.rut ?? ""} ${f.previredRut ?? ""} ${f.mutualRut ?? ""} ${f.mutualInstitucion ?? ""} ${f.grupo ?? ""}`
         .toLowerCase()
         .includes(q);
     });
@@ -92,11 +109,15 @@ export function CredencialesClient({
           Credenciales
         </h1>
         <p className="text-sm text-muted-foreground">
-          Claves SII y Previred de cada empresa. Vienen ocultas: el ojo la
-          muestra, el otro botón la copia sin mostrarla y el lápiz la cambia.
-          Cada vez que alguien ve o copia una clave queda registrado. {conSii}{" "}
-          de {activas.length} empresas activas con clave SII y {conPrevired}{" "}
-          con clave Previred.
+          Claves de cada empresa. Vienen ocultas: el ojo la muestra, el otro
+          botón la copia sin mostrarla y el lápiz la cambia. Cada vez que
+          alguien ve o copia una clave queda registrado.{" "}
+          <span className="font-medium text-foreground">
+            Haz clic en una empresa
+          </span>{" "}
+          para ver todas sus credenciales (SII, Previred, AFC y Mutual). {conSii}{" "}
+          de {activas.length} empresas activas con clave SII y {conPrevired} con
+          clave Previred.
         </p>
       </div>
 
@@ -155,7 +176,12 @@ export function CredencialesClient({
           </TableHeader>
           <TableBody>
             {filtradas.map((f) => (
-              <TableRow key={f.id}>
+              <TableRow
+                key={f.id}
+                className="cursor-pointer"
+                onClick={() => setSelId(f.id)}
+                title="Ver todas las credenciales"
+              >
                 <TableCell className="font-medium">
                   <span className="flex max-w-[280px] items-center gap-1.5">
                     {f.fijada ? (
@@ -215,6 +241,160 @@ export function CredencialesClient({
           </TableBody>
         </Table>
       </div>
+
+      <Dialog open={sel !== null} onOpenChange={(o) => { if (!o) setSelId(null); }}>
+        {sel ? (
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 font-heading">
+                {sel.fijada ? (
+                  <Pin className="size-4 text-[var(--brand-teal)]" />
+                ) : null}
+                {sel.razonSocial}
+              </DialogTitle>
+              <DialogDescription>
+                {sel.grupo ? `${sel.grupo} · ` : ""}
+                {sel.rut ?? "sin RUT"}. Ver o copiar una clave queda auditado.
+              </DialogDescription>
+            </DialogHeader>
+            <CredencialDetalle fila={sel} />
+          </DialogContent>
+        ) : null}
+      </Dialog>
+    </div>
+  );
+}
+
+/** Detalle de una empresa: todas sus credenciales (SII, Previred, AFC, Mutual),
+ * cada una con usuario y clave oculta con revelar/copiar/editar auditado. */
+function CredencialDetalle({ fila }: { fila: CredencialRow }) {
+  return (
+    <div className="space-y-4">
+      <BloqueCredencial titulo="SII" subtitulo="Clave tributaria de la empresa">
+        <CampoUsuario etiqueta="Usuario (RUT empresa)">
+          <RutCopiable rut={fila.rut} />
+        </CampoUsuario>
+        <CampoClave>
+          <ClaveCell
+            clienteId={fila.id}
+            campo="clave_sii"
+            etiqueta="Clave SII"
+            razonSocial={fila.razonSocial}
+            tiene={fila.tieneClaveSii}
+          />
+        </CampoClave>
+      </BloqueCredencial>
+
+      <BloqueCredencial titulo="Previred">
+        <CampoUsuario etiqueta="Usuario (RUT)">
+          <RutPreviredCell
+            clienteId={fila.id}
+            valorInicial={fila.previredRut}
+            campo="previred_rut"
+            etiqueta="RUT Previred"
+          />
+        </CampoUsuario>
+        <CampoClave>
+          <ClaveCell
+            clienteId={fila.id}
+            campo="previred_clave"
+            etiqueta="Clave Previred"
+            razonSocial={fila.razonSocial}
+            tiene={fila.tieneClavePrevired}
+          />
+        </CampoClave>
+      </BloqueCredencial>
+
+      <BloqueCredencial titulo="AFC" subtitulo="Seguro de cesantía">
+        <CampoUsuario etiqueta="Usuario (RUT)">
+          <RutPreviredCell
+            clienteId={fila.id}
+            valorInicial={fila.afcRut}
+            campo="afc_rut"
+            etiqueta="RUT AFC"
+          />
+        </CampoUsuario>
+        <CampoClave>
+          <ClaveCell
+            clienteId={fila.id}
+            campo="afc_clave"
+            etiqueta="Clave AFC"
+            razonSocial={fila.razonSocial}
+            tiene={fila.tieneClaveAfc}
+          />
+        </CampoClave>
+      </BloqueCredencial>
+
+      <BloqueCredencial
+        titulo="Mutual"
+        subtitulo={fila.mutualInstitucion ?? "Sin institución registrada"}
+      >
+        <CampoUsuario etiqueta="Usuario (RUT)">
+          <RutPreviredCell
+            clienteId={fila.id}
+            valorInicial={fila.mutualRut}
+            campo="mutual_rut"
+            etiqueta="RUT Mutual"
+          />
+        </CampoUsuario>
+        <CampoClave>
+          <ClaveCell
+            clienteId={fila.id}
+            campo="mutual_clave"
+            etiqueta="Clave Mutual"
+            razonSocial={fila.razonSocial}
+            tiene={fila.tieneClaveMutual}
+          />
+        </CampoClave>
+      </BloqueCredencial>
+    </div>
+  );
+}
+
+function BloqueCredencial({
+  titulo,
+  subtitulo,
+  children,
+}: {
+  titulo: string;
+  subtitulo?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border p-3">
+      <div className="mb-2">
+        <span className="text-sm font-semibold">{titulo}</span>
+        {subtitulo ? (
+          <span className="ml-2 text-xs text-muted-foreground">{subtitulo}</span>
+        ) : null}
+      </div>
+      <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CampoUsuario({
+  etiqueta,
+  children,
+}: {
+  etiqueta: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="text-xs text-muted-foreground">{etiqueta}</div>
+      {children}
+    </div>
+  );
+}
+
+function CampoClave({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="text-xs text-muted-foreground">Clave</div>
+      {children}
     </div>
   );
 }

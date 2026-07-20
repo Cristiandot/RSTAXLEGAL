@@ -3,10 +3,30 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export type TipoClave = "clave_sii" | "previred_clave";
+export type TipoClave =
+  | "clave_sii"
+  | "previred_clave"
+  | "mutual_clave"
+  | "afc_clave";
 
-const CAMPOS_EDITABLES = ["clave_sii", "previred_clave", "previred_rut"] as const;
+const CAMPOS_EDITABLES = [
+  "clave_sii",
+  "previred_clave",
+  "previred_rut",
+  "mutual_clave",
+  "mutual_rut",
+  "afc_clave",
+  "afc_rut",
+] as const;
 export type CampoCredencial = (typeof CAMPOS_EDITABLES)[number];
+
+// Claves (secretas): se revelan/copian con auditoría. El resto son RUT (usuario).
+const CLAVES_SECRETAS: TipoClave[] = [
+  "clave_sii",
+  "previred_clave",
+  "mutual_clave",
+  "afc_clave",
+];
 
 /**
  * Devuelve el valor real de una clave (SII o Previred) de una empresa.
@@ -19,7 +39,7 @@ export async function revelarCredencial(
   campo: TipoClave,
   accion: "revelar" | "copiar" = "revelar",
 ): Promise<{ ok: boolean; valor?: string | null; error?: string }> {
-  if (campo !== "clave_sii" && campo !== "previred_clave") {
+  if (!CLAVES_SECRETAS.includes(campo)) {
     return { ok: false, error: "Campo no permitido." };
   }
 
