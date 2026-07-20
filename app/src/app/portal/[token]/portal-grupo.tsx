@@ -436,6 +436,7 @@ function BitacoraGestiones({ token }: { token: string }) {
   const [items, setItems] = useState<BitacoraItem[] | null>(null);
   const [cargando, setCargando] = useState(true);
   const [expandido, setExpandido] = useState(false);
+  const [mesFiltro, setMesFiltro] = useState("todos"); // "todos" | "YYYY-MM"
 
   useEffect(() => {
     let vivo = true;
@@ -450,7 +451,22 @@ function BitacoraGestiones({ token }: { token: string }) {
     };
   }, [token]);
 
+  const claveMes = (it: BitacoraItem) => (it.fecha ? it.fecha.slice(0, 7) : "sin");
   const total = items?.length ?? 0;
+
+  // Meses disponibles (en orden, con conteo) para el selector.
+  const clavesMes: string[] = [];
+  const conteoMes: Record<string, number> = {};
+  for (const it of items ?? []) {
+    const k = claveMes(it);
+    if (!(k in conteoMes)) {
+      clavesMes.push(k);
+      conteoMes[k] = 0;
+    }
+    conteoMes[k]++;
+  }
+
+  const filtrados = mesFiltro === "todos" ? (items ?? []) : (items ?? []).filter((it) => claveMes(it) === mesFiltro);
 
   // Agrupa por mes conservando el orden (los items ya vienen desc por fecha).
   const porMes: { mes: string; items: BitacoraItem[] }[] = [];
@@ -463,11 +479,28 @@ function BitacoraGestiones({ token }: { token: string }) {
 
   return (
     <div className="card-soft rounded-xl bg-card p-5">
-      <div className="mb-1 flex items-center gap-2">
-        <History className="size-4 text-[var(--brand-teal)]" />
-        <h2 className="font-heading text-base font-semibold">Bitácora de gestiones</h2>
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <History className="size-4 text-[var(--brand-teal)]" />
+          <h2 className="font-heading text-base font-semibold">Bitácora de gestiones</h2>
+          {total > 0 ? (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{total}</span>
+          ) : null}
+        </div>
         {total > 0 ? (
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{total}</span>
+          <select
+            value={mesFiltro}
+            onChange={(e) => { setMesFiltro(e.target.value); setExpandido(false); }}
+            className="h-8 rounded-md border border-input bg-card px-2 text-xs capitalize shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Filtrar por mes"
+          >
+            <option value="todos">Todos los meses</option>
+            {clavesMes.map((k) => (
+              <option key={k} value={k} className="capitalize">
+                {k === "sin" ? "Sin fecha" : mesLabel(k)} ({conteoMes[k]})
+              </option>
+            ))}
+          </select>
         ) : null}
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
@@ -482,6 +515,13 @@ function BitacoraGestiones({ token }: { token: string }) {
         <p className="py-2 text-sm text-muted-foreground">
           Aún no hay gestiones registradas para tus empresas.
         </p>
+      ) : mesFiltro !== "todos" ? (
+        // Filtrado por un mes: lista plana de ese mes.
+        <ul>
+          {filtrados.map((it, i) => (
+            <FilaBitacora key={i} it={it} />
+          ))}
+        </ul>
       ) : !expandido ? (
         <>
           <ul>
