@@ -77,6 +77,7 @@ export const FERIADOS_CHILE: Record<string, string> = {
   "2027-06-28": "San Pedro y San Pablo (trasladado)",
   "2027-07-16": "Día de la Virgen del Carmen",
   "2027-08-15": "Asunción de la Virgen",
+  "2027-09-17": "Feriado adicional Fiestas Patrias",
   "2027-09-18": "Fiestas Patrias",
   "2027-09-19": "Día de las Glorias del Ejército",
   "2027-10-11": "Encuentro de Dos Mundos (trasladado)",
