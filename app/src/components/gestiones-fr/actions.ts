@@ -69,7 +69,6 @@ export async function crearCausa(input: {
   estado: string;
   proxima_gestion_fecha: string | null;
   proxima_gestion_detalle: string | null;
-  plazo_fatal: string | null;
   carpeta_sharepoint: string | null;
 }): Promise<Resultado> {
   if (!input.caratula.trim()) return { ok: false, error: "La carátula es obligatoria." };

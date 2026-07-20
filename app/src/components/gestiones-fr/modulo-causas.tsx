@@ -7,7 +7,6 @@ import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -18,19 +17,19 @@ import {
 } from "@/components/ui/table";
 import { CalendarioFR, LeyendaCalendario, type EventoCalendario } from "./calendario";
 import { actualizarCausa, agendarEnCausa, agregarHito, crearCausa } from "./actions";
-import { ESTADOS_CAUSA, type Causa } from "./tipos";
+import { ESTADOS_CAUSA, MATERIAS_CAUSA, TRIBUNALES_CAUSA, type Causa } from "./tipos";
 
 const selectClase =
   "h-8 rounded-md border border-input bg-white px-2 text-xs shadow-xs focus:outline-2 focus:outline-ring/50";
 const labelClase = "mb-1 block text-[11px] font-semibold text-muted-foreground";
+const inlineFecha =
+  "h-7 w-36 rounded-md border border-input bg-white px-1.5 text-[11px] shadow-xs focus:outline-2 focus:outline-ring/50";
+const inlineTexto =
+  "h-7 w-full min-w-40 rounded-md border border-input bg-white px-1.5 text-[11px] shadow-xs focus:outline-2 focus:outline-ring/50";
+const inlineSelect =
+  "h-7 w-full rounded-md border border-input bg-white px-1.5 text-[11px] shadow-xs focus:outline-2 focus:outline-ring/50";
 
-function diasHasta(fechaIso: string): number {
-  const [y, m, d] = fechaIso.split("-").map(Number);
-  const hoy = new Date();
-  const objetivo = new Date(y, m - 1, d);
-  const base = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-  return Math.round((objetivo.getTime() - base.getTime()) / 86400000);
-}
+const TIPOS_AUDIENCIA = ["Audiencia preparatoria", "Audiencia de juicio"];
 
 export function ModuloCausas({
   causas,
@@ -43,6 +42,7 @@ export function ModuloCausas({
   const [formCausa, setFormCausa] = useState(false);
   const [formAgenda, setFormAgenda] = useState(false);
   const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
+  const [filtroMateria, setFiltroMateria] = useState<string>("Todas");
 
   const eventos = useMemo<EventoCalendario[]>(() => {
     const evs: EventoCalendario[] = [];
@@ -56,18 +56,13 @@ export function ModuloCausas({
           clase: "causa",
           texto: `${c.proxima_audiencia_tipo ?? "Audiencia"} — ${quien}`,
         });
-      if (c.plazo_fatal)
-        evs.push({ fecha: c.plazo_fatal, clase: "fatal", texto: `🚨 Plazo fatal — ${quien}` });
     }
     return evs;
   }, [causas]);
 
-  const fatales = useMemo(
-    () =>
-      causas
-        .filter((c) => c.plazo_fatal && !["Terminada", "Archivada"].includes(c.estado ?? ""))
-        .sort((a, b) => (a.plazo_fatal! < b.plazo_fatal! ? -1 : 1)),
-    [causas],
+  const causasFiltradas = useMemo(
+    () => (filtroMateria === "Todas" ? causas : causas.filter((c) => c.materia === filtroMateria)),
+    [causas, filtroMateria],
   );
 
   function toggleHitos(id: string) {
@@ -91,6 +86,10 @@ export function ModuloCausas({
     });
   }
 
+  function guardarCampo(id: string, patch: Parameters<typeof actualizarCausa>[1], exito: string) {
+    ejecutar(() => actualizarCausa(id, patch), exito);
+  }
+
   function enviarNuevaCausa(form: HTMLFormElement) {
     const fd = new FormData(form);
     const v = (k: string) => (fd.get(k) as string)?.trim() || null;
@@ -103,10 +102,9 @@ export function ModuloCausas({
           materia: v("materia"),
           tribunal: v("tribunal"),
           rit_rol: v("rit_rol"),
-          estado: (fd.get("estado") as string) || "En preparacion",
+          estado: (fd.get("estado") as string) || "prospecto",
           proxima_gestion_fecha: v("pg_fecha"),
           proxima_gestion_detalle: v("pg_detalle"),
-          plazo_fatal: v("plazo_fatal"),
           carpeta_sharepoint: v("carpeta"),
         }),
       "Causa registrada.",
@@ -139,63 +137,35 @@ export function ModuloCausas({
 
   return (
     <div className="space-y-6">
-      {/* ===== Calendario judicial + plazos fatales ===== */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1">
-          <LeyendaCalendario
-            items={[
-              { color: "bg-red-500", label: "Audiencia / gestión" },
-              { color: "bg-red-800", label: "Plazo fatal" },
-              { color: "bg-[var(--brand-teal,#17A2B8)]", label: "Hoy" },
-            ]}
-          />
-          <CalendarioFR eventos={eventos} />
-        </div>
-        <div className="w-full shrink-0 space-y-3 lg:w-72">
-          <Card className="card-soft border-transparent">
-            <CardHeader>
-              <CardTitle className="text-xs tracking-wide text-muted-foreground uppercase">
-                ⏳ Plazos fatales
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {fatales.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Sin plazos fatales registrados.</p>
-              ) : (
-                fatales.map((c) => {
-                  const dias = diasHasta(c.plazo_fatal!);
-                  return (
-                    <div
-                      key={c.id}
-                      className="rounded-lg border border-red-200 bg-red-50 px-3 py-2"
-                      title={c.plazo_fatal_detalle ?? undefined}
-                    >
-                      <div className={`text-lg leading-none font-bold ${dias <= 14 ? "text-red-700" : "text-red-600"}`}>
-                        {dias} días
-                      </div>
-                      <div className="mt-1 text-xs font-semibold">
-                        {c.cliente ?? c.caratula} — {formatFecha(c.plazo_fatal)}
-                      </div>
-                      {c.plazo_fatal_detalle ? (
-                        <div className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
-                          {c.plazo_fatal_detalle}
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })
-              )}
-            </CardContent>
-          </Card>
-        </div>
+      {/* ===== Calendario judicial ===== */}
+      <div>
+        <LeyendaCalendario
+          items={[
+            { color: "bg-red-500", label: "Audiencia / gestión" },
+            { color: "bg-[var(--brand-teal,#17A2B8)]", label: "Hoy" },
+          ]}
+        />
+        <CalendarioFR eventos={eventos} />
       </div>
 
       {/* ===== Registro de causas ===== */}
       <div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <h3 className="mr-auto text-sm font-semibold">
-            Registro de causas ({causas.length})
+          <h3 className="text-sm font-semibold">
+            Registro de causas ({causasFiltradas.length}
+            {filtroMateria !== "Todas" ? ` de ${causas.length}` : ""})
           </h3>
+          <select
+            value={filtroMateria}
+            onChange={(e) => setFiltroMateria(e.target.value)}
+            className={`${selectClase} mr-auto`}
+            title="Filtrar por materia"
+          >
+            <option value="Todas">Todas las materias</option>
+            {MATERIAS_CAUSA.map((m) => (
+              <option key={m}>{m}</option>
+            ))}
+          </select>
           <Button variant="outline" size="sm" onClick={() => setFormAgenda((v) => !v)}>
             <CalendarPlus className="size-4" />
             Agendar audiencia / gestión
@@ -232,11 +202,24 @@ export function ModuloCausas({
               </div>
               <div>
                 <label className={labelClase}>Materia</label>
-                <Input name="materia" placeholder="Laboral, Civil, Familia…" />
+                <select name="materia" className={`${selectClase} w-full`} defaultValue="Laboral">
+                  {MATERIAS_CAUSA.map((m) => (
+                    <option key={m}>{m}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className={labelClase}>Tribunal / instancia</label>
-                <Input name="tribunal" placeholder="1° JLT Valparaíso (o pre-judicial IdT)" />
+                <Input
+                  name="tribunal"
+                  list="tribunales-causa"
+                  placeholder="JL Trabajo Valpo (o texto libre / pre-judicial IdT)"
+                />
+                <datalist id="tribunales-causa">
+                  {TRIBUNALES_CAUSA.map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className={labelClase}>RIT / ROL</label>
@@ -244,7 +227,7 @@ export function ModuloCausas({
               </div>
               <div>
                 <label className={labelClase}>Estado</label>
-                <select name="estado" className={`${selectClase} w-full`} defaultValue="En preparacion">
+                <select name="estado" className={`${selectClase} w-full`} defaultValue="prospecto">
                   {ESTADOS_CAUSA.map((e) => (
                     <option key={e}>{e}</option>
                   ))}
@@ -258,11 +241,7 @@ export function ModuloCausas({
                 <label className={labelClase}>Próxima gestión — detalle</label>
                 <Input name="pg_detalle" placeholder="Comparendo, contestación…" />
               </div>
-              <div>
-                <label className={labelClase}>Plazo fatal</label>
-                <Input name="plazo_fatal" type="date" />
-              </div>
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2 lg:col-span-3">
                 <label className={labelClase}>Carpeta SharePoint</label>
                 <Input name="carpeta" placeholder="https://rstaxlegalcl.sharepoint.com/…" />
               </div>
@@ -335,28 +314,31 @@ export function ModuloCausas({
                 <TableHead>Estado</TableHead>
                 <TableHead>Próxima gestión</TableHead>
                 <TableHead>Audiencia</TableHead>
-                <TableHead>Plazo fatal</TableHead>
                 <TableHead>Hitos</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {causas.length === 0 ? (
+              {causasFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
-                    Sin causas registradas.
+                  <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                    {causas.length === 0
+                      ? "Sin causas registradas."
+                      : "Ninguna causa en esta materia."}
                   </TableCell>
                 </TableRow>
               ) : null}
-              {causas.map((c) => {
+              {causasFiltradas.map((c) => {
                 const abierta = abiertas.has(c.id);
                 const hitosOrden = [...c.hitos].sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
                 return [
                   <TableRow key={c.id}>
-                    <TableCell>
+                    <TableCell className="align-top">
                       <div className="font-medium">{c.cliente ?? c.caratula}</div>
-                      <div className="text-xs text-muted-foreground">{c.caratula}</div>
+                      {c.cliente ? (
+                        <div className="text-xs text-muted-foreground">{c.caratula}</div>
+                      ) : null}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="align-top">
                       <Badge
                         variant="outline"
                         className={
@@ -370,8 +352,8 @@ export function ModuloCausas({
                         {c.calidad ?? "—"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm">{c.materia ?? "—"}</TableCell>
-                    <TableCell className="max-w-56 text-xs">
+                    <TableCell className="align-top text-sm">{c.materia ?? "—"}</TableCell>
+                    <TableCell className="max-w-56 align-top text-xs">
                       <div className="truncate" title={c.tribunal ?? undefined}>
                         {c.tribunal ?? "—"}
                       </div>
@@ -379,16 +361,13 @@ export function ModuloCausas({
                         <div className="text-muted-foreground">{c.rit_rol}</div>
                       ) : null}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="align-top">
                       <select
                         className={selectClase}
-                        value={c.estado ?? "En preparacion"}
+                        value={c.estado ?? "prospecto"}
                         disabled={pendiente}
                         onChange={(e) =>
-                          ejecutar(
-                            () => actualizarCausa(c.id, { estado: e.target.value }),
-                            "Estado actualizado.",
-                          )
+                          guardarCampo(c.id, { estado: e.target.value }, "Estado actualizado.")
                         }
                       >
                         {ESTADOS_CAUSA.map((e) => (
@@ -399,28 +378,78 @@ export function ModuloCausas({
                         ) : null}
                       </select>
                     </TableCell>
-                    <TableCell className="max-w-64 text-xs">
-                      {c.proxima_gestion_fecha ? (
-                        <span className="font-semibold">{formatFecha(c.proxima_gestion_fecha)} · </span>
-                      ) : null}
-                      <span className="line-clamp-2" title={c.proxima_gestion_detalle ?? undefined}>
-                        {c.proxima_gestion_detalle ?? "—"}
-                      </span>
+                    <TableCell className="max-w-64 align-top">
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="date"
+                          value={c.proxima_gestion_fecha ?? ""}
+                          disabled={pendiente}
+                          onChange={(e) =>
+                            guardarCampo(
+                              c.id,
+                              { proxima_gestion_fecha: e.target.value || null },
+                              "Próxima gestión actualizada.",
+                            )
+                          }
+                          className={inlineFecha}
+                        />
+                        <input
+                          type="text"
+                          defaultValue={c.proxima_gestion_detalle ?? ""}
+                          placeholder="detalle…"
+                          disabled={pendiente}
+                          onBlur={(e) => {
+                            const val = e.target.value.trim() || null;
+                            if (val !== (c.proxima_gestion_detalle ?? null))
+                              guardarCampo(
+                                c.id,
+                                { proxima_gestion_detalle: val },
+                                "Detalle de gestión actualizado.",
+                              );
+                          }}
+                          className={inlineTexto}
+                        />
+                      </div>
                     </TableCell>
-                    <TableCell className="text-xs">
-                      {c.proxima_audiencia_fecha ? (
-                        <>
-                          <span className="font-semibold">{formatFecha(c.proxima_audiencia_fecha)}</span>
-                          <div className="text-muted-foreground">{c.proxima_audiencia_tipo}</div>
-                        </>
-                      ) : (
-                        "—"
-                      )}
+                    <TableCell className="align-top">
+                      <div className="flex flex-col gap-1">
+                        <input
+                          type="date"
+                          value={c.proxima_audiencia_fecha ?? ""}
+                          disabled={pendiente}
+                          onChange={(e) =>
+                            guardarCampo(
+                              c.id,
+                              { proxima_audiencia_fecha: e.target.value || null },
+                              "Audiencia actualizada.",
+                            )
+                          }
+                          className={inlineFecha}
+                        />
+                        <select
+                          value={c.proxima_audiencia_tipo ?? ""}
+                          disabled={pendiente}
+                          onChange={(e) =>
+                            guardarCampo(
+                              c.id,
+                              { proxima_audiencia_tipo: e.target.value || null },
+                              "Audiencia actualizada.",
+                            )
+                          }
+                          className={inlineSelect}
+                        >
+                          <option value="">— tipo —</option>
+                          {TIPOS_AUDIENCIA.map((t) => (
+                            <option key={t}>{t}</option>
+                          ))}
+                          {c.proxima_audiencia_tipo &&
+                          !TIPOS_AUDIENCIA.includes(c.proxima_audiencia_tipo) ? (
+                            <option>{c.proxima_audiencia_tipo}</option>
+                          ) : null}
+                        </select>
+                      </div>
                     </TableCell>
-                    <TableCell className="text-xs font-bold whitespace-nowrap text-red-600">
-                      {c.plazo_fatal ? `⚠ ${formatFecha(c.plazo_fatal)}` : "—"}
-                    </TableCell>
-                    <TableCell>
+                    <TableCell className="align-top">
                       <button
                         type="button"
                         onClick={() => toggleHitos(c.id)}
@@ -432,7 +461,7 @@ export function ModuloCausas({
                   </TableRow>,
                   abierta ? (
                     <TableRow key={`${c.id}-hitos`} className="hover:bg-transparent">
-                      <TableCell colSpan={9} className="bg-muted/30">
+                      <TableCell colSpan={8} className="bg-muted/30">
                         <div className="my-2 ml-1 border-l-[3px] border-[var(--brand-teal,#17A2B8)] py-1 pl-4">
                           <div className="mb-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                             Bitácora de hitos — {c.cliente ?? c.caratula}
@@ -490,7 +519,8 @@ export function ModuloCausas({
           </Table>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          Quedan ~34 causas por migrar desde ClickUp a la tabla <code>gestion_causas_rs</code>.
+          Estados y catálogos alineados con la vista Causas de ClickUp. La fecha de próxima gestión
+          y de audiencia se editan directo en la tabla.
         </p>
       </div>
     </div>

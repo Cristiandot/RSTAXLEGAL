@@ -55,12 +55,45 @@ export type Cotizacion = {
   notas: string | null;
 };
 
+/** Workflow procesal, replicando exacto la vista Causas de ClickUp (espacio
+ *  "Juicios y Gestiones"). El orden es el ciclo de vida de la causa. */
 export const ESTADOS_CAUSA = [
-  "En preparacion",
-  "En curso",
-  "En espera",
-  "Terminada",
-  "Archivada",
+  "prospecto",
+  "inspección del trabajo",
+  "redacción",
+  "tramitación",
+  "stand by - seguimiento",
+  "contestación",
+  "audiencia preparatoria",
+  "audiencia de juicio",
+  "corte apelaciones",
+  "corte suprema",
+  "acuerdo",
+  "sentencia",
+  "cerrada",
+] as const;
+
+/** Estados terminales (causa cerrada): se excluyen de plazos fatales y alertas. */
+export const ESTADOS_CAUSA_TERMINALES = ["acuerdo", "sentencia", "cerrada"] as const;
+
+/** Materias, según catálogo de ClickUp. */
+export const MATERIAS_CAUSA = ["Laboral", "Familia", "Civil"] as const;
+
+/** Tribunales frecuentes (catálogo de ClickUp). El campo admite además texto
+ *  libre para tribunales fuera de esta lista. */
+export const TRIBUNALES_CAUSA = [
+  "JL Trabajo Valpo",
+  "JLT Santiago 1°",
+  "JLT Santiago 2°",
+  "24° JC de Santiago",
+  "2° J Familia Stgo",
+  "JF de Viña del Mar",
+  "27° JC de Santiago",
+  "2° JL Quilpué",
+  "3° JC de Viña del Mar",
+  "JF de San Fernando",
+  "JLT Puerto Montt",
+  "29° JC Santiago",
 ] as const;
 
 /** Deben calzar EXACTO con el CHECK de la tabla `contactos`. */
