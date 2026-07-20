@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
-import { CalendarPlus, ExternalLink, Plus } from "lucide-react";
+import { Archive, CalendarPlus, ExternalLink, Plus } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,10 +80,14 @@ export function ModuloCausas({
   const [filtroMateria, setFiltroMateria] = useState<string>("Todas");
   const [orden, setOrden] = useState<{ col: OrdenCol; dir: "asc" | "desc" } | null>(null);
   const [resaltada, setResaltada] = useState<string | null>(null);
+  const [verHistorico, setVerHistorico] = useState(false);
+
+  const nCerradas = useMemo(() => causas.filter((c) => c.estado === "cerrada").length, [causas]);
 
   const eventos = useMemo<EventoCalendario[]>(() => {
     const evs: EventoCalendario[] = [];
     for (const c of causas) {
+      if (c.estado === "cerrada") continue; // el histórico no ensucia el calendario
       const quien = c.cliente ?? c.caratula;
       if (c.proxima_gestion_fecha)
         evs.push({ fecha: c.proxima_gestion_fecha, clase: "causa", texto: `Gestión — ${quien}`, id: c.id });
@@ -98,10 +102,13 @@ export function ModuloCausas({
     return evs;
   }, [causas]);
 
-  const causasFiltradas = useMemo(
-    () => (filtroMateria === "Todas" ? causas : causas.filter((c) => c.materia === filtroMateria)),
-    [causas, filtroMateria],
-  );
+  const causasFiltradas = useMemo(() => {
+    const porMateria =
+      filtroMateria === "Todas" ? causas : causas.filter((c) => c.materia === filtroMateria);
+    return porMateria.filter((c) =>
+      verHistorico ? c.estado === "cerrada" : c.estado !== "cerrada",
+    );
+  }, [causas, filtroMateria, verHistorico]);
 
   const causasOrdenadas = useMemo(() => {
     if (!orden) return causasFiltradas;
@@ -257,13 +264,13 @@ export function ModuloCausas({
       <div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold">
-            Registro de causas ({causasFiltradas.length}
-            {filtroMateria !== "Todas" ? ` de ${causas.length}` : ""})
+            {verHistorico ? "Histórico — causas cerradas" : "Registro de causas"} (
+            {causasOrdenadas.length})
           </h3>
           <select
             value={filtroMateria}
             onChange={(e) => setFiltroMateria(e.target.value)}
-            className={`${selectClase} mr-auto`}
+            className={selectClase}
             title="Filtrar por materia"
           >
             <option value="Todas">Todas las materias</option>
@@ -271,6 +278,15 @@ export function ModuloCausas({
               <option key={m}>{m}</option>
             ))}
           </select>
+          <Button
+            variant={verHistorico ? "default" : "outline"}
+            size="sm"
+            className="mr-auto"
+            onClick={() => setVerHistorico((v) => !v)}
+          >
+            <Archive className="size-4" />
+            {verHistorico ? "Ver activas" : `Histórico (${nCerradas})`}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setFormAgenda((v) => !v)}>
             <CalendarPlus className="size-4" />
             Agendar audiencia / gestión
@@ -428,7 +444,9 @@ export function ModuloCausas({
                   <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
                     {causas.length === 0
                       ? "Sin causas registradas."
-                      : "Ninguna causa en esta materia."}
+                      : verHistorico
+                        ? "Sin causas cerradas en el histórico."
+                        : "Ninguna causa activa en esta vista."}
                   </TableCell>
                 </TableRow>
               ) : null}
