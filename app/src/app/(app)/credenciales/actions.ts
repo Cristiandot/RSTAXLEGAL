@@ -7,7 +7,9 @@ export type TipoClave =
   | "clave_sii"
   | "previred_clave"
   | "mutual_clave"
-  | "afc_clave";
+  | "afc_clave"
+  | "sii_rep_clave"
+  | "midt_clave";
 
 const CAMPOS_EDITABLES = [
   "clave_sii",
@@ -17,6 +19,10 @@ const CAMPOS_EDITABLES = [
   "mutual_rut",
   "afc_clave",
   "afc_rut",
+  "sii_rep_clave",
+  "sii_rep_rut",
+  "midt_clave",
+  "midt_rut",
 ] as const;
 export type CampoCredencial = (typeof CAMPOS_EDITABLES)[number];
 
@@ -26,6 +32,8 @@ const CLAVES_SECRETAS: TipoClave[] = [
   "previred_clave",
   "mutual_clave",
   "afc_clave",
+  "sii_rep_clave",
+  "midt_clave",
 ];
 
 /**

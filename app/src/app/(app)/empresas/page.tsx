@@ -17,6 +17,10 @@ const CAMPOS_ESPECIALES = new Set([
   "previred_clave",
   "mutual_rut",
   "mutual_clave",
+  "sii_rep_rut",
+  "sii_rep_clave",
+  "midt_rut",
+  "midt_clave",
 ]);
 
 export default async function EmpresasPage() {
@@ -27,7 +31,7 @@ export default async function EmpresasPage() {
       supabase
         .from("clientes")
         .select(
-          "id, razon_social, rut_empresa, grupo_id, tipo_cliente, hace_liquidaciones, hace_f29, hace_contabilidad_completa, hace_legal, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, correos_adicionales, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono, clave_sii, previred_rut, previred_clave, mutual_institucion, mutual_rut, mutual_clave, activo, fecha_termino_servicio",
+          "id, razon_social, rut_empresa, grupo_id, tipo_cliente, hace_liquidaciones, hace_f29, hace_contabilidad_completa, hace_legal, tipo_sociedad, regimen_tributario, giro, actividades_sii, fecha_inicio_actividades, domicilio, comuna, ciudad, representante_legal, representante_legal_rut, socios, correo_empresa, correos_adicionales, telefono_empresa, contacto_nombre, contacto_correo, contacto_telefono, clave_sii, previred_rut, previred_clave, mutual_institucion, mutual_rut, mutual_clave, sii_rep_rut, sii_rep_clave, midt_rut, midt_clave, activo, fecha_termino_servicio",
         )
         // Registros internos de la oficina (contador, etc.): fuera de Empresas.
         .eq("es_oficina", false)
@@ -137,6 +141,10 @@ export default async function EmpresasPage() {
       mutual_institucion: e.mutual_institucion,
       mutual_rut: e.mutual_rut,
       tiene_clave_mutual: Boolean(e.mutual_clave),
+      sii_rep_rut: e.sii_rep_rut,
+      tiene_clave_sii_rep: Boolean(e.sii_rep_clave),
+      midt_rut: e.midt_rut,
+      tiene_clave_midt: Boolean(e.midt_clave),
       socios: Array.isArray(e.socios) ? (e.socios as Socio[]) : [],
       correos_adicionales: Array.isArray(e.correos_adicionales)
         ? (e.correos_adicionales as string[])

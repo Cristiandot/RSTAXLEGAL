@@ -35,6 +35,10 @@ export type CredencialRow = {
   tieneClaveMutual: boolean;
   afcRut: string | null; // usuario AFC (cesantía)
   tieneClaveAfc: boolean;
+  siiRepRut: string | null; // usuario SII personal del representante legal
+  tieneClaveSiiRep: boolean;
+  midtRut: string | null; // usuario Mi DT (Dirección del Trabajo)
+  tieneClaveMidt: boolean;
   activo: boolean;
   grupo: string | null; // "A.4 — Red Barrera"
   fijada: boolean; // fijada arriba (claves de la oficina, p. ej. el contador)
@@ -115,7 +119,8 @@ export function CredencialesClient({
           <span className="font-medium text-foreground">
             Haz clic en una empresa
           </span>{" "}
-          para ver todas sus credenciales (SII, Previred, AFC y Mutual). {conSii}{" "}
+          para ver todas sus credenciales (SII empresa y rep. legal, Previred,
+          AFC, Mutual y Mi DT). {conSii}{" "}
           de {activas.length} empresas activas con clave SII y {conPrevired} con
           clave Previred.
         </p>
@@ -285,6 +290,29 @@ function CredencialDetalle({ fila }: { fila: CredencialRow }) {
         </CampoClave>
       </BloqueCredencial>
 
+      <BloqueCredencial
+        titulo="SII — Representante legal"
+        subtitulo="Clave personal del rep. legal"
+      >
+        <CampoUsuario etiqueta="Usuario (RUT rep. legal)">
+          <RutPreviredCell
+            clienteId={fila.id}
+            valorInicial={fila.siiRepRut}
+            campo="sii_rep_rut"
+            etiqueta="RUT SII rep. legal"
+          />
+        </CampoUsuario>
+        <CampoClave>
+          <ClaveCell
+            clienteId={fila.id}
+            campo="sii_rep_clave"
+            etiqueta="Clave SII rep. legal"
+            razonSocial={fila.razonSocial}
+            tiene={fila.tieneClaveSiiRep}
+          />
+        </CampoClave>
+      </BloqueCredencial>
+
       <BloqueCredencial titulo="Previred">
         <CampoUsuario etiqueta="Usuario (RUT)">
           <RutPreviredCell
@@ -344,6 +372,26 @@ function CredencialDetalle({ fila }: { fila: CredencialRow }) {
             etiqueta="Clave Mutual"
             razonSocial={fila.razonSocial}
             tiene={fila.tieneClaveMutual}
+          />
+        </CampoClave>
+      </BloqueCredencial>
+
+      <BloqueCredencial titulo="Mi DT" subtitulo="Dirección del Trabajo">
+        <CampoUsuario etiqueta="Usuario (RUT / Clave Única)">
+          <RutPreviredCell
+            clienteId={fila.id}
+            valorInicial={fila.midtRut}
+            campo="midt_rut"
+            etiqueta="RUT Mi DT"
+          />
+        </CampoUsuario>
+        <CampoClave>
+          <ClaveCell
+            clienteId={fila.id}
+            campo="midt_clave"
+            etiqueta="Clave Mi DT"
+            razonSocial={fila.razonSocial}
+            tiene={fila.tieneClaveMidt}
           />
         </CampoClave>
       </BloqueCredencial>

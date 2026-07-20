@@ -80,6 +80,10 @@ export type EmpresaFichaRow = {
   mutual_institucion: string | null;
   mutual_rut: string | null;
   tiene_clave_mutual: boolean;
+  sii_rep_rut: string | null;
+  tiene_clave_sii_rep: boolean;
+  midt_rut: string | null;
+  tiene_clave_midt: boolean;
   socios: Socio[];
   /** Correos adicionales: todo envío al cliente va con copia a esta lista. */
   correos_adicionales: string[];
@@ -300,8 +304,9 @@ function AccesosCard({ empresa }: { empresa: EmpresaFichaRow }) {
     <div className="rounded-lg border p-3">
       <div className="mb-1 text-sm font-semibold">Accesos</div>
       <p className="mb-2 text-xs text-muted-foreground">
-        Claves SII, Previred y Mutual. Ver o copiar una clave queda auditado;
-        la vista completa de la cartera está en Credenciales.
+        Claves SII (empresa y rep. legal), Previred, Mutual y Mi DT. Ver o
+        copiar una clave queda auditado; la vista completa de la cartera está
+        en Credenciales.
       </p>
       <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1">
@@ -356,6 +361,48 @@ function AccesosCard({ empresa }: { empresa: EmpresaFichaRow }) {
             etiqueta="Clave Mutual"
             razonSocial={empresa.razon_social}
             tiene={empresa.tiene_clave_mutual}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">
+            RUT SII rep. legal
+          </div>
+          <RutPreviredCell
+            clienteId={empresa.id}
+            valorInicial={empresa.sii_rep_rut}
+            campo="sii_rep_rut"
+            etiqueta="RUT SII rep. legal"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">
+            Clave SII rep. legal
+          </div>
+          <ClaveCell
+            clienteId={empresa.id}
+            campo="sii_rep_clave"
+            etiqueta="Clave SII rep. legal"
+            razonSocial={empresa.razon_social}
+            tiene={empresa.tiene_clave_sii_rep}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">RUT Mi DT</div>
+          <RutPreviredCell
+            clienteId={empresa.id}
+            valorInicial={empresa.midt_rut}
+            campo="midt_rut"
+            etiqueta="RUT Mi DT"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">Clave Mi DT</div>
+          <ClaveCell
+            clienteId={empresa.id}
+            campo="midt_clave"
+            etiqueta="Clave Mi DT"
+            razonSocial={empresa.razon_social}
+            tiene={empresa.tiene_clave_midt}
           />
         </div>
       </div>

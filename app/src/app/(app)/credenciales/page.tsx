@@ -11,7 +11,7 @@ export default async function CredencialesPage() {
     supabase
       .from("clientes")
       .select(
-        "id, razon_social, rut_empresa, previred_rut, clave_sii, previred_clave, mutual_institucion, mutual_rut, mutual_clave, afc_rut, afc_clave, activo, grupo_id, credencial_fijada",
+        "id, razon_social, rut_empresa, previred_rut, clave_sii, previred_clave, mutual_institucion, mutual_rut, mutual_clave, afc_rut, afc_clave, sii_rep_rut, sii_rep_clave, midt_rut, midt_clave, activo, grupo_id, credencial_fijada",
       )
       .order("credencial_fijada", { ascending: false })
       .order("razon_social"),
@@ -35,6 +35,10 @@ export default async function CredencialesPage() {
     tieneClaveMutual: Boolean(c.mutual_clave),
     afcRut: c.afc_rut,
     tieneClaveAfc: Boolean(c.afc_clave),
+    siiRepRut: c.sii_rep_rut,
+    tieneClaveSiiRep: Boolean(c.sii_rep_clave),
+    midtRut: c.midt_rut,
+    tieneClaveMidt: Boolean(c.midt_clave),
     activo: c.activo ?? true,
     grupo: c.grupo_id ? (grupos.get(c.grupo_id) ?? null) : null,
     fijada: Boolean(c.credencial_fijada),
