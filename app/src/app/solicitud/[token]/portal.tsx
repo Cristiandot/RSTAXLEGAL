@@ -38,6 +38,8 @@ export function PortalCliente({
 }) {
   const [tab, setTab] = useState<Tab>("financiera");
   const [anioFin, setAnioFin] = useState(2026);
+  // Trabajador preseleccionado para una solicitud (desde su ficha en la nómina).
+  const [prefillTrab, setPrefillTrab] = useState<string | null>(null);
   // null = cargando; false = sin datos (mostrar aviso); true = Financiera completa.
   const [hayFinanciera, setHayFinanciera] = useState<boolean | null>(null);
   const claveTab = `rstl_portal_tab_${token}`;
@@ -172,8 +174,24 @@ export function PortalCliente({
       ) : null}
       {tab === "rrhh" ? (
         <div className="space-y-6">
-          <RecursosHumanos token={token} />
-          <SolicitudForm token={token} empresa={empresa} />
+          <RecursosHumanos
+            token={token}
+            onSolicitarGestion={(id) => {
+              setPrefillTrab(id);
+              // Espera a que el panel lateral termine de cerrar antes de desplazar.
+              setTimeout(
+                () =>
+                  document.getElementById("form-solicitud")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  }),
+                280,
+              );
+            }}
+          />
+          <div id="form-solicitud">
+            <SolicitudForm token={token} empresa={empresa} prefillTrabajadorId={prefillTrab} />
+          </div>
         </div>
       ) : null}
       {tab === "remuneraciones" ? (
