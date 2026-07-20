@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 import { CalendarPlus, ExternalLink, Plus } from "lucide-react";
 import { formatFecha } from "@/lib/format";
@@ -31,6 +31,41 @@ const inlineSelect =
 
 const TIPOS_AUDIENCIA = ["Audiencia preparatoria", "Audiencia de juicio"];
 
+type OrdenCol =
+  | "causa"
+  | "calidad"
+  | "materia"
+  | "tribunal"
+  | "estado"
+  | "gestion"
+  | "audiencia"
+  | "hitos";
+
+/** Valor comparable de una causa según la columna. Los estados se ordenan por su
+ *  posición en el ciclo procesal (no alfabético); el resto por texto/fecha/número. */
+function valorOrden(c: Causa, col: OrdenCol): string | number {
+  switch (col) {
+    case "causa":
+      return (c.cliente ?? c.caratula ?? "").toLowerCase();
+    case "calidad":
+      return (c.calidad ?? "").toLowerCase();
+    case "materia":
+      return (c.materia ?? "").toLowerCase();
+    case "tribunal":
+      return (c.tribunal ?? "").toLowerCase();
+    case "estado": {
+      const i = ESTADOS_CAUSA.indexOf(c.estado as never);
+      return i === -1 ? 999 : i;
+    }
+    case "gestion":
+      return c.proxima_gestion_fecha ?? "";
+    case "audiencia":
+      return c.proxima_audiencia_fecha ?? "";
+    case "hitos":
+      return c.hitos.length;
+  }
+}
+
 export function ModuloCausas({
   causas,
   recargar,
@@ -43,6 +78,7 @@ export function ModuloCausas({
   const [formAgenda, setFormAgenda] = useState(false);
   const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
   const [filtroMateria, setFiltroMateria] = useState<string>("Todas");
+  const [orden, setOrden] = useState<{ col: OrdenCol; dir: "asc" | "desc" } | null>(null);
 
   const eventos = useMemo<EventoCalendario[]>(() => {
     const evs: EventoCalendario[] = [];
@@ -64,6 +100,55 @@ export function ModuloCausas({
     () => (filtroMateria === "Todas" ? causas : causas.filter((c) => c.materia === filtroMateria)),
     [causas, filtroMateria],
   );
+
+  const causasOrdenadas = useMemo(() => {
+    if (!orden) return causasFiltradas;
+    const { col, dir } = orden;
+    return [...causasFiltradas].sort((a, b) => {
+      const va = valorOrden(a, col);
+      const vb = valorOrden(b, col);
+      // Valores vacíos (sin fecha, sin dato) siempre al final, sin importar la dirección.
+      const aVacio = va === "";
+      const bVacio = vb === "";
+      if (aVacio && bVacio) return 0;
+      if (aVacio) return 1;
+      if (bVacio) return -1;
+      const cmp =
+        typeof va === "number" && typeof vb === "number"
+          ? va - vb
+          : String(va) < String(vb)
+            ? -1
+            : String(va) > String(vb)
+              ? 1
+              : 0;
+      return dir === "asc" ? cmp : -cmp;
+    });
+  }, [causasFiltradas, orden]);
+
+  function toggleOrden(col: OrdenCol) {
+    setOrden((prev) =>
+      prev?.col === col ? { col, dir: prev.dir === "asc" ? "desc" : "asc" } : { col, dir: "asc" },
+    );
+  }
+
+  function renderTh(col: OrdenCol, label: ReactNode, className?: string): ReactNode {
+    const activo = orden?.col === col;
+    return (
+      <TableHead className={className}>
+        <button
+          type="button"
+          onClick={() => toggleOrden(col)}
+          className="inline-flex items-center gap-1 hover:text-foreground"
+          title="Ordenar"
+        >
+          {label}
+          <span className={`text-[10px] ${activo ? "text-foreground" : "text-muted-foreground/50"}`}>
+            {activo ? (orden!.dir === "asc" ? "▲" : "▼") : "↕"}
+          </span>
+        </button>
+      </TableHead>
+    );
+  }
 
   function toggleHitos(id: string) {
     setAbiertas((prev) => {
@@ -307,18 +392,18 @@ export function ModuloCausas({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Causa</TableHead>
-                <TableHead>Calidad</TableHead>
-                <TableHead>Materia</TableHead>
-                <TableHead>Tribunal / RIT</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Próxima gestión</TableHead>
-                <TableHead>Audiencia</TableHead>
-                <TableHead>Hitos</TableHead>
+                {renderTh("causa", "Causa")}
+                {renderTh("calidad", "Calidad")}
+                {renderTh("materia", "Materia")}
+                {renderTh("tribunal", "Tribunal / RIT")}
+                {renderTh("estado", "Estado")}
+                {renderTh("gestion", "Próxima gestión")}
+                {renderTh("audiencia", "Audiencia")}
+                {renderTh("hitos", "Hitos")}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {causasFiltradas.length === 0 ? (
+              {causasOrdenadas.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
                     {causas.length === 0
@@ -327,7 +412,7 @@ export function ModuloCausas({
                   </TableCell>
                 </TableRow>
               ) : null}
-              {causasFiltradas.map((c) => {
+              {causasOrdenadas.map((c) => {
                 const abierta = abiertas.has(c.id);
                 const hitosOrden = [...c.hitos].sort((a, b) => (a.fecha < b.fecha ? -1 : 1));
                 return [
