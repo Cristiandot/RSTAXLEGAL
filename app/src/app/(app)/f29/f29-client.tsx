@@ -13,6 +13,7 @@ import { ClaveCell } from "@/components/credencial-celdas";
 import {
   claseDias,
   claseEstado,
+  f29Cerrado,
   type F29Row,
   type UsuarioOpcion,
 } from "@/lib/ciclos";
@@ -58,10 +59,10 @@ const ESTADOS = [
   "Sin iniciar",
   "Pendiente presentación",
   "Guardado y enviado",
-  "Declarado, folio pendiente",
-  "Declarado",
   "Fondos en RS",
-  "Pagado",
+  "Declarado, folio pendiente",
+  "Pagado, folio pendiente",
+  "Declarado",
 ];
 
 /**
@@ -297,14 +298,26 @@ export function F29Client({
       valor: filas.filter((c) => c.estado === "Fondos en RS").length,
     },
     {
-      label: "Pagados",
-      valor: filas.filter((c) => c.estado === "Pagado").length,
+      // "Declarado" es el estado terminal (F29 OK: declarado y, si correspondía,
+      // pagado). Reemplaza al antiguo conteo de "Pagados" (criterio 20-07-2026).
+      label: "Declarados",
+      valor: filas.filter((c) => c.estado === "Declarado").length,
+    },
+    {
+      // F29 que quedaron declarados/pagados pero les falta cargar el folio
+      // (estados «Pagado, folio pendiente» y «Declarado, folio pendiente»).
+      label: "Folio pendiente",
+      valor: filas.filter(
+        (c) =>
+          c.estado === "Pagado, folio pendiente" ||
+          c.estado === "Declarado, folio pendiente",
+      ).length,
     },
     {
       label: "Plazo ≤ 5 días",
       valor: filas.filter(
         (c) =>
-          c.estado !== "Pagado" &&
+          !f29Cerrado(c.estado) &&
           c.dias_restantes_f29 !== null &&
           c.dias_restantes_f29 <= 5,
       ).length,
@@ -954,8 +967,8 @@ export function F29Client({
                   {enviandoPago
                     ? "Guardando, marcando pagado y enviando el comprobante…"
                     : editando.fecha_correo_pago_enviado
-                      ? `Pagado y avisado el ${formatFecha(editando.fecha_correo_pago_enviado.slice(0, 10))}. El F29 quedó en «Pagado».`
-                      : "Úsalo cuando el cliente transfirió a RS y ya pagamos: registra la fecha de pago (el F29 pasa a «Pagado») y envía el comprobante con monto, fecha y N° de operación."}
+                      ? `Pagado y avisado el ${formatFecha(editando.fecha_correo_pago_enviado.slice(0, 10))}. Si aún no cargas el folio queda como «Pagado, folio pendiente»; con folio pasa a «Declarado».`
+                      : "Úsalo cuando el cliente transfirió a RS y ya pagamos: registra la fecha de pago y envía el comprobante (monto, fecha y N° de operación). No necesitas el folio para pagar: si falta, el F29 queda como «Pagado, folio pendiente» hasta que lo cargues (ahí pasa a «Declarado»)."}
                 </span>
               </div>
               <div className="col-span-2 flex flex-col gap-1.5">

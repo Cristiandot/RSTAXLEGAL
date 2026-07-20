@@ -79,18 +79,12 @@ export async function guardarF29(
   // contaminada por flujos antiguos y ya no es la señal de declaración
   // (criterio Cristian 20-07-2026). Enviar el aviso NO requiere declaración.
   const folio = input.folio?.trim() || null;
-  const declarado = !!folio || input.declarado;
   const fechaPresentado = folio ? (input.fechaPresentado ?? new Date().toISOString().slice(0, 10)) : null;
 
-  // No se marca PAGADO un F29 no declarado: se paga lo declarado, con folio o
-  // con la casilla «Declarado, folio pendiente» (criterio Cristian 20-07-2026).
-  if (input.fechaPagoF29 && input.fechaPagoF29.trim() !== "" && !declarado) {
-    return {
-      ok: false,
-      error:
-        "No puedes marcar el F29 como pagado sin haberlo declarado. Ingresa el folio o marca «Declarado (folio pendiente)».",
-    };
-  }
+  // Se permite marcar PAGADO aunque aún no haya folio (RS a veces paga en el SII
+  // antes de tener el folio a mano). En ese caso la vista muestra «Pagado, folio
+  // pendiente» como recordatorio; al cargar el folio pasa a «Declarado»
+  // (criterio Cristian 20-07-2026, releva el resguardo "no pagar sin declarar").
 
   const { error } = await supabase
     .from("ciclo_f29")
@@ -275,19 +269,9 @@ export async function enviarCorreoF29Pagado(
   if (errRow || !row) {
     return { ok: false, error: errRow?.message ?? "Ciclo F29 no encontrado." };
   }
-  // No se paga un F29 no declarado: se admite con folio o con la casilla
-  // «Declarado, folio pendiente» (declarado_sin_folio) — criterio Cristian
-  // 20-07-2026.
-  const declarado =
-    (!!row.folio_f29 && String(row.folio_f29).trim() !== "") ||
-    row.declarado_sin_folio === true;
-  if (!declarado) {
-    return {
-      ok: false,
-      error:
-        "No puedes marcar el F29 como pagado sin haberlo declarado. Ingresa el folio o marca «Declarado (folio pendiente)» en el formulario.",
-    };
-  }
+  // Se permite pagar aunque no haya folio: el F29 queda como «Pagado, folio
+  // pendiente» (la vista lo resuelve) hasta que se cargue el folio → «Declarado»
+  // (criterio Cristian 20-07-2026, releva el resguardo "no pagar sin declarar").
   // Mismo resguardo que el aviso de F29: el comprobante no puede salir sin monto.
   if (row.monto_a_pagar === null || row.monto_a_pagar === undefined || String(row.monto_a_pagar) === "") {
     return {

@@ -216,6 +216,9 @@ export function claseEstado(estado: string): string {
     case "Declarado, folio pendiente":
     case "Guardado y enviado":
       return "border-sky-200 bg-sky-50 text-sky-700";
+    case "Pagado, folio pendiente":
+      // Pagado pero falta cargar el folio: ámbar para que el pendiente resalte.
+      return "border-amber-200 bg-amber-50 text-amber-700";
     case "Sin iniciar":
       return "border-slate-200 bg-slate-100 text-slate-600";
     case "Descargando":
@@ -232,10 +235,25 @@ export function claseEstado(estado: string): string {
   }
 }
 
+/**
+ * Estados del F29 en los que la obligación de presentación ya está cumplida:
+ * el F29 quedó declarado (con folio o con la marca "folio pendiente") o pagado.
+ * En estos casos el plazo ya no corre. "Declarado" es el estado terminal desde
+ * el criterio del 20-07-2026 (folio gana sobre el pago en v_checklist_f29).
+ */
+export function f29Cerrado(estado: string): boolean {
+  return (
+    estado === "Declarado" ||
+    estado === "Declarado, folio pendiente" ||
+    estado === "Pagado, folio pendiente" ||
+    estado === "Pagado"
+  );
+}
+
 /** Clase de color para la celda de días restantes. */
 export function claseDias(estado: string, dias: number | null): string {
   if (
-    estado === "Pagado" ||
+    f29Cerrado(estado) ||
     estado === "Previred pagado" ||
     estado === "DNP declarado" ||
     estado === "DNP pagado"
