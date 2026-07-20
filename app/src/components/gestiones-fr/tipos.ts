@@ -94,6 +94,89 @@ export const ESTADO_COLOR: Record<string, string> = {
   cerrada: "#6b7280",
 };
 
+// ===================== Gestiones legales (no litigiosas) =====================
+
+export type HitoGestion = {
+  id: string;
+  gestion_id: string;
+  fecha: string;
+  detalle: string;
+};
+
+export type GestionLegal = {
+  id: string;
+  titulo: string;
+  tipo: string | null;
+  cliente: string | null;
+  contraparte: string | null;
+  estado: string | null;
+  proxima_gestion_fecha: string | null;
+  proxima_gestion_detalle: string | null;
+  carpeta_sharepoint: string | null;
+  notas: string | null;
+  hitos: HitoGestion[];
+};
+
+export const TIPOS_GESTION = [
+  "Compraventa",
+  "Estudio de título",
+  "Constitución/modif. sociedad",
+  "Solicitud",
+  "Contrato",
+  "Otro",
+] as const;
+
+export const ESTADOS_GESTION = [
+  "En análisis",
+  "En trámite",
+  "En espera de terceros",
+  "Por firmar",
+  "Terminada",
+] as const;
+
+export const ESTADOS_GESTION_TERMINALES = ["Terminada"] as const;
+
+export const ESTADO_GESTION_COLOR: Record<string, string> = {
+  "En análisis": "#6366f1",
+  "En trámite": "#3b82f6",
+  "En espera de terceros": "#f97316",
+  "Por firmar": "#f59e0b",
+  Terminada: "#10b981",
+};
+
+// ===================== Pendientes =====================
+
+/** Pendiente manual propio del panel (tabla pendientes_fr). */
+export type Pendiente = {
+  id: string;
+  titulo: string;
+  detalle: string | null;
+  area: string;
+  fecha: string | null;
+  hecho: boolean;
+};
+
+/** Requerimiento del equipo asignado a Felipe (espejo de tareas_oficina). */
+export type Requerimiento = {
+  id: string;
+  titulo: string;
+  detalle: string | null;
+  canal: string | null;
+  plazo: string | null;
+  estado: string;
+};
+
+export const AREAS_PENDIENTE = ["causas", "gestiones", "prospeccion", "gerencia", "otro"] as const;
+
+export const AREA_PENDIENTE_LABEL: Record<string, string> = {
+  causas: "Causas",
+  gestiones: "Gestiones",
+  prospeccion: "Prospección",
+  gerencia: "Gerencia",
+  requerimiento: "Requerimiento",
+  otro: "Otro",
+};
+
 /** Materias, según catálogo de ClickUp. */
 export const MATERIAS_CAUSA = ["Laboral", "Familia", "Civil"] as const;
 

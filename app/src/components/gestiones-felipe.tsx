@@ -3,7 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { LayoutDashboard, Loader2, Lock, RefreshCw, Scale, TrendingUp, Unlock } from "lucide-react";
+import {
+  FileText,
+  LayoutDashboard,
+  ListChecks,
+  Loader2,
+  Lock,
+  RefreshCw,
+  Scale,
+  TrendingUp,
+  Unlock,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,7 +28,17 @@ import { cargarGerencia, cargarGestionesFR } from "@/components/gestiones-fr/act
 import { ModuloCausas } from "@/components/gestiones-fr/modulo-causas";
 import { ModuloComercial } from "@/components/gestiones-fr/modulo-comercial";
 import { ModuloGerencia } from "@/components/gestiones-fr/modulo-gerencia";
-import type { Causa, Contacto, Cotizacion, DatosGerencia } from "@/components/gestiones-fr/tipos";
+import { ModuloGestiones } from "@/components/gestiones-fr/modulo-gestiones";
+import { ModuloPendientes } from "@/components/gestiones-fr/modulo-pendientes";
+import type {
+  Causa,
+  Contacto,
+  Cotizacion,
+  DatosGerencia,
+  GestionLegal,
+  Pendiente,
+  Requerimiento,
+} from "@/components/gestiones-fr/tipos";
 
 const CLAVE = "5753";
 const STORAGE_KEY = "gestiones-fr-unlocked";
@@ -27,7 +47,12 @@ type Datos = {
   causas: Causa[];
   contactos: Contacto[];
   cotizaciones: Cotizacion[];
+  gestiones: GestionLegal[];
+  pendientes: Pendiente[];
+  requerimientos: Requerimiento[];
 };
+
+type Modulo = "causas" | "gestiones" | "comercial" | "gerencia" | "pendientes";
 
 export default function GestionesFelipe() {
   const router = useRouter();
@@ -37,7 +62,7 @@ export default function GestionesFelipe() {
   const [datos, setDatos] = useState<Datos | null>(null);
   const [gerencia, setGerencia] = useState<DatosGerencia | null>(null);
   const [cargando, setCargando] = useState(false);
-  const [modulo, setModulo] = useState<"causas" | "comercial" | "gerencia">("causas");
+  const [modulo, setModulo] = useState<Modulo>("causas");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // El desbloqueo dura mientras viva la pestaña. Se lee tras montar para no
@@ -65,6 +90,9 @@ export default function GestionesFelipe() {
       causas: res.causas,
       contactos: res.contactos,
       cotizaciones: res.cotizaciones,
+      gestiones: res.gestiones,
+      pendientes: res.pendientes,
+      requerimientos: res.requerimientos,
     });
     if (resGerencia.ok) setGerencia(resGerencia.datos);
     else toast.error(resGerencia.error ?? "No se pudo cargar Gerencia.");
@@ -188,7 +216,24 @@ export default function GestionesFelipe() {
           <span>
             <span className="block text-sm font-semibold">Causas judiciales</span>
             <span className="block text-xs text-muted-foreground">
-              {datos ? `${datos.causas.length} causas · audiencias y plazos fatales` : "…"}
+              {datos ? `${datos.causas.length} causas · agrupadas por estado` : "…"}
+            </span>
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setModulo("gestiones")}
+          className={`flex min-w-56 flex-1 items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition ${
+            modulo === "gestiones"
+              ? "border-[var(--brand-teal,#17A2B8)] bg-accent"
+              : "border-transparent bg-white hover:bg-muted/50"
+          }`}
+        >
+          <FileText className="size-5 shrink-0 text-[var(--brand-teal,#17A2B8)]" />
+          <span>
+            <span className="block text-sm font-semibold">Gestiones</span>
+            <span className="block text-xs text-muted-foreground">
+              {datos ? `${datos.gestiones.length} gestiones · compraventas, estudios, solicitudes` : "…"}
             </span>
           </span>
         </button>
@@ -230,6 +275,25 @@ export default function GestionesFelipe() {
             </span>
           </span>
         </button>
+        <button
+          type="button"
+          onClick={() => setModulo("pendientes")}
+          className={`flex min-w-56 flex-1 items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition ${
+            modulo === "pendientes"
+              ? "border-[var(--brand-teal,#17A2B8)] bg-accent"
+              : "border-transparent bg-white hover:bg-muted/50"
+          }`}
+        >
+          <ListChecks className="size-5 shrink-0 text-[var(--brand-teal,#17A2B8)]" />
+          <span>
+            <span className="block text-sm font-semibold">Pendientes</span>
+            <span className="block text-xs text-muted-foreground">
+              {datos
+                ? `${datos.pendientes.filter((p) => !p.hecho).length} propios · ${datos.requerimientos.length} requerimientos`
+                : "…"}
+            </span>
+          </span>
+        </button>
       </div>
 
       {!datos ? (
@@ -241,10 +305,22 @@ export default function GestionesFelipe() {
         </Card>
       ) : modulo === "causas" ? (
         <ModuloCausas causas={datos.causas} recargar={recargar} />
+      ) : modulo === "gestiones" ? (
+        <ModuloGestiones gestiones={datos.gestiones} recargar={recargar} />
       ) : modulo === "comercial" ? (
         <ModuloComercial
           contactos={datos.contactos}
           cotizaciones={datos.cotizaciones}
+          recargar={recargar}
+        />
+      ) : modulo === "pendientes" ? (
+        <ModuloPendientes
+          causas={datos.causas}
+          gestiones={datos.gestiones}
+          contactos={datos.contactos}
+          cotizaciones={datos.cotizaciones}
+          requerimientos={datos.requerimientos}
+          pendientes={datos.pendientes}
           recargar={recargar}
         />
       ) : gerencia ? (

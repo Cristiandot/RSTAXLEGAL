@@ -10,14 +10,20 @@ import type {
   DatosGerencia,
   DeudaCliente,
   EmisionItem,
+  GestionLegal,
   HitoGerencia,
   LinkPlan,
   MetaCategoria,
+  Pendiente,
   Posicion,
   PuntoCrecimiento,
+  Requerimiento,
 } from "./tipos";
 
 type Resultado = { ok: boolean; error?: string };
+
+/** Usuario Felipe Rodríguez (dueño de este panel), para filtrar sus requerimientos. */
+const FELIPE_ID = "a93e8f17-7f21-418a-9895-c612aa02dd0c";
 
 /** Carga todo el módulo de una vez (se llama al desbloquear la sección). */
 export async function cargarGestionesFR(): Promise<{
@@ -26,34 +32,55 @@ export async function cargarGestionesFR(): Promise<{
   causas: Causa[];
   contactos: Contacto[];
   cotizaciones: Cotizacion[];
+  gestiones: GestionLegal[];
+  pendientes: Pendiente[];
+  requerimientos: Requerimiento[];
 }> {
   const supabase = await createClient();
-  const [causasRes, contactosRes, cotizRes] = await Promise.all([
-    supabase
-      .from("gestion_causas_rs")
-      .select("*, hitos:gestion_causas_hitos(id, causa_id, fecha, detalle)")
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("contactos")
-      .select(
-        "id, nombre, segmento, empresa_rubro, medio_preferido, contacto, referido_por, estado, fecha_proxima_accion, notas",
-      )
-      .order("nombre", { ascending: true }),
-    supabase
-      .from("gestion_cotizaciones_rs")
-      .select("*")
-      .order("numero", { ascending: false }),
-  ]);
+  const vacio = { causas: [], contactos: [], cotizaciones: [], gestiones: [], pendientes: [], requerimientos: [] };
+  const [causasRes, contactosRes, cotizRes, gestionesRes, pendientesRes, requerimientosRes] =
+    await Promise.all([
+      supabase
+        .from("gestion_causas_rs")
+        .select("*, hitos:gestion_causas_hitos(id, causa_id, fecha, detalle)")
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("contactos")
+        .select(
+          "id, nombre, segmento, empresa_rubro, medio_preferido, contacto, referido_por, estado, fecha_proxima_accion, notas",
+        )
+        .order("nombre", { ascending: true }),
+      supabase.from("gestion_cotizaciones_rs").select("*").order("numero", { ascending: false }),
+      supabase
+        .from("gestion_legal_rs")
+        .select("*, hitos:gestion_legal_hitos(id, gestion_id, fecha, detalle)")
+        .order("created_at", { ascending: true }),
+      supabase.from("pendientes_fr").select("*").order("created_at", { ascending: true }),
+      supabase
+        .from("tareas_oficina")
+        .select("id, titulo, detalle, canal, plazo, estado")
+        .eq("responsable_id", FELIPE_ID)
+        .eq("estado", "pendiente")
+        .order("plazo", { ascending: true, nullsFirst: false }),
+    ]);
 
   const error =
-    causasRes.error?.message ?? contactosRes.error?.message ?? cotizRes.error?.message;
-  if (error) return { ok: false, error, causas: [], contactos: [], cotizaciones: [] };
+    causasRes.error?.message ??
+    contactosRes.error?.message ??
+    cotizRes.error?.message ??
+    gestionesRes.error?.message ??
+    pendientesRes.error?.message ??
+    requerimientosRes.error?.message;
+  if (error) return { ok: false, error, ...vacio };
 
   return {
     ok: true,
     causas: (causasRes.data ?? []) as Causa[],
     contactos: (contactosRes.data ?? []) as Contacto[],
     cotizaciones: (cotizRes.data ?? []) as Cotizacion[],
+    gestiones: (gestionesRes.data ?? []) as GestionLegal[],
+    pendientes: (pendientesRes.data ?? []) as Pendiente[],
+    requerimientos: (requerimientosRes.data ?? []) as Requerimiento[],
   };
 }
 
@@ -135,6 +162,93 @@ export async function agregarHito(
   const { error } = await supabase
     .from("gestion_causas_hitos")
     .insert({ causa_id: causaId, fecha, detalle: detalle.trim() });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+// ===================== Gestiones legales =====================
+
+export async function crearGestion(input: {
+  titulo: string;
+  tipo: string | null;
+  cliente: string | null;
+  contraparte: string | null;
+  estado: string;
+  proxima_gestion_fecha: string | null;
+  proxima_gestion_detalle: string | null;
+  carpeta_sharepoint: string | null;
+  notas: string | null;
+}): Promise<Resultado> {
+  if (!input.titulo.trim()) return { ok: false, error: "El título es obligatorio." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("gestion_legal_rs").insert(input);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function actualizarGestion(
+  id: string,
+  patch: Partial<
+    Pick<
+      GestionLegal,
+      | "titulo"
+      | "tipo"
+      | "cliente"
+      | "contraparte"
+      | "estado"
+      | "proxima_gestion_fecha"
+      | "proxima_gestion_detalle"
+      | "carpeta_sharepoint"
+      | "notas"
+    >
+  >,
+): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("gestion_legal_rs")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function agregarHitoGestion(
+  gestionId: string,
+  fecha: string,
+  detalle: string,
+): Promise<Resultado> {
+  if (!fecha || !detalle.trim())
+    return { ok: false, error: "Fecha y detalle son obligatorios." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("gestion_legal_hitos")
+    .insert({ gestion_id: gestionId, fecha, detalle: detalle.trim() });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+// ===================== Pendientes =====================
+
+export async function crearPendiente(input: {
+  titulo: string;
+  detalle: string | null;
+  area: string;
+  fecha: string | null;
+}): Promise<Resultado> {
+  if (!input.titulo.trim()) return { ok: false, error: "El título es obligatorio." };
+  const supabase = await createClient();
+  const { error } = await supabase.from("pendientes_fr").insert(input);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function togglePendiente(id: string, hecho: boolean): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("pendientes_fr")
+    .update({ hecho, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function eliminarPendiente(id: string): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("pendientes_fr").delete().eq("id", id);
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
