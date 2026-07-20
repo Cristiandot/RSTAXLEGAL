@@ -384,10 +384,58 @@ function canalLabel(canal: string | null): string {
   return canal;
 }
 
-/** Bitácora del grupo (vista "Todas"): gestiones RRHH + requerimientos, más recientes primero. */
+const MESES_BITACORA = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+function mesLabel(fecha: string | null): string {
+  if (!fecha) return "Sin fecha";
+  const [y, m] = fecha.slice(0, 7).split("-").map(Number);
+  return `${MESES_BITACORA[(m || 1) - 1] ?? ""} ${y}`;
+}
+
+/** Una gestión de la bitácora, en una sola línea. */
+function FilaBitacora({ it }: { it: BitacoraItem }) {
+  return (
+    <li className="flex items-center gap-3 border-b border-border py-2 last:border-0">
+      <span className="shrink-0 text-[var(--brand-teal)]">
+        {it.fuente === "requerimiento" ? (
+          canalLabel(it.canal) === "WhatsApp" ? <MessageCircle className="size-4" /> : <Mail className="size-4" />
+        ) : (
+          <FileText className="size-4" />
+        )}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+        <span className="truncate font-medium">
+          {it.fuente === "requerimiento" ? it.tipo : etiquetaGestion(it.tipo)}
+        </span>
+        {it.trabajador ? <span className="text-sm text-muted-foreground">· {it.trabajador}</span> : null}
+        {it.empresa ? <span className="text-xs text-muted-foreground">· {it.empresa}</span> : null}
+        {it.fuente === "requerimiento" ? (
+          <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] text-sky-800">{canalLabel(it.canal)}</span>
+        ) : null}
+        {it.estado ? (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
+            {it.estado.replace(/_/g, " ")}
+          </span>
+        ) : null}
+      </div>
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+        {it.fecha ? formatFecha(it.fecha.slice(0, 10)) : ""}
+      </span>
+    </li>
+  );
+}
+
+/**
+ * Bitácora del grupo (vista "Todas"): gestiones RRHH + requerimientos, más
+ * recientes primero. Colapsada muestra hasta 10 (una línea c/u); al expandir,
+ * el total agrupado por mes.
+ */
 function BitacoraGestiones({ token }: { token: string }) {
   const [items, setItems] = useState<BitacoraItem[] | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [expandido, setExpandido] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -402,60 +450,77 @@ function BitacoraGestiones({ token }: { token: string }) {
     };
   }, [token]);
 
+  const total = items?.length ?? 0;
+
+  // Agrupa por mes conservando el orden (los items ya vienen desc por fecha).
+  const porMes: { mes: string; items: BitacoraItem[] }[] = [];
+  for (const it of items ?? []) {
+    const m = mesLabel(it.fecha);
+    const ult = porMes[porMes.length - 1];
+    if (ult && ult.mes === m) ult.items.push(it);
+    else porMes.push({ mes: m, items: [it] });
+  }
+
   return (
     <div className="card-soft rounded-xl bg-card p-5">
       <div className="mb-1 flex items-center gap-2">
         <History className="size-4 text-[var(--brand-teal)]" />
         <h2 className="font-heading text-base font-semibold">Bitácora de gestiones</h2>
+        {total > 0 ? (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{total}</span>
+        ) : null}
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
-        Lo que hemos gestionado para tus empresas — solicitudes laborales y requerimientos, del más reciente al más antiguo.
+        Lo que hemos gestionado para tus empresas — solicitudes laborales y requerimientos.
       </p>
+
       {cargando ? (
         <p className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" /> Cargando…
         </p>
-      ) : !items || items.length === 0 ? (
+      ) : total === 0 ? (
         <p className="py-2 text-sm text-muted-foreground">
           Aún no hay gestiones registradas para tus empresas.
         </p>
+      ) : !expandido ? (
+        <>
+          <ul>
+            {items!.slice(0, 10).map((it, i) => (
+              <FilaBitacora key={i} it={it} />
+            ))}
+          </ul>
+          {total > 10 ? (
+            <button
+              type="button"
+              onClick={() => setExpandido(true)}
+              className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[var(--brand-teal)]"
+            >
+              Ver las {total} gestiones por mes <ChevronDown className="size-4" />
+            </button>
+          ) : null}
+        </>
       ) : (
-        <ul className="space-y-2.5">
-          {items.map((it, i) => (
-            <li key={i} className="flex items-start gap-3 border-b border-border pb-2.5 last:border-0 last:pb-0">
-              <span className="mt-0.5 shrink-0 text-[var(--brand-teal)]">
-                {it.fuente === "requerimiento" ? (
-                  canalLabel(it.canal) === "WhatsApp" ? <MessageCircle className="size-4" /> : <Mail className="size-4" />
-                ) : (
-                  <FileText className="size-4" />
-                )}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                  <span className="font-medium">
-                    {it.fuente === "requerimiento" ? it.tipo : etiquetaGestion(it.tipo)}
-                  </span>
-                  {it.trabajador ? <span className="text-sm text-muted-foreground">· {it.trabajador}</span> : null}
-                  {it.empresa ? <span className="text-xs text-muted-foreground">· {it.empresa}</span> : null}
-                  {it.fuente === "requerimiento" ? (
-                    <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] text-sky-800">{canalLabel(it.canal)}</span>
-                  ) : null}
-                  {it.estado ? (
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
-                      {it.estado.replace(/_/g, " ")}
-                    </span>
-                  ) : null}
-                </div>
-                {it.detalle ? (
-                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{it.detalle}</p>
-                ) : null}
+        <>
+          <div className="space-y-4">
+            {porMes.map((g) => (
+              <div key={g.mes}>
+                <p className="mb-0.5 text-xs font-semibold capitalize text-muted-foreground">{g.mes}</p>
+                <ul>
+                  {g.items.map((it, i) => (
+                    <FilaBitacora key={`${g.mes}-${i}`} it={it} />
+                  ))}
+                </ul>
               </div>
-              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                {it.fecha ? formatFecha(it.fecha.slice(0, 10)) : ""}
-              </span>
-            </li>
-          ))}
-        </ul>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpandido(false)}
+            className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[var(--brand-teal)]"
+          >
+            Ver menos <ChevronDown className="size-4 rotate-180" />
+          </button>
+        </>
       )}
     </div>
   );
