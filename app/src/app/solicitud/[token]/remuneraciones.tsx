@@ -54,6 +54,17 @@ function periodoActual(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// Tasas del empleador para ESTIMAR el costo empresa del preview (referencial;
+// varían por normativa y por la mutualidad de cada empresa — la definitiva la
+// calcula RS Tax & Legal).
+const TASA_SIS = 0.0188; // Seguro de Invalidez y Sobrevivencia (cargo empleador)
+const TASA_MUTUAL_BASE = 0.009; // cotización básica mutualidad (sin adicional por empresa)
+const afcEmpleadorTasa = (tipo: string | null): number =>
+  tipo === "plazo_fijo" ? 0.03 : 0.024;
+
+const BANDA_PREVIEW =
+  "VISTA PRELIMINAR · Este documento no constituye una liquidación de sueldo. Es una estimación referencial sujeta a revisión de RS Tax & Legal.";
+
 function moverPeriodo(p: string, delta: number): string {
   const [y, m] = p.split("-").map(Number);
   const d = new Date(Date.UTC(y, m - 1 + delta, 1));
@@ -265,6 +276,7 @@ export function DetalleRemuneraciones({
   }, [token]);
 
   const [detalleDe, setDetalleDe] = useState<TrabajadorNomina | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [dlgTipo, setDlgTipo] = useState<"anticipo" | "bono">("anticipo");
   const [dlgMonto, setDlgMonto] = useState("");
   const [dlgComentario, setDlgComentario] = useState("");
@@ -461,6 +473,14 @@ export function DetalleRemuneraciones({
       utm: ind.utm,
       tasasAfp: ind.tasas_afp.map((a) => ({ nombre: a.nombre, tasa_trabajador: a.tasa_trabajador })),
     });
+  }
+
+  /** Costo empresa estimado: bruto pagado + aportes patronales sobre el imponible. */
+  function costoEmpresaDe(t: TrabajadorNomina, liq: LiquidacionEjemplo): number {
+    const aportes = Math.round(
+      liq.totalImponible * (TASA_SIS + TASA_MUTUAL_BASE + afcEmpleadorTasa(t.tipo_contrato)),
+    );
+    return liq.totalImponible + liq.colacion + liq.movilizacion + aportes;
   }
 
   return (
@@ -881,14 +901,19 @@ export function DetalleRemuneraciones({
             </CardContent>
           </Card>
 
-          {!cerrado ? (
-            <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            {nomina && nomina.trabajadores.length > 0 ? (
+              <Button variant="outline" size="lg" onClick={() => setPreviewOpen(true)}>
+                <Eye className="size-4" /> Previsualizar liquidaciones
+              </Button>
+            ) : null}
+            {!cerrado ? (
               <Button size="lg" disabled={ocupado || cargando} onClick={cerrarMes}>
                 <Lock className="size-4" />
                 Cerrar {nombrePeriodo(periodo)} y enviar a RS Tax &amp; Legal
               </Button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </>
       )}
 
@@ -969,6 +994,102 @@ export function DetalleRemuneraciones({
                     <Button onClick={agregarMontoNovedad} disabled={ocupado}><Plus className="size-4" /> Agregar</Button>
                   </div>
                 ) : null}
+              </div>
+            </DialogContent>
+          );
+        })() : null}
+      </Dialog>
+
+      {/* Preview de liquidaciones — estimación con banda de advertencia */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        {previewOpen ? (() => {
+          const filas = (nomina?.trabajadores ?? [])
+            .map((t) => ({ t, liq: liquidacionDe(t) }))
+            .filter((x): x is { t: TrabajadorNomina; liq: LiquidacionEjemplo } => x.liq !== null)
+            .map(({ t, liq }) => ({
+              id: t.id,
+              nombre: t.nombre,
+              tipo: t.tipo_contrato,
+              liquido: liq.liquido,
+              costo: costoEmpresaDe(t, liq),
+            }));
+          const totalLiquido = filas.reduce((s, f) => s + f.liquido, 0);
+          const totalCosto = filas.reduce((s, f) => s + f.costo, 0);
+          return (
+            <DialogContent className="max-h-[85vh] overflow-hidden p-0 sm:max-w-2xl">
+              <div className="bg-amber-500 px-8 py-2 text-center text-[11px] font-semibold uppercase leading-tight tracking-wide text-white">
+                {BANDA_PREVIEW}
+              </div>
+              <div className="relative max-h-[calc(85vh-3rem)] overflow-y-auto px-5 pb-5 pt-4">
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden"
+                >
+                  <span className="rotate-[-24deg] select-none text-5xl font-black uppercase tracking-widest text-muted-foreground/10">
+                    Vista preliminar
+                  </span>
+                </div>
+
+                <DialogHeader className="relative">
+                  <DialogTitle className="font-heading">
+                    Previsualización de liquidaciones · {nombrePeriodo(periodo)}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Estimación con los indicadores Previred de {nomina?.indicadores?.periodo ?? "—"} y
+                    las novedades cargadas. No es la liquidación definitiva.
+                  </DialogDescription>
+                </DialogHeader>
+
+                {filas.length > 0 ? (
+                  <div className="relative mt-3 space-y-4">
+                    <div className="overflow-x-auto rounded-lg border border-border bg-card/80">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/40 text-left text-xs text-muted-foreground">
+                            <th className="px-3 py-2 font-medium">Trabajador</th>
+                            <th className="px-3 py-2 font-medium">Contrato</th>
+                            <th className="px-3 py-2 text-right font-medium">Líquido a pagar</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filas.map((f) => (
+                            <tr key={f.id} className="border-b last:border-0">
+                              <td className="px-3 py-2">{f.nombre}</td>
+                              <td className="px-3 py-2 text-xs text-muted-foreground">
+                                {f.tipo === "plazo_fijo" ? "Plazo fijo" : f.tipo === "indefinido" ? "Indefinido" : "—"}
+                              </td>
+                              <td className="px-3 py-2 text-right tabular-nums">{formatMonto(f.liquido)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                        <p className="text-xs text-emerald-800/80">Total líquido a pagar</p>
+                        <p className="text-xl font-bold tabular-nums text-emerald-800">{formatMonto(totalLiquido)}</p>
+                        <p className="mt-0.5 text-[11px] text-emerald-800/70">Lo que transfieres a los trabajadores.</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-muted p-3">
+                        <p className="text-xs text-muted-foreground">Costo total empresa (estimado)</p>
+                        <p className="text-xl font-bold tabular-nums">{formatMonto(totalCosto)}</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          Incluye cotizaciones del empleador estimadas (seguro de cesantía, SIS y mutualidad base).
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground">
+                      Montos referenciales; pueden variar según las novedades definitivas del mes y la
+                      mutualidad de tu empresa. La liquidación de sueldo oficial la emite RS Tax &amp; Legal.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="relative mt-4 text-sm text-muted-foreground">
+                    No tenemos sueldos cargados para estimar las liquidaciones de esta empresa.
+                  </p>
+                )}
               </div>
             </DialogContent>
           );
