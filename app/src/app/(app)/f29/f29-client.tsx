@@ -40,6 +40,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -185,6 +186,33 @@ function postergadoPendiente(c: F29Row): number {
   const v = c.iva_postergado;
   if (v === null || v === undefined || String(v) === "") return 0;
   return Number(v) || 0;
+}
+
+/**
+ * Elegible para el envío masivo del aviso (paso 1): el correo sale con los
+ * datos GUARDADOS del ciclo, así que exige monto guardado y correo en la ficha,
+ * y que el F29 no esté cerrado (declarado/pagado ya no lleva aviso).
+ */
+function enviableMasivo(c: F29Row): boolean {
+  const monto = c.monto_a_pagar;
+  const tieneMonto =
+    monto !== null && monto !== undefined && String(monto) !== "";
+  return (
+    tieneMonto &&
+    Boolean((c.correo_empresa ?? "").trim()) &&
+    !f29Cerrado(c.estado)
+  );
+}
+
+/** Por qué una fila NO es seleccionable para el envío masivo (tooltip). */
+function motivoNoEnviable(c: F29Row): string {
+  if (f29Cerrado(c.estado)) return "F29 cerrado: ya no lleva aviso.";
+  const monto = c.monto_a_pagar;
+  if (monto === null || monto === undefined || String(monto) === "")
+    return "Falta guardar el detalle del F29 (ábrelo y llena los conceptos).";
+  if (!(c.correo_empresa ?? "").trim())
+    return "Falta el correo del cliente en la ficha (ábrelo y guárdalo).";
+  return "";
 }
 
 function claseEstadoSii(id: number | null): string {
@@ -411,6 +439,39 @@ export function F29Client({
   const [enviando, startEnviar] = useTransition();
   const [enviandoPago, startEnviarPago] = useTransition();
 
+  // Envío masivo del aviso (paso 1): selección por checkbox en la grilla,
+  // confirmación con la lista y envío uno a uno (misma barrera del server que
+  // el envío individual: sin monto guardado el correo no sale).
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  // Foto de las filas al abrir el diálogo: la lista y sus resultados no se
+  // mueven aunque la selección cambie al terminar (los ok se destildan).
+  const [masivoLista, setMasivoLista] = useState<F29Row[]>([]);
+  const [masivoAbierto, setMasivoAbierto] = useState(false);
+  const [enviandoMasivo, setEnviandoMasivo] = useState(false);
+  const [progresoMasivo, setProgresoMasivo] = useState({ hecho: 0, total: 0 });
+  const [resultadosMasivo, setResultadosMasivo] = useState<
+    Map<string, { ok: boolean; error?: string; enviadoA?: string }>
+  >(new Map());
+
+  // Al cambiar el período cambian los ciclo_id: se poda la selección para no
+  // arrastrar ids que ya no están en pantalla.
+  useEffect(() => {
+    setSel((prev) => {
+      const vivos = new Set(filas.map((c) => c.ciclo_id));
+      const next = new Set([...prev].filter((id) => vivos.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [filas]);
+
+  function toggleSel(cicloId: string) {
+    setSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(cicloId)) next.delete(cicloId);
+      else next.add(cicloId);
+      return next;
+    });
+  }
+
   function abrirModal(c: F29Row) {
     setCorreoCli(c.correo_empresa ?? "");
     setNumOp(c.numero_operacion ?? "");
@@ -477,6 +538,77 @@ export function F29Client({
   // Postergaciones del período con IVA pendiente de pago (para el banner de cobro).
   const postergados = filas.filter((c) => postergadoPendiente(c) > 0);
   const totalPostergado = postergados.reduce((s, c) => s + postergadoPendiente(c), 0);
+
+  // Envío masivo: filas seleccionadas (sobre TODAS las del período, no solo las
+  // filtradas: la selección sobrevive a cambios de filtro) y enviables a la vista.
+  const seleccionadas = filas.filter((c) => sel.has(c.ciclo_id));
+  const enviablesVisibles = filtradas.filter(enviableMasivo);
+  const todasVisiblesSel =
+    enviablesVisibles.length > 0 &&
+    enviablesVisibles.every((c) => sel.has(c.ciclo_id));
+
+  function toggleTodasVisibles() {
+    setSel((prev) => {
+      const next = new Set(prev);
+      if (todasVisiblesSel) {
+        for (const c of enviablesVisibles) next.delete(c.ciclo_id);
+      } else {
+        for (const c of enviablesVisibles) next.add(c.ciclo_id);
+      }
+      return next;
+    });
+  }
+
+  function abrirMasivo() {
+    setMasivoLista(seleccionadas);
+    setResultadosMasivo(new Map());
+    setMasivoAbierto(true);
+  }
+
+  /**
+   * Envía el aviso a los seleccionados UNO A UNO (secuencial, para no saturar
+   * el correo) reusando la misma action del envío individual — corre la misma
+   * barrera del server (sin monto guardado no sale). Los que fallan quedan
+   * seleccionados para reintentar; los enviados se destildan.
+   */
+  async function enviarMasivo() {
+    // En el primer envío van todos los de la foto; en un reintento, solo los
+    // que siguen seleccionados (los fallidos). Los resultados se acumulan.
+    const pendientes = masivoLista.filter((c) => sel.has(c.ciclo_id));
+    if (pendientes.length === 0) return;
+    setEnviandoMasivo(true);
+    setProgresoMasivo({ hecho: 0, total: pendientes.length });
+    const out = new Map(resultadosMasivo);
+    let okN = 0;
+    for (const c of pendientes) {
+      const r = await enviarCorreoF29(c.ciclo_id, null);
+      if (r.ok) okN += 1;
+      out.set(c.ciclo_id, r);
+      setResultadosMasivo(new Map(out));
+      setProgresoMasivo((p) => ({ ...p, hecho: p.hecho + 1 }));
+    }
+    setEnviandoMasivo(false);
+    setSel((prev) => {
+      const next = new Set(prev);
+      for (const [id, r] of out) if (r.ok) next.delete(id);
+      return next;
+    });
+    if (okN === pendientes.length) {
+      toast.success(okN === 1 ? "Aviso enviado" : `${okN} avisos enviados`);
+    } else {
+      toast.error(
+        `${okN} de ${pendientes.length} avisos enviados — los que fallaron siguen seleccionados para reintentar.`,
+      );
+    }
+    router.refresh();
+  }
+
+  function cerrarMasivo() {
+    if (enviandoMasivo) return;
+    setMasivoAbierto(false);
+    setResultadosMasivo(new Map());
+    setMasivoLista([]);
+  }
 
   const resumen = [
     { label: "Total", valor: filas.length },
@@ -771,10 +903,49 @@ export function F29Client({
         </div>
       ) : null}
 
+      {sel.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 p-2.5 text-sm text-sky-900">
+          <span>
+            <strong>{sel.size}</strong>{" "}
+            {sel.size === 1 ? "F29 seleccionado" : "F29 seleccionados"} para
+            enviar el aviso al cliente.
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSel(new Set())}
+            >
+              Limpiar
+            </Button>
+            <Button type="button" size="sm" onClick={abrirMasivo}>
+              <Send className="size-4" />
+              Enviar {sel.size === 1 ? "aviso" : `${sel.size} avisos`}…
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="card-soft rounded-xl bg-card">
         <Table stickyHeader>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              <TableHead className="w-8">
+                <input
+                  type="checkbox"
+                  aria-label="Seleccionar todos los enviables visibles"
+                  title={
+                    enviablesVisibles.length === 0
+                      ? "Ninguna fila visible está lista para enviar (falta guardar detalle o correo)."
+                      : "Seleccionar todos los enviables visibles"
+                  }
+                  className="size-4 accent-sky-600"
+                  checked={todasVisiblesSel}
+                  disabled={enviablesVisibles.length === 0}
+                  onChange={toggleTodasVisibles}
+                />
+              </TableHead>
               <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[260px]">Cliente</ThSort>
               <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT</ThSort>
               <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
@@ -789,7 +960,7 @@ export function F29Client({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -802,6 +973,23 @@ export function F29Client({
                   onClick={() => abrirModal(c)}
                   className="cursor-pointer"
                 >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Seleccionar ${c.razon_social}`}
+                      title={
+                        enviableMasivo(c)
+                          ? c.fecha_correo_f29_enviado
+                            ? `Aviso ya enviado el ${formatFecha(c.fecha_correo_f29_enviado.slice(0, 10))} — seleccionarlo lo REENVÍA.`
+                            : "Seleccionar para envío masivo del aviso"
+                          : motivoNoEnviable(c)
+                      }
+                      className="size-4 accent-sky-600 disabled:opacity-30"
+                      checked={sel.has(c.ciclo_id)}
+                      disabled={!enviableMasivo(c)}
+                      onChange={() => toggleSel(c.ciclo_id)}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium">
                     <div className="flex items-center gap-1.5">
                       {c.grupo_codigo && (
@@ -1338,6 +1526,129 @@ export function F29Client({
             </DialogFooter>
           </DialogContent>
         ) : null}
+      </Dialog>
+
+      {/* Envío masivo del aviso F29: confirmación con la lista de lo que va a
+          salir (destino + monto guardado) y resultado por cliente. */}
+      <Dialog open={masivoAbierto} onOpenChange={soloCerrarConX(cerrarMasivo)}>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col gap-3 sm:max-w-lg md:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-heading">
+              Enviar{" "}
+              {masivoLista.length === 1
+                ? "el aviso F29"
+                : `${masivoLista.length} avisos F29`}
+            </DialogTitle>
+            <DialogDescription>
+              Período {periodo}. Cada aviso sale con los datos guardados del
+              ciclo al correo de la ficha del cliente (con sus copias). Los que
+              fallen quedan seleccionados para reintentar.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-card">
+                <tr className="text-left text-xs text-muted-foreground">
+                  <th className="px-3 py-1.5 font-medium">Cliente</th>
+                  <th className="px-3 py-1.5 font-medium">Correo</th>
+                  <th className="px-3 py-1.5 text-right font-medium">Monto</th>
+                  <th className="px-3 py-1.5 font-medium">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {masivoLista.map((c) => {
+                  const r = resultadosMasivo.get(c.ciclo_id);
+                  return (
+                    <tr key={c.ciclo_id} className="border-t border-border">
+                      <td className="px-3 py-1.5">
+                        <span className="flex items-center gap-1.5">
+                          {c.grupo_codigo && (
+                            <span className="rounded bg-muted px-1 text-[11px] font-semibold text-muted-foreground">
+                              {c.grupo_codigo}
+                            </span>
+                          )}
+                          <span className="truncate" title={c.razon_social}>
+                            {c.razon_social}
+                          </span>
+                        </span>
+                      </td>
+                      <td className="max-w-48 truncate px-3 py-1.5 text-muted-foreground">
+                        {(c.correo_empresa ?? "").trim() || "—"}
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums">
+                        {c.monto_a_pagar === null || String(c.monto_a_pagar) === ""
+                          ? "—"
+                          : formatMonto(c.monto_a_pagar)}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        {r ? (
+                          r.ok ? (
+                            <span className="flex items-center gap-1 text-emerald-600">
+                              <CheckCircle2 className="size-3.5 shrink-0" />
+                              enviado
+                            </span>
+                          ) : (
+                            <span
+                              className="flex items-center gap-1 text-red-600"
+                              title={r.error}
+                            >
+                              <AlertTriangle className="size-3.5 shrink-0" />
+                              {r.error ?? "error"}
+                            </span>
+                          )
+                        ) : c.fecha_correo_f29_enviado ? (
+                          <span className="text-xs text-amber-600">
+                            reenvío (ya salió el{" "}
+                            {formatFecha(c.fecha_correo_f29_enviado.slice(0, 10))})
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            listo para enviar
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={cerrarMasivo}
+              disabled={enviandoMasivo}
+            >
+              {resultadosMasivo.size > 0 && !enviandoMasivo ? "Cerrar" : "Cancelar"}
+            </Button>
+            {(() => {
+              const porEnviar = masivoLista.filter((c) =>
+                sel.has(c.ciclo_id),
+              ).length;
+              return (
+                <Button
+                  type="button"
+                  onClick={enviarMasivo}
+                  disabled={enviandoMasivo || porEnviar === 0}
+                >
+                  <Send className="size-4" />
+                  {enviandoMasivo
+                    ? `Enviando ${Math.min(progresoMasivo.hecho + 1, progresoMasivo.total)} de ${progresoMasivo.total}…`
+                    : resultadosMasivo.size > 0
+                      ? porEnviar === 0
+                        ? "Todo enviado"
+                        : `Reintentar (${porEnviar})`
+                      : porEnviar === 1
+                        ? "Enviar el aviso"
+                        : `Enviar ${porEnviar} avisos`}
+                </Button>
+              );
+            })()}
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
     </div>
   );
