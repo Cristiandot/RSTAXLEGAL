@@ -177,6 +177,49 @@ function MontoDetalle({ fila }: { fila: F29Row }) {
   );
 }
 
+/** IVA postergado que quedó pendiente de pago en el período (0 si no postergó). */
+function postergadoPendiente(c: F29Row): number {
+  const v = c.iva_postergado;
+  if (v === null || v === undefined || String(v) === "") return 0;
+  return Number(v) || 0;
+}
+
+function claseEstadoSii(id: number | null): string {
+  if (id === 1) return "border-emerald-300 bg-emerald-50 text-emerald-700"; // Vigente
+  if (id === 10) return "border-amber-300 bg-amber-50 text-amber-700"; // Guardada (borrador)
+  return "border-border bg-muted text-muted-foreground"; // otros / rechazada
+}
+
+/**
+ * Celda "SII": estado y folio de lo declarado en el SII (espejo sii_f29_estado),
+ * más un aviso de conciliación contra el panel (falta folio / folio distinto).
+ * Vacía si aún no se ha bajado el período del SII.
+ */
+function SiiCelda({ fila }: { fila: F29Row }) {
+  if (!fila.sii_estado) {
+    return <span className="text-xs text-muted-foreground" title="Aún no bajado del SII">—</span>;
+  }
+  const declarada = Boolean(fila.sii_declarada);
+  const panelFolio = (fila.folio_f29 ?? "").trim();
+  const siiFolio = (fila.sii_folio ?? "").trim();
+  let aviso: string | null = null;
+  if (declarada && !panelFolio) aviso = "falta folio en panel";
+  else if (declarada && siiFolio && panelFolio && panelFolio !== siiFolio) aviso = "folio ≠ panel";
+  return (
+    <div className="flex flex-col gap-0.5">
+      <Badge variant="outline" className={`w-fit ${claseEstadoSii(fila.sii_estado_id)}`}>
+        {fila.sii_estado}
+      </Badge>
+      {siiFolio && (
+        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+          {siiFolio}
+        </span>
+      )}
+      {aviso && <span className="text-[11px] text-amber-600">{aviso}</span>}
+    </div>
+  );
+}
+
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
@@ -208,6 +251,8 @@ export function F29Client({
   const [estadoF, setEstadoF] = useState("");
   const [concilF, setConcilF] = useState("");
   const [respF, setRespF] = useState("");
+  // Solo clientes que postergaron IVA con monto pendiente (seguimiento de cobro).
+  const [soloPost, setSoloPost] = useState(false);
   const [editando, setEditando] = useState<F29Row | null>(null);
   // Correo del cliente (ficha) editable desde el modal.
   const [correoCli, setCorreoCli] = useState("");
@@ -267,6 +312,7 @@ export function F29Client({
       if (concilF === "ok" && !c.conciliacion_ok) return false;
       if (concilF === "no" && c.conciliacion_ok) return false;
       if (respF && c.responsable !== respF) return false;
+      if (soloPost && postergadoPendiente(c) <= 0) return false;
       return true;
     });
     // Orden por defecto = prioridad por código de grupo (A.1, B.2, C.10…),
@@ -285,6 +331,7 @@ export function F29Client({
         case "cliente": return c.razon_social;
         case "rut": return c.rut_empresa;
         case "estado": return c.estado;
+        case "sii": return c.sii_estado;
         case "responsable": return c.responsable;
         case "plazo": return c.plazo_f29;
         case "dias": return c.dias_restantes_f29;
@@ -293,7 +340,11 @@ export function F29Client({
       }
     };
     return [...out].sort((a, b) => comparar(valor(a), valor(b), orden.dir));
-  }, [filas, buscar, estadoF, concilF, respF, orden]);
+  }, [filas, buscar, estadoF, concilF, respF, soloPost, orden]);
+
+  // Postergaciones del período con IVA pendiente de pago (para el banner de cobro).
+  const postergados = filas.filter((c) => postergadoPendiente(c) > 0);
+  const totalPostergado = postergados.reduce((s, c) => s + postergadoPendiente(c), 0);
 
   const resumen = [
     { label: "Total", valor: filas.length },
@@ -541,10 +592,39 @@ export function F29Client({
           ))}
         </select>
 
+        <button
+          type="button"
+          onClick={() => setSoloPost((v) => !v)}
+          aria-pressed={soloPost}
+          className={`h-9 rounded-md border px-3 text-sm shadow-sm ${
+            soloPost
+              ? "border-amber-300 bg-amber-100 text-amber-800"
+              : "border-input bg-card text-muted-foreground hover:bg-muted"
+          }`}
+          title="Mostrar solo los que postergaron IVA con monto pendiente"
+        >
+          Postergados {postergados.length > 0 ? `(${postergados.length})` : ""}
+        </button>
+
         <span className="ml-auto text-sm text-muted-foreground">
           {filtradas.length} de {filas.length} clientes
         </span>
       </div>
+
+      {postergados.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setSoloPost(true)}
+          className="flex w-full items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-left text-sm text-amber-800 hover:bg-amber-100"
+        >
+          <AlertTriangle className="size-4 shrink-0" />
+          <span>
+            <strong>{postergados.length}</strong>{" "}
+            {postergados.length === 1 ? "cliente postergó" : "clientes postergaron"} IVA este período —{" "}
+            <strong>{formatMonto(totalPostergado)}</strong> pendiente de pago. Clic para ver y hacer seguimiento de cobro.
+          </span>
+        </button>
+      )}
 
       {errorCarga ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
@@ -559,6 +639,7 @@ export function F29Client({
               <ThSort col="cliente" orden={orden} setOrden={setOrden} className="w-[260px]">Cliente</ThSort>
               <ThSort col="rut" orden={orden} setOrden={setOrden}>RUT</ThSort>
               <ThSort col="estado" orden={orden} setOrden={setOrden}>Estado</ThSort>
+              <ThSort col="sii" orden={orden} setOrden={setOrden}>SII</ThSort>
               <ThSort col="responsable" orden={orden} setOrden={setOrden}>Responsable</ThSort>
               <ThSort col="plazo" orden={orden} setOrden={setOrden}>Plazo</ThSort>
               <ThSort col="dias" orden={orden} setOrden={setOrden} className="text-center">Días</ThSort>
@@ -569,7 +650,7 @@ export function F29Client({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para este período y filtros.
@@ -611,9 +692,22 @@ export function F29Client({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={claseEstado(c.estado)}>
-                      {c.estado}
-                    </Badge>
+                    <div className="flex flex-col items-start gap-0.5">
+                      <Badge variant="outline" className={claseEstado(c.estado)}>
+                        {c.estado}
+                      </Badge>
+                      {postergadoPendiente(c) > 0 && (
+                        <span
+                          className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800"
+                          title="IVA postergado pendiente de pago"
+                        >
+                          Postergado {formatMonto(postergadoPendiente(c))}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <SiiCelda fila={c} />
                   </TableCell>
                   <TableCell>{c.responsable ?? "—"}</TableCell>
                   <TableCell>{formatFecha(c.plazo_f29)}</TableCell>
@@ -896,6 +990,22 @@ export function F29Client({
                   className="w-48 bg-card"
                   defaultValue={editando.folio_f29 ?? ""}
                 />
+                {editando.sii_folio &&
+                  editando.sii_folio.trim() !==
+                    (editando.folio_f29 ?? "").trim() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById(
+                          "folio",
+                        ) as HTMLInputElement | null;
+                        if (el) el.value = editando.sii_folio!.trim();
+                      }}
+                      className="w-fit text-xs text-indigo-700 underline decoration-dotted underline-offset-2 hover:text-indigo-900"
+                    >
+                      Usar folio del SII: {editando.sii_folio} (luego Guardar)
+                    </button>
+                  )}
                 <label className="flex items-center gap-2 text-sm text-indigo-900">
                   <input
                     type="checkbox"

@@ -115,6 +115,13 @@ export type F29Row = {
   // booleano postergar_iva de arriba; los convenios viven en su módulo aparte).
   multa: number | string | null; // interés y multa por presentación/pago fuera de plazo
   condonacion: number | string | null; // condonación de recargos otorgada
+  // Espejo de lo declarado en el SII (sii_f29_estado; lo llena el drip/sync-f29).
+  sii_estado_id: number | null; // 1=Vigente, 10=Guardada (borrador), 70=Rechazada…
+  sii_estado: string | null; // texto del SII
+  sii_folio: string | null; // folio del F29 declarado (null si borrador)
+  sii_monto: number | string | null; // monto declarado según el SII
+  sii_declarada: boolean | null; // true si el SII lo tiene Vigente
+  sii_sincronizado_en: string | null; // última vez que se bajó del SII
 };
 
 /** Fila de `v_comunicacion_mensual` (resumen mensual de pagos por empresa). */
