@@ -25,15 +25,22 @@ function fechaCorta(iso: string | null): string {
   return `${d}-${m}-${y}`;
 }
 
-const INTRO_DEFECTO =
-  "Estimados,\n\nJunto con saludar, compartimos el estado de cuenta de los honorarios pendientes de pago a la fecha. Agradeceremos regularizar el saldo indicado; se adjuntan las facturas correspondientes.\n\nQuedamos atentos a cualquier consulta.";
+const INTRO_TRANSFIERE =
+  "Estimados,\n\nJunto con saludar, compartimos el estado de cuenta de los honorarios pendientes de pago a la fecha. Agradeceremos regularizar el saldo indicado mediante transferencia a la cuenta que se detalla; se adjuntan las facturas correspondientes.\n\nQuedamos atentos a cualquier consulta.";
+
+const INTRO_SUSCRIPCION =
+  "Estimados,\n\nDetectamos un problema con el cobro automático de su suscripción, por lo que los siguientes documentos quedaron pendientes de pago. Mientras normalizamos el cobro automático, agradeceremos regularizar el saldo mediante transferencia a la cuenta que se indica más abajo; se adjuntan las facturas correspondientes.\n\nQuedamos atentos a cualquier consulta.";
+
+// Datos de la cuenta de la firma para transferencias (editable en el envío).
+const DATOS_CUENTA_DEFECTO =
+  "Rodríguez Samith Servicios Legales y Contables II Limitada\nRUT 78.073.973-8\nBanco: [COMPLETAR]\nTipo de cuenta: [COMPLETAR]\nN° de cuenta: [COMPLETAR]\nCorreo: pagos@rstaxlegal.cl";
 
 function escaparHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Convierte el texto del intro (párrafos separados por línea en blanco) a HTML. */
-function introAHtml(texto: string): string {
+/** Convierte texto (párrafos separados por línea en blanco) a HTML de párrafos. */
+function textoAHtml(texto: string): string {
   return texto
     .split(/\n{2,}/)
     .map((p) => p.trim())
@@ -41,6 +48,18 @@ function introAHtml(texto: string): string {
     .map((p) => `<p>${escaparHtml(p).replace(/\n/g, "<br>")}</p>`)
     .join("");
 }
+
+/** Datos de cuenta (texto multilínea) a HTML de una línea por renglón. */
+function cuentaAHtml(texto: string): string {
+  return escaparHtml(texto.trim()).replace(/\n/g, "<br>");
+}
+
+const FILTROS = [
+  { id: "todos", label: "Todos" },
+  { id: "T", label: "Transfieren" },
+  { id: "S", label: "Suscritos" },
+] as const;
+type FiltroId = (typeof FILTROS)[number]["id"];
 
 export function TabCobranza({
   cobranza,
@@ -50,28 +69,41 @@ export function TabCobranza({
   recargar: () => Promise<void>;
 }) {
   const [busqueda, setBusqueda] = useState("");
+  const [filtro, setFiltro] = useState<FiltroId>("todos");
   const [fichaId, setFichaId] = useState<string | null>(null);
   const [enviando, startTransition] = useTransition();
 
-  // Estado de la ficha abierta
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
-  const [intro, setIntro] = useState(INTRO_DEFECTO);
+  const [intro, setIntro] = useState(INTRO_TRANSFIERE);
+  const [cuenta, setCuenta] = useState(DATOS_CUENTA_DEFECTO);
   const [invitar, setInvitar] = useState(true);
 
   const ficha = fichaId ? (cobranza.find((c) => c.cliente_id === fichaId) ?? null) : null;
+  const modo: "transfiere" | "suscripcion" = ficha?.formaPago === "S" ? "suscripcion" : "transfiere";
 
   const filtrada = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    if (!q) return cobranza;
-    return cobranza.filter((c) => `${c.razon_social} ${c.correo ?? ""}`.toLowerCase().includes(q));
-  }, [cobranza, busqueda]);
+    return cobranza.filter((c) => {
+      if (filtro !== "todos" && c.formaPago !== filtro) return false;
+      if (!q) return true;
+      return `${c.razon_social} ${c.correo ?? ""}`.toLowerCase().includes(q);
+    });
+  }, [cobranza, busqueda, filtro]);
 
   const totalGlobal = useMemo(() => cobranza.reduce((s, c) => s + c.total, 0), [cobranza]);
+  const conteo = useMemo(
+    () => ({
+      T: cobranza.filter((c) => c.formaPago === "T").length,
+      S: cobranza.filter((c) => c.formaPago === "S").length,
+    }),
+    [cobranza],
+  );
 
   function abrir(c: CobranzaCliente) {
     setFichaId(c.cliente_id);
     setSeleccion(new Set(c.facturas.map((f) => f.id)));
-    setIntro(INTRO_DEFECTO);
+    setIntro(c.formaPago === "S" ? INTRO_SUSCRIPCION : INTRO_TRANSFIERE);
+    setCuenta(DATOS_CUENTA_DEFECTO);
     setInvitar(!c.suscrito && !!c.planLink);
   }
 
@@ -103,15 +135,17 @@ export function TabCobranza({
       const res = await enviarCobranza({
         clienteId: ficha.cliente_id,
         facturaIds: [...seleccion],
-        introHtml: introAHtml(intro),
-        planNombre: invitar ? ficha.planNombre : null,
-        planLink: invitar ? ficha.planLink : null,
+        introHtml: textoAHtml(intro),
+        datosCuentaHtml: cuentaAHtml(cuenta),
+        modo,
+        planNombre: modo === "transfiere" && invitar ? ficha.planNombre : null,
+        planLink: modo === "transfiere" && invitar ? ficha.planLink : null,
       });
       if (!res.ok) {
-        toast.error(res.error ?? "No se pudo enviar la cobranza.");
+        toast.error(res.error ?? "No se pudo enviar el correo.");
         return;
       }
-      toast.success(`Cobranza enviada a ${res.enviadoA}.`);
+      toast.success(`${modo === "suscripcion" ? "Aviso de suscripción" : "Cobranza"} enviado a ${res.enviadoA}.`);
       setFichaId(null);
       await recargar();
     });
@@ -123,6 +157,9 @@ export function TabCobranza({
         <div className="rounded-xl border bg-white p-4">
           <p className="text-xs text-muted-foreground">Clientes con facturas impagas</p>
           <p className="mt-1 text-2xl font-bold">{cobranza.length}</p>
+          <p className="text-xs text-muted-foreground">
+            {conteo.T} transfieren · {conteo.S} suscritos
+          </p>
         </div>
         <div className="rounded-xl border bg-white p-4">
           <p className="text-xs text-muted-foreground">Documentos por cobrar</p>
@@ -134,14 +171,37 @@ export function TabCobranza({
         </div>
       </div>
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-        <Input
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar cliente o correo…"
-          className="pl-8"
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex gap-1 rounded-lg border bg-white p-1">
+          {FILTROS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFiltro(f.id)}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
+                filtro === f.id
+                  ? "bg-[var(--brand-navy,#0B2545)] text-white"
+                  : "text-muted-foreground hover:bg-muted/60"
+              }`}
+            >
+              {f.label}
+              {f.id !== "todos" ? (
+                <span className={`ml-1 ${filtro === f.id ? "opacity-80" : "text-muted-foreground"}`}>
+                  {f.id === "T" ? conteo.T : conteo.S}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+        <div className="relative min-w-48 flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+          <Input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar cliente o correo…"
+            className="pl-8"
+          />
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border bg-white">
@@ -151,12 +211,17 @@ export function TabCobranza({
           </p>
         ) : (
           filtrada.map((c) => (
-            <div key={c.cliente_id} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
+            <button
+              key={c.cliente_id}
+              type="button"
+              onClick={() => abrir(c)}
+              className="flex w-full items-center gap-3 border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted/40"
+              title="Ver detalle de la deuda"
+            >
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{c.razon_social}</div>
                 <div className="truncate text-[11px] text-muted-foreground">
                   {c.correo ?? <span className="text-red-600">sin correo en ficha</span>}
-                  {c.suscrito ? " · suscrito" : ""}
                   {c.ultimoEnvio ? ` · último cobro ${fechaCorta(c.ultimoEnvio)}` : ""}
                 </div>
               </div>
@@ -167,26 +232,15 @@ export function TabCobranza({
                       ? "border border-violet-200 bg-violet-50 text-violet-700"
                       : "border border-sky-200 bg-sky-50 text-sky-700"
                   }`}
-                  title={c.formaPago === "S" ? "Suscripción (pago automático)" : "Transfiere"}
                 >
                   {c.formaPago === "S" ? "Suscripción" : "Transfiere"}
                 </span>
               ) : null}
-              {c.ncCount > 0 ? (
-                <span
-                  className="shrink-0 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
-                  title={`${c.ncCount} nota(s) de crédito por ${montoCLP(Math.round(c.ncMonto))} — revisar/rebajar de la deuda`}
-                >
-                  ⚠ {c.ncCount} NC
-                </span>
-              ) : null}
-              <span className="shrink-0 text-[11px] text-muted-foreground">{c.docs} doc{c.docs === 1 ? "" : "s"}</span>
+              <span className="shrink-0 text-[11px] text-muted-foreground">
+                {c.docs} doc{c.docs === 1 ? "" : "s"}
+              </span>
               <span className="shrink-0 text-sm font-semibold tabular-nums">{montoCLP(Math.round(c.total))}</span>
-              <Button size="sm" variant="outline" onClick={() => abrir(c)} className="shrink-0">
-                <Mail className="size-4" />
-                Preparar
-              </Button>
-            </div>
+            </button>
           ))
         )}
       </div>
@@ -198,7 +252,7 @@ export function TabCobranza({
               <SheetHeader className="border-b">
                 <div className="flex items-start justify-between gap-2">
                   <SheetTitle className="text-base leading-snug">
-                    Cobranza · {ficha.razon_social}
+                    {modo === "suscripcion" ? "Suscripción" : "Cobranza"} · {ficha.razon_social}
                   </SheetTitle>
                   <button
                     type="button"
@@ -209,7 +263,7 @@ export function TabCobranza({
                     <X className="size-4" />
                   </button>
                 </div>
-                <SheetDescription className="sr-only">Preparar correo de cobranza</SheetDescription>
+                <SheetDescription className="sr-only">Detalle de la deuda y correo</SheetDescription>
               </SheetHeader>
 
               <div className="space-y-5 p-4">
@@ -218,17 +272,11 @@ export function TabCobranza({
                   {ficha.correo ?? <span className="text-red-600">sin correo — cárgalo en la ficha del cliente</span>}
                   <br />
                   <span className="text-muted-foreground">
-                    El correo sale a tu nombre, con copia a tu buzón. Se adjuntan los PDF de las facturas seleccionadas.
+                    {modo === "suscripcion"
+                      ? "Cliente con suscripción: el correo avisa el problema de cobro e indica los datos de cuenta para regularizar."
+                      : "El correo sale a tu nombre, con copia a tu buzón. Se adjuntan los PDF seleccionados."}
                   </span>
                 </div>
-
-                {ficha.ncCount > 0 ? (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                    ⚠ Este cliente tiene <strong>{ficha.ncCount} nota(s) de crédito</strong> pendiente(s) por{" "}
-                    <strong>{montoCLP(Math.round(ficha.ncMonto))}</strong>. Las notas de crédito no se cobran;
-                    revisa si corresponde rebajarlas de la deuda antes de enviar.
-                  </div>
-                ) : null}
 
                 <div>
                   <label className={labelClase}>Mensaje (editable)</label>
@@ -239,12 +287,12 @@ export function TabCobranza({
                     className="w-full rounded-md border border-input bg-white px-2 py-1.5 text-xs shadow-xs focus:outline-2 focus:outline-ring/50"
                   />
                   <p className="mt-1 text-[10px] text-muted-foreground">
-                    Debajo del mensaje se agrega automáticamente el detalle de las facturas y el total.
+                    Debajo se agrega automáticamente el detalle de la deuda, el total y los datos de cuenta.
                   </p>
                 </div>
 
                 <div>
-                  <label className={labelClase}>Facturas a cobrar ({nSel} de {ficha.facturas.length})</label>
+                  <label className={labelClase}>Detalle de la deuda ({nSel} de {ficha.facturas.length})</label>
                   <div className="overflow-hidden rounded-lg border">
                     {ficha.facturas.map((f) => (
                       <label
@@ -263,7 +311,7 @@ export function TabCobranza({
                       </label>
                     ))}
                     <div className="flex items-center justify-between bg-muted/40 px-2.5 py-1.5 text-xs font-semibold">
-                      <span>Total a cobrar</span>
+                      <span>Total</span>
                       <span className="tabular-nums">{montoCLP(Math.round(totalSel))}</span>
                     </div>
                   </div>
@@ -272,7 +320,17 @@ export function TabCobranza({
                   </p>
                 </div>
 
-                {ficha.planLink ? (
+                <div>
+                  <label className={labelClase}>Datos de cuenta (editable)</label>
+                  <textarea
+                    value={cuenta}
+                    onChange={(e) => setCuenta(e.target.value)}
+                    rows={5}
+                    className="w-full rounded-md border border-input bg-white px-2 py-1.5 text-xs shadow-xs focus:outline-2 focus:outline-ring/50"
+                  />
+                </div>
+
+                {modo === "transfiere" && ficha.planLink ? (
                   <label className="flex items-start gap-2 rounded-lg border bg-white p-3 text-xs">
                     <input
                       type="checkbox"
@@ -283,9 +341,6 @@ export function TabCobranza({
                     <span>
                       Invitar a la <span className="font-semibold">suscripción de pago automático</span>
                       {ficha.planNombre ? ` (${ficha.planNombre})` : ""}.
-                      {ficha.suscrito ? (
-                        <span className="text-amber-700"> Este cliente ya figura como suscrito.</span>
-                      ) : null}
                     </span>
                   </label>
                 ) : null}
@@ -318,7 +373,11 @@ export function TabCobranza({
                 <div className="flex gap-2 border-t pt-4">
                   <Button size="sm" onClick={enviar} disabled={enviando || !ficha.correo || nSel === 0}>
                     <Mail className="size-4" />
-                    {enviando ? "Enviando…" : `Enviar cobranza`}
+                    {enviando
+                      ? "Enviando…"
+                      : modo === "suscripcion"
+                        ? "Enviar aviso de suscripción"
+                        : "Enviar cobranza"}
                   </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => setFichaId(null)}>
                     Cancelar

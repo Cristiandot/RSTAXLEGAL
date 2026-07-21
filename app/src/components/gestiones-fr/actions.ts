@@ -703,6 +703,8 @@ export async function enviarCobranza(input: {
   clienteId: string;
   facturaIds: string[];
   introHtml: string;
+  datosCuentaHtml: string;
+  modo: "transfiere" | "suscripcion";
   planNombre: string | null;
   planLink: string | null;
 }): Promise<{ ok: boolean; error?: string; enviadoA?: string }> {
@@ -752,9 +754,21 @@ export async function enviarCobranza(input: {
     .join("");
   const tabla = `<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;"><thead><tr><th style="padding:6px 10px;text-align:left;border-bottom:2px solid #0b2545;">Factura</th><th style="padding:6px 10px;text-align:left;border-bottom:2px solid #0b2545;">Período</th><th style="padding:6px 10px;text-align:right;border-bottom:2px solid #0b2545;">Monto</th></tr></thead><tbody>${filas}<tr><td colspan="2" style="padding:8px 10px;text-align:right;font-weight:bold;">Total a pagar</td><td style="padding:8px 10px;text-align:right;font-weight:bold;">${montoCLP(Math.round(total))}</td></tr></tbody></table>`;
 
-  const suscripcion = input.planLink
-    ? `<p style="margin:16px 0 0;">Para evitar estas gestiones mes a mes, te invitamos a activar el <strong>pago automático por suscripción</strong>${input.planNombre ? ` (${input.planNombre})` : ""}: <a href="${input.planLink}" style="color:#17A2B8;font-weight:bold;">Activar suscripción</a>.</p>`
-    : "";
+  const esSusc = input.modo === "suscripcion";
+  const cuenta =
+    input.datosCuentaHtml && input.datosCuentaHtml.trim()
+      ? `<div style="margin:16px 0;padding:12px 14px;background:#f3f5f9;border-radius:8px;font-size:14px;"><strong>Datos para la transferencia</strong><br>${input.datosCuentaHtml}</div>`
+      : "";
+  // La invitación a suscripción solo aplica a quienes transfieren (los suscritos ya la tienen).
+  const suscripcion =
+    !esSusc && input.planLink
+      ? `<p style="margin:16px 0 0;">Para evitar estas gestiones mes a mes, te invitamos a activar el <strong>pago automático por suscripción</strong>${input.planNombre ? ` (${input.planNombre})` : ""}: <a href="${input.planLink}" style="color:#17A2B8;font-weight:bold;">Activar suscripción</a>.</p>`
+      : "";
+
+  const titulo = esSusc ? "Regularización de suscripción" : "Estado de cuenta";
+  const asunto = esSusc
+    ? "Problema con tu suscripción — RS Tax & Legal"
+    : `Estado de cuenta — RS Tax & Legal (${facturas.length} ${facturas.length === 1 ? "factura pendiente" : "facturas pendientes"})`;
 
   const usuario = await getUsuarioActual();
   const {
@@ -764,11 +778,8 @@ export async function enviarCobranza(input: {
   const res = await enviarCorreo({
     para: destino,
     cc: await correosCopiaCliente([clienteId], [destino]),
-    asunto: `Estado de cuenta — RS Tax & Legal (${facturas.length} ${facturas.length === 1 ? "factura pendiente" : "facturas pendientes"})`,
-    html: htmlCorreoDocumento({
-      titulo: "Estado de cuenta",
-      cuerpo: `${input.introHtml}${tabla}${suscripcion}`,
-    }),
+    asunto,
+    html: htmlCorreoDocumento({ titulo, cuerpo: `${input.introHtml}${tabla}${cuenta}${suscripcion}` }),
     adjuntos,
     de: { nombre: usuario.nombre, correo: usuario.correo },
   });
@@ -780,7 +791,9 @@ export async function enviarCobranza(input: {
     folios: facturas.map((f) => f.folio as number),
     docs: facturas.length,
     total: Math.round(total),
-    asunto: `Estado de cuenta — ${facturas.length} doc(s)`,
+    asunto: esSusc
+      ? `Regularización suscripción — ${facturas.length} doc(s)`
+      : `Estado de cuenta — ${facturas.length} doc(s)`,
     enviado_por: user?.id ?? null,
   });
 
