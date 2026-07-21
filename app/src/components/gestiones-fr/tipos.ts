@@ -182,6 +182,13 @@ export type Requerimiento = {
   estado: string;
 };
 
+/** Propuesta de trabajo diaria (tabla propuesta_diaria_fr). */
+export type PropuestaDiaria = {
+  fecha: string;
+  contenido: string;
+  generada_at: string | null;
+};
+
 /** Evento copiado del calendario Outlook de Felipe (tabla agenda_externa). */
 export type AgendaEvento = {
   id: string;

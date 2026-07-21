@@ -17,6 +17,7 @@ import type {
   MetaCategoria,
   Pendiente,
   Posicion,
+  PropuestaDiaria,
   PuntoCrecimiento,
   Requerimiento,
 } from "./tipos";
@@ -37,11 +38,20 @@ export async function cargarGestionesFR(): Promise<{
   pendientes: Pendiente[];
   requerimientos: Requerimiento[];
   agenda: AgendaEvento[];
+  propuestas: PropuestaDiaria[];
 }> {
   const supabase = await createClient();
-  const vacio = { causas: [], contactos: [], cotizaciones: [], gestiones: [], pendientes: [], requerimientos: [], agenda: [] };
-  const [causasRes, contactosRes, cotizRes, gestionesRes, pendientesRes, requerimientosRes, agendaRes] =
-    await Promise.all([
+  const vacio = { causas: [], contactos: [], cotizaciones: [], gestiones: [], pendientes: [], requerimientos: [], agenda: [], propuestas: [] };
+  const [
+    causasRes,
+    contactosRes,
+    cotizRes,
+    gestionesRes,
+    pendientesRes,
+    requerimientosRes,
+    agendaRes,
+    propuestasRes,
+  ] = await Promise.all([
       supabase
         .from("gestion_causas_rs")
         .select("*, hitos:gestion_causas_hitos(id, causa_id, fecha, hora, detalle)")
@@ -68,6 +78,7 @@ export async function cargarGestionesFR(): Promise<{
         .eq("estado", "pendiente")
         .order("plazo", { ascending: true, nullsFirst: false }),
       supabase.from("agenda_externa").select("*").order("fecha", { ascending: true }),
+      supabase.from("propuesta_diaria_fr").select("*").order("fecha", { ascending: false }).limit(14),
     ]);
 
   const error =
@@ -77,7 +88,8 @@ export async function cargarGestionesFR(): Promise<{
     gestionesRes.error?.message ??
     pendientesRes.error?.message ??
     requerimientosRes.error?.message ??
-    agendaRes.error?.message;
+    agendaRes.error?.message ??
+    propuestasRes.error?.message;
   if (error) return { ok: false, error, ...vacio };
 
   return {
@@ -89,6 +101,7 @@ export async function cargarGestionesFR(): Promise<{
     pendientes: (pendientesRes.data ?? []) as Pendiente[],
     requerimientos: (requerimientosRes.data ?? []) as Requerimiento[],
     agenda: (agendaRes.data ?? []) as AgendaEvento[],
+    propuestas: (propuestasRes.data ?? []) as PropuestaDiaria[],
   };
 }
 

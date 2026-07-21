@@ -10,6 +10,7 @@ import type {
   Cotizacion,
   GestionLegal,
   Pendiente,
+  PropuestaDiaria,
 } from "./tipos";
 
 const AREA_COLOR: Record<string, string> = {
@@ -82,6 +83,7 @@ export function ModuloTimeBox({
   cotizaciones,
   pendientes,
   agenda,
+  propuestas,
 }: {
   causas: Causa[];
   gestiones: GestionLegal[];
@@ -89,8 +91,10 @@ export function ModuloTimeBox({
   cotizaciones: Cotizacion[];
   pendientes: Pendiente[];
   agenda: AgendaEvento[];
+  propuestas: PropuestaDiaria[];
 }) {
   const [dia, setDia] = useState<string>(hoyIso());
+  const propuesta = propuestas.find((p) => p.fecha === dia);
 
   const bloques = useMemo(() => {
     const items: Bloque[] = [];
@@ -156,6 +160,15 @@ export function ModuloTimeBox({
           <ChevronRight className="size-4" />
         </Button>
       </div>
+
+      {propuesta ? (
+        <div className="rounded-xl border-l-4 border-[var(--brand-teal,#17A2B8)] bg-accent/40 p-4">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            📋 Propuesta del día
+          </div>
+          <div className="text-sm leading-relaxed whitespace-pre-line">{propuesta.contenido}</div>
+        </div>
+      ) : null}
 
       {bloques.length === 0 ? (
         <div className="rounded-xl border bg-white py-12 text-center text-sm text-muted-foreground">

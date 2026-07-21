@@ -40,6 +40,7 @@ import type {
   DatosGerencia,
   GestionLegal,
   Pendiente,
+  PropuestaDiaria,
   Requerimiento,
 } from "@/components/gestiones-fr/tipos";
 
@@ -54,6 +55,7 @@ type Datos = {
   pendientes: Pendiente[];
   requerimientos: Requerimiento[];
   agenda: AgendaEvento[];
+  propuestas: PropuestaDiaria[];
 };
 
 type Modulo = "timebox" | "causas" | "gestiones" | "comercial" | "gerencia" | "pendientes";
@@ -98,6 +100,7 @@ export default function GestionesFelipe() {
       pendientes: res.pendientes,
       requerimientos: res.requerimientos,
       agenda: res.agenda,
+      propuestas: res.propuestas,
     });
     if (resGerencia.ok) setGerencia(resGerencia.datos);
     else toast.error(resGerencia.error ?? "No se pudo cargar Gerencia.");
@@ -331,6 +334,7 @@ export default function GestionesFelipe() {
           cotizaciones={datos.cotizaciones}
           pendientes={datos.pendientes}
           agenda={datos.agenda}
+          propuestas={datos.propuestas}
         />
       ) : modulo === "causas" ? (
         <ModuloCausas causas={datos.causas} agenda={datos.agenda} recargar={recargar} />
