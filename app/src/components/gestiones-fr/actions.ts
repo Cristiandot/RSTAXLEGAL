@@ -34,13 +34,17 @@ type Resultado = { ok: boolean; error?: string };
 /** Usuario Felipe Rodríguez (dueño de este panel), para filtrar sus requerimientos. */
 const FELIPE_ID = "a93e8f17-7f21-418a-9895-c612aa02dd0c";
 
-/** Extrae el valor UF de un plan de suscripción desde su monto ("1,2 UF") o nombre ("Plan UF 1,2"). */
-function parsePlanUF(monto: string | null, nombre: string | null): number | null {
+/** Valor en pesos de un plan de suscripción, desde su monto ("1,2 UF" o "$30.000"). */
+function planPesos(monto: string | null, nombre: string | null, uf: number): number | null {
   const src = `${monto ?? ""} ${nombre ?? ""}`;
-  const m = src.match(/(\d+(?:[.,]\d+)?)/);
+  if (src.includes("$")) {
+    const n = Number((src.match(/\$\s*([\d.]+)/)?.[1] ?? "").replace(/\./g, ""));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  const m = src.match(/(\d+(?:[.,]\d+)?)\s*UF/i) ?? src.match(/UF\s*(\d+(?:[.,]\d+)?)/i);
   if (!m) return null;
-  const x = Number(m[1].replace(",", "."));
-  return Number.isFinite(x) ? x : null;
+  const n = Number(m[1].replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? Math.round(n * uf) : null;
 }
 
 /** Carga todo el módulo de una vez (se llama al desbloquear la sección). */
@@ -552,12 +556,11 @@ export async function cargarGerencia(): Promise<
   ]);
 
   const planes = (links.data ?? [])
-    .map((l) => ({
-      uf: parsePlanUF(l.monto as string | null, l.nombre as string | null),
-      link: l.link as string,
-      nombre: l.nombre as string,
-    }))
-    .filter((p): p is { uf: number; link: string; nombre: string } => p.uf != null);
+    .map((l) => {
+      const pesos = planPesos(l.monto as string | null, l.nombre as string | null, ufActual);
+      return pesos != null ? { pesos, link: l.link as string, nombre: l.nombre as string } : null;
+    })
+    .filter((p): p is { pesos: number; link: string; nombre: string } => p != null);
 
   const enviosPorCliente = new Map<string, CobranzaEnvio[]>();
   for (const e of cobranzaLogRes.data ?? []) {
@@ -643,14 +646,14 @@ export async function cargarGerencia(): Promise<
     const fc = formaCount.get(cid)!;
     g.formaPago = fc.T === 0 && fc.S === 0 ? null : fc.S > fc.T ? "S" : "T";
 
-    // Sobre este monto por factura no se puede ofrecer suscripción (los planes
-    // MercadoPago llegan hasta UF 5): no se asigna plan → no se invita a suscribirse.
+    // Los planes MercadoPago llegan hasta $350.000 (≈ UF 8,5). Sobre ese monto por
+    // factura no se ofrece suscripción: no se asigna plan → no se invita a suscribirse.
+    // Se elige el plan (UF o pesos) cuyo valor en pesos sea el más cercano a la factura.
     const TOPE_SUSCRIPCION = 350_000;
     const montoRep = g.facturas.length ? Math.max(...g.facturas.map((f) => f.monto)) : 0;
-    const ufAprox = ufActual && montoRep ? montoRep / ufActual : null;
-    if (ufAprox != null && montoRep <= TOPE_SUSCRIPCION && planes.length) {
+    if (montoRep > 0 && montoRep <= TOPE_SUSCRIPCION && planes.length) {
       const mejor = planes.reduce((a, b) =>
-        Math.abs(b.uf - ufAprox) < Math.abs(a.uf - ufAprox) ? b : a,
+        Math.abs(b.pesos - montoRep) < Math.abs(a.pesos - montoRep) ? b : a,
       );
       g.planNombre = mejor.nombre;
       g.planLink = mejor.link;
