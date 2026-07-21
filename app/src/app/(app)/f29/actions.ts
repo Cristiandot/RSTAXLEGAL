@@ -10,6 +10,11 @@ import {
   construirCorreoF29Pagado,
   fechaLimitePostergacion,
 } from "@/lib/f29-correo";
+import {
+  generarUploadF29,
+  type CodigoF29,
+  type F29DocResumen,
+} from "@/lib/f29-txt";
 
 /** Marca "Observada" del F29 (único estado manual del semáforo del portal). */
 export async function getObservadaF29(clienteId: string, periodo: string): Promise<boolean> {
@@ -47,6 +52,102 @@ export async function marcarPostergadoPagado(
   if (error) return { ok: false, error: error.message };
   revalidatePath("/f29");
   return { ok: true };
+}
+
+/**
+ * Genera el archivo UPLOAD F29 (TXT del SII) de un ciclo: RCV del período por
+ * tipo de documento + desglose del panel (imp. único, retenciones, PPM). El
+ * contenido se devuelve al cliente para descargarlo como [RUT 8 díg].txt y
+ * cargarlo en sii.cl → Declarar y Pagar por Caja (F29) → Upload, donde el SII
+ * recalcula los totalizadores y la contadora valida antes de presentar.
+ */
+export async function generarTxtF29Sii(cicloId: string): Promise<
+  | {
+      ok: true;
+      nombreArchivo: string;
+      contenido: string;
+      codigos: CodigoF29[];
+      advertencias: string[];
+    }
+  | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+
+  const { data: ciclo, error: errCiclo } = await supabase
+    .from("ciclo_f29")
+    .select(
+      "cliente_id, periodo, monto_iva, imp_unico, monto_retenciones, ppm, monto_otros, iva_postergado, clientes(razon_social, rut_empresa)",
+    )
+    .eq("id", cicloId)
+    .single();
+  if (errCiclo || !ciclo) {
+    return { ok: false, error: errCiclo?.message ?? "Ciclo F29 no encontrado." };
+  }
+  const cli = ciclo.clientes as unknown as {
+    razon_social: string;
+    rut_empresa: string | null;
+  } | null;
+  if (!cli?.rut_empresa) {
+    return { ok: false, error: "El cliente no tiene RUT en su ficha." };
+  }
+
+  const { data: rcv, error: errRcv } = await supabase
+    .from("v_f29_upload_rcv")
+    .select("libro, tipo_doc, docs, docs_incompletos, neto, exento, iva, iva_activo_fijo, docs_activo_fijo, iva_no_recuperable, iva_uso_comun")
+    .eq("cliente_id", ciclo.cliente_id)
+    .eq("periodo", ciclo.periodo);
+  if (errRcv) return { ok: false, error: errRcv.message };
+
+  // Retención de honorarios según BHE recibidas (cuadratura del código 151).
+  const { data: bhe } = await supabase
+    .from("honorarios_periodo")
+    .select("retencion, estado")
+    .eq("cliente_id", ciclo.cliente_id)
+    .eq("periodo", ciclo.periodo);
+  const retencionBhe = (bhe ?? [])
+    .filter((b) => (b.estado ?? "") !== "ANULADA")
+    .reduce((s, b) => s + (Number(b.retencion) || 0), 0);
+
+  try {
+    const archivo = generarUploadF29({
+      rut: cli.rut_empresa,
+      razonSocial: cli.razon_social,
+      periodo: ciclo.periodo,
+      rcv: (rcv ?? []).map((d) => ({
+        ...d,
+        docs: Number(d.docs) || 0,
+        neto: Number(d.neto) || 0,
+        exento: Number(d.exento) || 0,
+        iva: Number(d.iva) || 0,
+        iva_activo_fijo: Number(d.iva_activo_fijo) || 0,
+        docs_activo_fijo: Number(d.docs_activo_fijo) || 0,
+        iva_no_recuperable: Number(d.iva_no_recuperable) || 0,
+        iva_uso_comun: Number(d.iva_uso_comun) || 0,
+      })) as F29DocResumen[],
+      impUnico: ciclo.imp_unico,
+      retenciones: ciclo.monto_retenciones,
+      ppm: ciclo.ppm,
+      montoIva: ciclo.monto_iva,
+      montoOtros: ciclo.monto_otros,
+      ivaPostergado: ciclo.iva_postergado,
+      retencionHonorariosBd: retencionBhe,
+    });
+    const advertencias = [...archivo.advertencias];
+    if ((rcv ?? []).length === 0) {
+      advertencias.unshift(
+        "No hay RCV cargado para este período: el TXT sale SIN el detalle de IVA (débitos/créditos). Baja el RCV del SII primero.",
+      );
+    }
+    return {
+      ok: true,
+      nombreArchivo: archivo.nombreArchivo,
+      contenido: archivo.contenido,
+      codigos: archivo.codigos,
+      advertencias,
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export type GuardarF29Input = {

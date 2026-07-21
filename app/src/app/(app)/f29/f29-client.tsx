@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, CheckCircle2, AlertTriangle, Send } from "lucide-react";
+import { Search, CheckCircle2, AlertTriangle, Send, FileDown } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { SelectorPeriodo } from "@/components/selector-periodo";
 import { comparar, type Orden } from "@/lib/ordenar";
@@ -21,6 +21,7 @@ import {
 import {
   enviarCorreoF29,
   enviarCorreoF29Pagado,
+  generarTxtF29Sii,
   guardarF29,
   getObservadaF29,
   marcarObservadaF29,
@@ -213,6 +214,79 @@ function motivoNoEnviable(c: F29Row): string {
   if (!(c.correo_empresa ?? "").trim())
     return "Falta el correo del cliente en la ficha (ábrelo y guárdalo).";
   return "";
+}
+
+/**
+ * Botón «Generar TXT F29 para SII»: arma el archivo UPLOAD F29 (RCV del período
+ * por tipo de documento + desglose GUARDADO del ciclo) y lo descarga como
+ * [RUT 8 dígitos].txt, listo para cargarlo en sii.cl → Impuestos Mensuales →
+ * Declarar y Pagar por Caja (F29 y F50) → tipo de ingreso Upload. El SII
+ * recalcula los totalizadores al cargar; las advertencias de cuadratura quedan
+ * visibles bajo el botón para revisarlas en pantalla antes de presentar.
+ */
+function TxtF29Sii({ cicloId }: { cicloId: string }) {
+  const [generando, setGenerando] = useState(false);
+  const [advertencias, setAdvertencias] = useState<string[]>([]);
+  const [resumen, setResumen] = useState<string | null>(null);
+
+  async function generar() {
+    setGenerando(true);
+    setAdvertencias([]);
+    setResumen(null);
+    const r = await generarTxtF29Sii(cicloId);
+    setGenerando(false);
+    if (!r.ok) {
+      toast.error(r.error ?? "No se pudo generar el TXT del F29");
+      return;
+    }
+    const url = URL.createObjectURL(
+      new Blob([r.contenido], { type: "text/plain;charset=ascii" }),
+    );
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = r.nombreArchivo;
+    a.click();
+    URL.revokeObjectURL(url);
+    setAdvertencias(r.advertencias);
+    setResumen(`${r.nombreArchivo} · ${r.codigos.length} códigos`);
+    toast.success(`TXT F29 generado: ${r.nombreArchivo}`);
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-indigo-200 pt-2">
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={generar}
+          disabled={generando}
+        >
+          <FileDown className="size-4" />
+          {generando ? "Generando…" : "Generar TXT F29 para SII"}
+        </Button>
+        {resumen && (
+          <span className="text-xs text-muted-foreground">{resumen}</span>
+        )}
+      </div>
+      <span className="text-xs text-muted-foreground">
+        Arma el archivo Upload con el RCV del período y el detalle GUARDADO
+        (guarda primero si cambiaste algo). Se carga en sii.cl → Declarar y
+        Pagar por Caja (F29) → Upload; ahí el SII recalcula los totales y
+        validas antes de presentar.
+      </span>
+      {advertencias.length > 0 && (
+        <ul className="flex flex-col gap-1 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+          {advertencias.map((a, i) => (
+            <li key={i} className="flex gap-1.5">
+              <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+              <span>{a}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function claseEstadoSii(id: number | null): string {
@@ -1348,6 +1422,7 @@ export function F29Client({
                   el F29 pasa a «Declarado, folio pendiente» (para no olvidar cargar
                   el folio después). No es necesario para enviar el aviso.
                 </span>
+                <TxtF29Sii cicloId={editando.ciclo_id} />
               </div>
 
               {/* Paso 3 — el cliente transfirió los fondos a la oficina. */}
