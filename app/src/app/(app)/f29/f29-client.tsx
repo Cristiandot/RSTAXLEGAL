@@ -218,6 +218,14 @@ function SiiCelda({ fila }: { fila: F29Row }) {
         </span>
       )}
       {aviso && <span className="text-[11px] text-amber-600">{aviso}</span>}
+      {declarada && fila.sii_pagado === true && (
+        <span className="text-[11px] text-emerald-600">
+          pagado {formatFecha(fila.sii_pago_fecha)}
+        </span>
+      )}
+      {declarada && fila.sii_pagado === false && (
+        <span className="text-[11px] text-red-600">sin pago en SII</span>
+      )}
     </div>
   );
 }

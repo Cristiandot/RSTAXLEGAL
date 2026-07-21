@@ -122,6 +122,10 @@ export type F29Row = {
   sii_monto: number | string | null; // monto declarado según el SII
   sii_declarada: boolean | null; // true si el SII lo tiene Vigente
   sii_sincronizado_en: string | null; // última vez que se bajó del SII
+  // Comprobante de pago del SII (getComprobantePec) — pagó-total vs postergó/impago.
+  sii_pagado: boolean | null; // true=pagado en el SII; false=declarado sin pago; null=no consultado
+  sii_pago_fecha: string | null; // fecha de pago (YYYY-MM-DD)
+  sii_pago_monto: number | string | null; // monto pagado según el SII
 };
 
 /** Fila de `v_iva_postergado`: seguimiento de cobro del IVA postergado. */
