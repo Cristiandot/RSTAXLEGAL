@@ -98,15 +98,23 @@ export async function generarTxtF29Sii(cicloId: string): Promise<
     .eq("periodo", ciclo.periodo);
   if (errRcv) return { ok: false, error: errRcv.message };
 
-  // Retención de honorarios según BHE recibidas (cuadratura del código 151).
+  // Retención del código 151 (Art. 74 N°2) = BHE recibidas + BTE emitidas
+  // (boletas de terceros que emite la empresa): ambas son retención del emisor.
   const { data: bhe } = await supabase
     .from("honorarios_periodo")
     .select("retencion, estado")
     .eq("cliente_id", ciclo.cliente_id)
     .eq("periodo", ciclo.periodo);
-  const retencionBhe = (bhe ?? [])
-    .filter((b) => (b.estado ?? "") !== "ANULADA")
-    .reduce((s, b) => s + (Number(b.retencion) || 0), 0);
+  const { data: bteEmi } = await supabase
+    .from("bte_emitidas")
+    .select("retencion, estado")
+    .eq("cliente_id", ciclo.cliente_id)
+    .eq("periodo", ciclo.periodo);
+  const sumaRet = (rows: { retencion: number | null; estado: string | null }[] | null) =>
+    (rows ?? [])
+      .filter((b) => (b.estado ?? "") !== "ANULADA")
+      .reduce((s, b) => s + (Number(b.retencion) || 0), 0);
+  const retencionBhe = sumaRet(bhe) + sumaRet(bteEmi);
 
   try {
     const archivo = generarUploadF29({

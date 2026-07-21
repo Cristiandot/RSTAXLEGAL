@@ -342,7 +342,7 @@ export function construirCodigosF29(datos: DatosF29): {
     redondear(retenciones) !== redondear(Number(retBd))
   ) {
     adv.push(
-      `Las retenciones del panel ($${retenciones.toLocaleString("es-CL")}) no cuadran con la retención de las BHE recibidas ($${Number(retBd).toLocaleString("es-CL")}): confirma el código 151.`,
+      `Las retenciones del panel ($${retenciones.toLocaleString("es-CL")}) no cuadran con la retención de BHE recibidas + BTE emitidas ($${Number(retBd).toLocaleString("es-CL")}): confirma el código 151.`,
     );
   }
 
