@@ -212,8 +212,11 @@ export function ModuloPendientes({
               Sin pendientes propios. Agrega uno o revisa los de abajo.
             </p>
           ) : (
-            manualesPend.map((p) => (
+            manualesPend.map((p, i) => (
               <div key={p.id} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
+                <span className="w-5 shrink-0 text-right text-[11px] font-semibold tabular-nums text-muted-foreground">
+                  {i + 1}
+                </span>
                 <button
                   type="button"
                   onClick={() => ejecutar(() => togglePendiente(p.id, true), "Marcado como hecho.")}
