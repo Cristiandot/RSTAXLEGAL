@@ -78,9 +78,12 @@ export async function enviarCorreo({
 export function htmlCorreoDocumento({
   titulo,
   cuerpo,
+  pie,
 }: {
   titulo: string;
   cuerpo: string;
+  /** Texto del pie de página. Si se omite, usa el genérico de la firma. */
+  pie?: string;
 }): string {
   return `<!doctype html>
 <html lang="es"><body style="margin:0;padding:0;background:#f3f5f9;font-family:Arial,Helvetica,sans-serif;">
@@ -92,8 +95,7 @@ export function htmlCorreoDocumento({
       <h1 style="font-size:18px;margin:0 0 12px;">${titulo}</h1>
       ${cuerpo}
       <p style="margin:20px 0 0;color:#64748b;font-size:12px;">
-        Este correo fue enviado por RS Tax &amp; Legal. Si tienes dudas, responde
-        directamente a tu ejecutivo o escríbenos.
+        ${pie ?? "Este correo fue enviado por RS Tax &amp; Legal. Si tienes dudas, responde directamente a tu ejecutivo o escríbenos."}
       </p>
     </div>
     <p style="text-align:center;color:#94a3b8;font-size:11px;margin-top:14px;">

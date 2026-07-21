@@ -789,7 +789,11 @@ export async function enviarCobranza(input: {
     para: destino,
     cc: await correosCopiaCliente([clienteId], [destino]),
     asunto,
-    html: htmlCorreoDocumento({ titulo, cuerpo: `${input.introHtml}${tabla}${cuenta}${suscripcion}` }),
+    html: htmlCorreoDocumento({
+      titulo,
+      cuerpo: `${input.introHtml}${tabla}${cuenta}${suscripcion}`,
+      pie: "Este correo fue enviado por RS Tax &amp; Legal y generado de manera automática. Si tiene alguna duda, favor comunicarse al número +56 9 7392 8662.",
+    }),
     adjuntos,
     de: { nombre: usuario.nombre, correo: usuario.correo },
   });

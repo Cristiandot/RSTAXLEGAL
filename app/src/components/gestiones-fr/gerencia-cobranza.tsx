@@ -26,7 +26,7 @@ function fechaCorta(iso: string | null): string {
 }
 
 const INTRO_TRANSFIERE =
-  "Estimados,\n\nJunto con saludar, compartimos el estado de cuenta de los honorarios pendientes de pago a la fecha. Agradeceremos regularizar el saldo indicado mediante transferencia a la cuenta que se detalla; se adjuntan las facturas correspondientes.\n\nQuedamos atentos a cualquier consulta.";
+  "Estimado Cliente,\n\nJunto con saludar, compartimos el estado de cuenta de los honorarios pendientes a la fecha. Agradeceremos gestionar el saldo indicado mediante transferencia a la cuenta que se detalla; se adjuntan las facturas correspondientes.\n\nQuedamos atentos a cualquier consulta.";
 
 const INTRO_SUSCRIPCION =
   "Estimados,\n\nDetectamos un problema con el cobro automático de su suscripción, por lo que los siguientes documentos quedaron pendientes de pago. Mientras normalizamos el cobro automático, agradeceremos regularizar el saldo mediante transferencia a la cuenta que se indica más abajo; se adjuntan las facturas correspondientes.\n\nQuedamos atentos a cualquier consulta.";
