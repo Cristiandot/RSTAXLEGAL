@@ -55,7 +55,10 @@ export async function cargarGestionesFR(): Promise<{
         .from("gestion_legal_rs")
         .select("*, hitos:gestion_legal_hitos(id, gestion_id, fecha, detalle)")
         .order("created_at", { ascending: true }),
-      supabase.from("pendientes_fr").select("*").order("created_at", { ascending: true }),
+      supabase
+        .from("pendientes_fr")
+        .select("*, hitos:pendientes_fr_hitos(id, pendiente_id, fecha, detalle)")
+        .order("created_at", { ascending: true }),
       supabase
         .from("tareas_oficina")
         .select("id, titulo, detalle, canal, plazo, estado")
@@ -234,6 +237,32 @@ export async function crearPendiente(input: {
   if (!input.titulo.trim()) return { ok: false, error: "El título es obligatorio." };
   const supabase = await createClient();
   const { error } = await supabase.from("pendientes_fr").insert(input);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function actualizarPendiente(
+  id: string,
+  patch: Partial<Pick<Pendiente, "titulo" | "detalle" | "area" | "fecha">>,
+): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("pendientes_fr")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function agregarHitoPendiente(
+  pendienteId: string,
+  fecha: string,
+  detalle: string,
+): Promise<Resultado> {
+  if (!fecha || !detalle.trim())
+    return { ok: false, error: "Fecha y detalle son obligatorios." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("pendientes_fr_hitos")
+    .insert({ pendiente_id: pendienteId, fecha, detalle: detalle.trim() });
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 

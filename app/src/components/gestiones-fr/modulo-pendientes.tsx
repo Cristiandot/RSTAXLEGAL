@@ -2,11 +2,25 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Check, Plus, Trash2, X } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { crearPendiente, eliminarPendiente, terminarRequerimiento, togglePendiente } from "./actions";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  actualizarPendiente,
+  agregarHitoPendiente,
+  crearPendiente,
+  eliminarPendiente,
+  terminarRequerimiento,
+  togglePendiente,
+} from "./actions";
 import {
   AREAS_PENDIENTE,
   AREA_PENDIENTE_LABEL,
@@ -21,6 +35,8 @@ import {
 const selectClase =
   "h-8 rounded-md border border-input bg-white px-2 text-xs shadow-xs focus:outline-2 focus:outline-ring/50";
 const labelClase = "mb-1 block text-[11px] font-semibold text-muted-foreground";
+const campoInput =
+  "h-8 w-full rounded-md border border-input bg-white px-2 text-xs shadow-xs focus:outline-2 focus:outline-ring/50";
 
 const AREA_COLOR: Record<string, string> = {
   causas: "#3b82f6",
@@ -83,6 +99,10 @@ export function ModuloPendientes({
   const [pendiente, startTransition] = useTransition();
   const [form, setForm] = useState(false);
   const [mostrarTodos, setMostrarTodos] = useState(false);
+  const [fichaId, setFichaId] = useState<string | null>(null);
+
+  const ficha = fichaId ? (pendientes.find((p) => p.id === fichaId) ?? null) : null;
+  const hitosFicha = ficha ? [...ficha.hitos].sort((a, b) => (a.fecha < b.fecha ? -1 : 1)) : [];
 
   const manualesPend = useMemo(() => pendientes.filter((p) => !p.hecho), [pendientes]);
   const manualesHechos = useMemo(() => pendientes.filter((p) => p.hecho), [pendientes]);
@@ -93,10 +113,9 @@ export function ModuloPendientes({
     for (const c of causas) {
       if (c.estado === "cerrada") continue;
       const quien = c.cliente ?? c.caratula;
+      // Solo la próxima gestión de la causa es pendiente; las audiencias no.
       if (c.proxima_gestion_fecha)
         items.push({ key: `c-g-${c.id}`, fecha: c.proxima_gestion_fecha, titulo: quien, area: "causas", detalle: c.proxima_gestion_detalle ?? "Próxima gestión" });
-      if (c.proxima_audiencia_fecha)
-        items.push({ key: `c-a-${c.id}`, fecha: c.proxima_audiencia_fecha, titulo: quien, area: "causas", detalle: c.proxima_audiencia_tipo ?? "Audiencia" });
     }
     for (const g of gestiones) {
       if (g.estado === "Terminada") continue;
@@ -133,6 +152,19 @@ export function ModuloPendientes({
       toast.success(exito);
       await recargar();
     });
+  }
+
+  function guardarPendiente(id: string, patch: Parameters<typeof actualizarPendiente>[1], exito: string) {
+    ejecutar(() => actualizarPendiente(id, patch), exito);
+  }
+
+  function enviarHitoPendiente(pid: string, f: HTMLFormElement) {
+    const fd = new FormData(f);
+    ejecutar(
+      () => agregarHitoPendiente(pid, (fd.get("fecha") as string) ?? "", (fd.get("detalle") as string) ?? ""),
+      "Anotación agregada.",
+    );
+    f.reset();
   }
 
   function enviarPendiente(f: HTMLFormElement) {
@@ -226,12 +258,20 @@ export function ModuloPendientes({
                 >
                   <Check className="size-3.5 text-muted-foreground/25 group-hover:text-teal-600" />
                 </button>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{p.titulo}</div>
+                <button
+                  type="button"
+                  onClick={() => setFichaId(p.id)}
+                  className="min-w-0 flex-1 text-left"
+                  title="Abrir ficha"
+                >
+                  <div className="truncate text-sm font-medium hover:underline">{p.titulo}</div>
                   {p.detalle ? (
                     <div className="truncate text-[11px] text-muted-foreground">{p.detalle}</div>
                   ) : null}
-                </div>
+                </button>
+                {p.hitos.length > 0 ? (
+                  <span className="shrink-0 text-[11px] text-muted-foreground">📌 {p.hitos.length}</span>
+                ) : null}
                 <AreaTag area={p.area} />
                 <Fecha fecha={p.fecha} />
                 <button
@@ -369,10 +409,151 @@ export function ModuloPendientes({
           )}
         </div>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          Muestra los próximos {VENTANA_DIAS} días (y lo vencido); el resto queda oculto. Se arma solo
-          con las próximas fechas de cada área; edítalas en su pestaña.
+          Próximas gestiones de causas, gestiones y prospección (las audiencias no son pendientes).
+          Muestra los próximos {VENTANA_DIAS} días y lo vencido; edítalas en su pestaña.
         </p>
       </section>
+
+      {/* ===== Ficha del pendiente ===== */}
+      <Sheet open={!!fichaId} onOpenChange={(o) => !o && setFichaId(null)}>
+        <SheetContent side="right" className="w-full gap-0 overflow-y-auto p-0 sm:!max-w-lg">
+          {ficha ? (
+            <>
+              <SheetHeader className="border-b">
+                <div className="flex items-start justify-between gap-2">
+                  <SheetTitle className="text-base leading-snug">
+                    Pendiente N° {ficha.numero}
+                  </SheetTitle>
+                  <button
+                    type="button"
+                    onClick={() => setFichaId(null)}
+                    className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted"
+                    aria-label="Cerrar"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+                <SheetDescription className="sr-only">Ficha del pendiente</SheetDescription>
+              </SheetHeader>
+
+              <div className="space-y-5 p-4">
+                <div>
+                  <label className={labelClase}>Título</label>
+                  <input
+                    key={`t-${ficha.id}-${ficha.titulo}`}
+                    type="text"
+                    defaultValue={ficha.titulo}
+                    onBlur={(e) => {
+                      const val = e.target.value.trim();
+                      if (val && val !== ficha.titulo)
+                        guardarPendiente(ficha.id, { titulo: val }, "Título actualizado.");
+                    }}
+                    className={campoInput}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelClase}>Área</label>
+                    <select
+                      value={ficha.area}
+                      onChange={(e) => guardarPendiente(ficha.id, { area: e.target.value }, "Área actualizada.")}
+                      className={campoInput}
+                    >
+                      {AREAS_PENDIENTE.map((a) => (
+                        <option key={a} value={a}>
+                          {AREA_PENDIENTE_LABEL[a] ?? a}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelClase}>Vencimiento</label>
+                    <input
+                      key={`f-${ficha.id}-${ficha.fecha ?? ""}`}
+                      type="date"
+                      defaultValue={ficha.fecha ?? ""}
+                      onBlur={(e) => {
+                        const val = e.target.value || null;
+                        if (val !== (ficha.fecha ?? null))
+                          guardarPendiente(ficha.id, { fecha: val }, "Vencimiento actualizado.");
+                      }}
+                      className={campoInput}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={labelClase}>Detalle</label>
+                  <textarea
+                    key={`d-${ficha.id}`}
+                    defaultValue={ficha.detalle ?? ""}
+                    rows={2}
+                    placeholder="Detalle…"
+                    onBlur={(e) => {
+                      const val = e.target.value.trim() || null;
+                      if (val !== (ficha.detalle ?? null))
+                        guardarPendiente(ficha.id, { detalle: val }, "Detalle actualizado.");
+                    }}
+                    className="w-full rounded-md border border-input bg-white px-2 py-1.5 text-xs shadow-xs focus:outline-2 focus:outline-ring/50"
+                  />
+                </div>
+
+                <section>
+                  <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Bitácora
+                  </h4>
+                  <div className="border-l-[3px] border-[var(--brand-teal,#17A2B8)] pl-3">
+                    {hitosFicha.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">Sin anotaciones todavía.</p>
+                    ) : (
+                      hitosFicha.map((h) => (
+                        <div key={h.id} className="flex gap-3 py-0.5 text-xs">
+                          <span className="w-20 shrink-0 font-bold text-teal-700">
+                            {formatFecha(h.fecha)}
+                          </span>
+                          <span>{h.detalle}</span>
+                        </div>
+                      ))
+                    )}
+                    <form
+                      className="mt-2 flex flex-wrap items-center gap-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        enviarHitoPendiente(ficha.id, e.currentTarget);
+                      }}
+                    >
+                      <Input name="fecha" type="date" required className="h-8 w-36 text-xs" />
+                      <Input
+                        name="detalle"
+                        required
+                        placeholder="Anotación…"
+                        className="h-8 min-w-48 flex-1 text-xs"
+                      />
+                      <Button type="submit" size="sm" disabled={pendiente}>
+                        + Anotar
+                      </Button>
+                    </form>
+                  </div>
+                </section>
+
+                <div className="flex gap-2 border-t pt-4">
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      ejecutar(() => togglePendiente(ficha.id, true), "Marcado como hecho.")
+                    }
+                    disabled={pendiente}
+                  >
+                    <Check className="size-4" />
+                    Dar por terminado
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

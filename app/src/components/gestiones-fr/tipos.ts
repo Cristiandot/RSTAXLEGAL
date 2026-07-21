@@ -146,7 +146,14 @@ export const ESTADO_GESTION_COLOR: Record<string, string> = {
 
 // ===================== Pendientes =====================
 
-/** Pendiente manual propio del panel (tabla pendientes_fr). */
+export type HitoPendiente = {
+  id: string;
+  pendiente_id: string;
+  fecha: string;
+  detalle: string;
+};
+
+/** Pendiente manual propio del panel (tabla pendientes_fr). `fecha` = vencimiento. */
 export type Pendiente = {
   id: string;
   numero: number;
@@ -155,6 +162,7 @@ export type Pendiente = {
   area: string;
   fecha: string | null;
   hecho: boolean;
+  hitos: HitoPendiente[];
 };
 
 /** Requerimiento del equipo asignado a Felipe (espejo de tareas_oficina). */
