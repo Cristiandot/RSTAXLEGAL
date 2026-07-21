@@ -643,9 +643,12 @@ export async function cargarGerencia(): Promise<
     const fc = formaCount.get(cid)!;
     g.formaPago = fc.T === 0 && fc.S === 0 ? null : fc.S > fc.T ? "S" : "T";
 
-    const ufAprox =
-      ufActual && g.facturas.length ? Math.max(...g.facturas.map((f) => f.monto)) / ufActual : null;
-    if (ufAprox != null && planes.length) {
+    // Sobre este monto por factura no se puede ofrecer suscripción (los planes
+    // MercadoPago llegan hasta UF 5): no se asigna plan → no se invita a suscribirse.
+    const TOPE_SUSCRIPCION = 350_000;
+    const montoRep = g.facturas.length ? Math.max(...g.facturas.map((f) => f.monto)) : 0;
+    const ufAprox = ufActual && montoRep ? montoRep / ufActual : null;
+    if (ufAprox != null && montoRep <= TOPE_SUSCRIPCION && planes.length) {
       const mejor = planes.reduce((a, b) =>
         Math.abs(b.uf - ufAprox) < Math.abs(a.uf - ufAprox) ? b : a,
       );
