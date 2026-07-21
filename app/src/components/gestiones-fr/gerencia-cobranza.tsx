@@ -262,6 +262,31 @@ export function TabCobranza({
                   </label>
                 ) : null}
 
+                <section>
+                  <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Historial de cobros ({ficha.envios.length})
+                  </h4>
+                  {ficha.envios.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">Sin cobros enviados aún.</p>
+                  ) : (
+                    <div className="overflow-hidden rounded-lg border">
+                      {ficha.envios.map((e, i) => (
+                        <div
+                          key={`${e.created_at}-${i}`}
+                          className="flex items-center gap-2 border-b px-2.5 py-1.5 text-xs last:border-b-0"
+                        >
+                          <span className="w-24 shrink-0 font-medium text-teal-700">{fechaCorta(e.created_at)}</span>
+                          <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                            {e.docs} doc{e.docs === 1 ? "" : "s"}
+                            {e.correo ? ` · ${e.correo}` : ""}
+                          </span>
+                          <span className="shrink-0 font-medium tabular-nums">{montoCLP(Math.round(e.total))}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
                 <div className="flex gap-2 border-t pt-4">
                   <Button size="sm" onClick={enviar} disabled={enviando || !ficha.correo || nSel === 0}>
                     <Mail className="size-4" />

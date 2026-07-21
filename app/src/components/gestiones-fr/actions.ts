@@ -12,6 +12,7 @@ import type {
   CarteraItem,
   Causa,
   CobranzaCliente,
+  CobranzaEnvio,
   Contacto,
   Cotizacion,
   DatosGerencia,
@@ -546,7 +547,7 @@ export async function cargarGerencia(): Promise<
       .not("cliente_id", "is", null),
     supabase
       .from("gerencia_cobranza_envios")
-      .select("cliente_id, created_at")
+      .select("cliente_id, created_at, correo, docs, total, folios")
       .order("created_at", { ascending: false }),
   ]);
 
@@ -558,10 +559,18 @@ export async function cargarGerencia(): Promise<
     }))
     .filter((p): p is { uf: number; link: string; nombre: string } => p.uf != null);
 
-  const ultimoEnvio = new Map<string, string>();
+  const enviosPorCliente = new Map<string, CobranzaEnvio[]>();
   for (const e of cobranzaLogRes.data ?? []) {
-    if (e.cliente_id && !ultimoEnvio.has(e.cliente_id as string))
-      ultimoEnvio.set(e.cliente_id as string, e.created_at as string);
+    const cid = e.cliente_id as string | null;
+    if (!cid) continue;
+    if (!enviosPorCliente.has(cid)) enviosPorCliente.set(cid, []);
+    enviosPorCliente.get(cid)!.push({
+      created_at: e.created_at as string,
+      correo: (e.correo as string) ?? "",
+      docs: num(e.docs),
+      total: num(e.total),
+      folios: (e.folios as number[]) ?? [],
+    });
   }
 
   const porCliente = new Map<string, CobranzaCliente>();
@@ -584,7 +593,8 @@ export async function cargarGerencia(): Promise<
         suscrito: !!cli?.suscripcion_pago,
         planNombre: null,
         planLink: null,
-        ultimoEnvio: ultimoEnvio.get(cid) ?? null,
+        ultimoEnvio: enviosPorCliente.get(cid)?.[0]?.created_at ?? null,
+        envios: enviosPorCliente.get(cid) ?? [],
       });
     }
     const g = porCliente.get(cid)!;

@@ -387,6 +387,15 @@ export type CobranzaFactura = {
   tipo: string | null;
 };
 
+/** Un correo de cobranza ya enviado (tabla gerencia_cobranza_envios). */
+export type CobranzaEnvio = {
+  created_at: string;
+  correo: string;
+  docs: number;
+  total: number;
+  folios: number[];
+};
+
 /** Un cliente con facturas RS impagas, agrupado para el correo de cobranza. */
 export type CobranzaCliente = {
   cliente_id: string;
@@ -399,6 +408,7 @@ export type CobranzaCliente = {
   planNombre: string | null; // plan de suscripción sugerido según UF
   planLink: string | null;
   ultimoEnvio: string | null; // created_at del último correo de cobranza enviado
+  envios: CobranzaEnvio[]; // historial de cobros enviados (desc)
 };
 
 export type DatosGerencia = {
