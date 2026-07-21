@@ -33,6 +33,7 @@ import { ModuloGestiones } from "@/components/gestiones-fr/modulo-gestiones";
 import { ModuloPendientes } from "@/components/gestiones-fr/modulo-pendientes";
 import { ModuloTimeBox } from "@/components/gestiones-fr/modulo-timebox";
 import type {
+  AgendaEvento,
   Causa,
   Contacto,
   Cotizacion,
@@ -52,6 +53,7 @@ type Datos = {
   gestiones: GestionLegal[];
   pendientes: Pendiente[];
   requerimientos: Requerimiento[];
+  agenda: AgendaEvento[];
 };
 
 type Modulo = "timebox" | "causas" | "gestiones" | "comercial" | "gerencia" | "pendientes";
@@ -95,6 +97,7 @@ export default function GestionesFelipe() {
       gestiones: res.gestiones,
       pendientes: res.pendientes,
       requerimientos: res.requerimientos,
+      agenda: res.agenda,
     });
     if (resGerencia.ok) setGerencia(resGerencia.datos);
     else toast.error(resGerencia.error ?? "No se pudo cargar Gerencia.");
@@ -327,9 +330,10 @@ export default function GestionesFelipe() {
           contactos={datos.contactos}
           cotizaciones={datos.cotizaciones}
           pendientes={datos.pendientes}
+          agenda={datos.agenda}
         />
       ) : modulo === "causas" ? (
-        <ModuloCausas causas={datos.causas} recargar={recargar} />
+        <ModuloCausas causas={datos.causas} agenda={datos.agenda} recargar={recargar} />
       ) : modulo === "gestiones" ? (
         <ModuloGestiones gestiones={datos.gestiones} recargar={recargar} />
       ) : modulo === "comercial" ? (

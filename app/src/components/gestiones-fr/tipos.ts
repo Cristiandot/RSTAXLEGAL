@@ -182,6 +182,16 @@ export type Requerimiento = {
   estado: string;
 };
 
+/** Evento copiado del calendario Outlook de Felipe (tabla agenda_externa). */
+export type AgendaEvento = {
+  id: string;
+  fecha: string;
+  hora: string | null;
+  fin_hora: string | null;
+  titulo: string;
+  ubicacion: string | null;
+};
+
 export const AREAS_PENDIENTE = ["causas", "gestiones", "prospeccion", "gerencia", "otro"] as const;
 
 export const AREA_PENDIENTE_LABEL: Record<string, string> = {

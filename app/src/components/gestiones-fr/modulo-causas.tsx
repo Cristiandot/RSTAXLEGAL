@@ -22,6 +22,7 @@ import {
   ESTADO_COLOR,
   MATERIAS_CAUSA,
   TRIBUNALES_CAUSA,
+  type AgendaEvento,
   type Causa,
 } from "./tipos";
 
@@ -95,9 +96,11 @@ function Campo({ label, value }: { label: string; value: string | null }) {
 
 export function ModuloCausas({
   causas,
+  agenda,
   recargar,
 }: {
   causas: Causa[];
+  agenda: AgendaEvento[];
   recargar: () => Promise<void>;
 }) {
   const [pendiente, startTransition] = useTransition();
@@ -138,8 +141,15 @@ export function ModuloCausas({
           id: c.id,
         });
     }
+    for (const a of agenda) {
+      evs.push({
+        fecha: a.fecha,
+        clase: "agenda",
+        texto: `${a.hora ? a.hora + " " : ""}${a.titulo}`,
+      });
+    }
     return evs;
-  }, [causas]);
+  }, [causas, agenda]);
 
   const causasFiltradas = useMemo(() => {
     const porMateria =
@@ -242,6 +252,7 @@ export function ModuloCausas({
         <LeyendaCalendario
           items={[
             { color: "bg-red-500", label: "Audiencia / gestión" },
+            { color: "bg-indigo-400", label: "Mi calendario" },
             { color: "bg-rose-300", label: "Feriado" },
             { color: "bg-[var(--brand-teal,#17A2B8)]", label: "Hoy" },
           ]}

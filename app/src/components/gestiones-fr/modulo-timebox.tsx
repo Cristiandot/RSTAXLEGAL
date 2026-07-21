@@ -3,7 +3,14 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Causa, Contacto, Cotizacion, GestionLegal, Pendiente } from "./tipos";
+import type {
+  AgendaEvento,
+  Causa,
+  Contacto,
+  Cotizacion,
+  GestionLegal,
+  Pendiente,
+} from "./tipos";
 
 const AREA_COLOR: Record<string, string> = {
   audiencia: "#3b82f6",
@@ -11,6 +18,7 @@ const AREA_COLOR: Record<string, string> = {
   gestiones: "#10b981",
   prospeccion: "#a855f7",
   pendiente: "#64748b",
+  agenda: "#6366f1",
 };
 const AREA_LABEL: Record<string, string> = {
   audiencia: "Audiencia",
@@ -18,6 +26,7 @@ const AREA_LABEL: Record<string, string> = {
   gestiones: "Gestión",
   prospeccion: "Prospección",
   pendiente: "Pendiente",
+  agenda: "Mi calendario",
 };
 
 function pad(n: number) {
@@ -72,12 +81,14 @@ export function ModuloTimeBox({
   contactos,
   cotizaciones,
   pendientes,
+  agenda,
 }: {
   causas: Causa[];
   gestiones: GestionLegal[];
   contactos: Contacto[];
   cotizaciones: Cotizacion[];
   pendientes: Pendiente[];
+  agenda: AgendaEvento[];
 }) {
   const [dia, setDia] = useState<string>(hoyIso());
 
@@ -109,8 +120,12 @@ export function ModuloTimeBox({
       if (q.proxima_accion_fecha === dia)
         items.push({ key: `pq-${q.id}`, hora: null, titulo: q.destinatario, area: "prospeccion", detalle: q.proxima_accion_detalle ?? "Próxima acción" });
     }
+    for (const a of agenda) {
+      if (a.fecha === dia)
+        items.push({ key: `ag-${a.id}`, hora: a.hora, titulo: a.titulo, area: "agenda", detalle: a.ubicacion ?? "" });
+    }
     return items;
-  }, [causas, gestiones, contactos, cotizaciones, pendientes, dia]);
+  }, [causas, gestiones, contactos, cotizaciones, pendientes, agenda, dia]);
 
   const sinHora = bloques.filter((b) => !b.hora).sort((a, b) => a.titulo.localeCompare(b.titulo));
   const conHora = bloques.filter((b) => b.hora).sort((a, b) => (a.hora! < b.hora! ? -1 : 1));

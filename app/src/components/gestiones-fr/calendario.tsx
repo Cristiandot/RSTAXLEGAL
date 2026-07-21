@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 export type EventoCalendario = {
   /** ISO YYYY-MM-DD */
   fecha: string;
-  clase: "causa" | "fatal" | "prosp" | "cotiz";
+  clase: "causa" | "fatal" | "prosp" | "cotiz" | "agenda";
   texto: string;
   /** Id de la entidad de origen (causa, cotización…) para navegar al detalle. */
   id?: string;
@@ -22,6 +22,7 @@ const CLASE_CHIP: Record<EventoCalendario["clase"], string> = {
   fatal: "border-l-red-900 bg-red-600 font-semibold text-white",
   prosp: "border-l-violet-500 bg-violet-50 text-violet-800",
   cotiz: "border-l-sky-600 bg-sky-50 text-sky-800",
+  agenda: "border-l-indigo-500 bg-indigo-50 text-indigo-800",
 };
 
 /** Feriados legales NACIONALES de Chile (no incluye regionales). Viernes/Sábado

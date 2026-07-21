@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type {
   AdItem,
+  AgendaEvento,
   CarteraItem,
   Causa,
   Contacto,
@@ -35,10 +36,11 @@ export async function cargarGestionesFR(): Promise<{
   gestiones: GestionLegal[];
   pendientes: Pendiente[];
   requerimientos: Requerimiento[];
+  agenda: AgendaEvento[];
 }> {
   const supabase = await createClient();
-  const vacio = { causas: [], contactos: [], cotizaciones: [], gestiones: [], pendientes: [], requerimientos: [] };
-  const [causasRes, contactosRes, cotizRes, gestionesRes, pendientesRes, requerimientosRes] =
+  const vacio = { causas: [], contactos: [], cotizaciones: [], gestiones: [], pendientes: [], requerimientos: [], agenda: [] };
+  const [causasRes, contactosRes, cotizRes, gestionesRes, pendientesRes, requerimientosRes, agendaRes] =
     await Promise.all([
       supabase
         .from("gestion_causas_rs")
@@ -65,6 +67,7 @@ export async function cargarGestionesFR(): Promise<{
         .eq("responsable_id", FELIPE_ID)
         .eq("estado", "pendiente")
         .order("plazo", { ascending: true, nullsFirst: false }),
+      supabase.from("agenda_externa").select("*").order("fecha", { ascending: true }),
     ]);
 
   const error =
@@ -73,7 +76,8 @@ export async function cargarGestionesFR(): Promise<{
     cotizRes.error?.message ??
     gestionesRes.error?.message ??
     pendientesRes.error?.message ??
-    requerimientosRes.error?.message;
+    requerimientosRes.error?.message ??
+    agendaRes.error?.message;
   if (error) return { ok: false, error, ...vacio };
 
   return {
@@ -84,6 +88,7 @@ export async function cargarGestionesFR(): Promise<{
     gestiones: (gestionesRes.data ?? []) as GestionLegal[],
     pendientes: (pendientesRes.data ?? []) as Pendiente[],
     requerimientos: (requerimientosRes.data ?? []) as Requerimiento[],
+    agenda: (agendaRes.data ?? []) as AgendaEvento[],
   };
 }
 
