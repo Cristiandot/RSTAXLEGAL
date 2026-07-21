@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "app"],
       "port": 3000
+    },
+    {
+      "name": "panel-3005",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "app", "--", "-p", "3005"],
+      "port": 3005
     }
   ]
 }

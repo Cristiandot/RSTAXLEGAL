@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, AlertTriangle } from "lucide-react";
 import { formatMonto, formatFecha } from "@/lib/format";
-import { etiquetaPeriodo } from "@/lib/periodos";
-import { SelectorPeriodo } from "@/components/selector-periodo";
+import { etiquetaRango } from "@/lib/periodos";
+import { SelectorRangoPeriodo } from "@/components/selector-rango-periodo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { LineaDiario, OrigenAsiento } from "@/lib/contabilidad/centralizacion";
@@ -40,7 +40,8 @@ export function BalanceClient({
   clienteId,
   razonSocial,
   rutEmpresa,
-  periodo,
+  desde,
+  hasta,
   lineas,
   filas,
   totales,
@@ -50,7 +51,8 @@ export function BalanceClient({
   clienteId: string;
   razonSocial: string;
   rutEmpresa: string | null;
-  periodo: string;
+  desde: string;
+  hasta: string;
   lineas: LineaDiario[];
   filas: BalanceFila[];
   totales: BalanceTotales;
@@ -86,7 +88,7 @@ export function BalanceClient({
 
   return (
     <div className="space-y-5">
-      <ContabilidadTabs clienteId={clienteId} periodo={periodo} active="balance" />
+      <ContabilidadTabs clienteId={clienteId} periodo={hasta} active="balance" />
       {/* ── Encabezado ── */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -94,7 +96,7 @@ export function BalanceClient({
             variant="ghost"
             size="sm"
             className="-ml-2 mb-1"
-            render={<Link href={`/contabilidad/${clienteId}/rcv?periodo=${periodo}`} />}
+            render={<Link href={`/contabilidad/${clienteId}/rcv?periodo=${hasta}`} />}
           >
             <ArrowLeft className="size-4" />
             Volver a los libros RCV
@@ -105,13 +107,19 @@ export function BalanceClient({
           <p className="mt-1 text-sm text-muted-foreground">
             {rutEmpresa ? `RUT ${rutEmpresa} · ` : ""}
             Centralización automática y Balance de 8 columnas de{" "}
-            {etiquetaPeriodo(periodo)}.
+            {etiquetaRango(desde, hasta)}.
           </p>
         </div>
-        <SelectorPeriodo
-          periodo={periodo}
-          onCambio={(p) => router.push(`/contabilidad/${clienteId}/balance?periodo=${p}`)}
-        />
+        <div className="flex flex-col items-end gap-1">
+          <span className="text-xs font-medium text-muted-foreground">Período (desde → hasta)</span>
+          <SelectorRangoPeriodo
+            desde={desde}
+            hasta={hasta}
+            onCambio={(d, h) =>
+              router.push(`/contabilidad/${clienteId}/balance?desde=${d}&hasta=${h}`)
+            }
+          />
+        </div>
       </div>
 
       {/* ── Cuadratura ── */}

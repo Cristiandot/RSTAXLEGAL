@@ -62,6 +62,54 @@ export function normalizarPeriodo(p: string | undefined): string {
   return p && /^\d{4}-\d{2}$/.test(p) ? p : periodoPorDefecto();
 }
 
+/** Etiqueta de un rango: "Mayo 2026", "Enero a Mayo 2026", "Noviembre 2025 a Febrero 2026". */
+export function etiquetaRango(desde: string, hasta: string): string {
+  if (desde === hasta) return etiquetaPeriodo(desde);
+  const [yd, md] = desde.split("-");
+  const [yh, mh] = hasta.split("-");
+  const mesD = MESES[Number(md) - 1] ?? md;
+  const mesH = MESES[Number(mh) - 1] ?? mh;
+  if (yd === yh) return `${mesD} a ${mesH} ${yd}`;
+  return `${mesD} ${yd} a ${mesH} ${yh}`;
+}
+
+/**
+ * Lista de períodos "YYYY-MM" entre `desde` y `hasta` (ambos inclusive), en
+ * orden cronológico. Tope de seguridad: 36 meses.
+ */
+export function expandirRango(desde: string, hasta: string): string[] {
+  let [y, m] = desde.split("-").map(Number);
+  const [yh, mh] = hasta.split("-").map(Number);
+  const out: string[] = [];
+  while ((y < yh || (y === yh && m <= mh)) && out.length < 36) {
+    out.push(componerPeriodo(y, m));
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return out.length > 0 ? out : [desde];
+}
+
+/**
+ * Normaliza un rango desde los search params. Acepta `desde`/`hasta` (y el
+ * `periodo` legado como fallback de ambos). Si falta uno, se copia del otro
+ * (rango de un solo mes). Si vienen invertidos, se ordenan.
+ */
+export function normalizarRango(
+  desde: string | undefined,
+  hasta: string | undefined,
+  legado?: string,
+): { desde: string; hasta: string } {
+  const ok = (p?: string) => (p && /^\d{4}-\d{2}$/.test(p) ? p : null);
+  const base = ok(legado) ?? periodoPorDefecto();
+  let d = ok(desde) ?? ok(hasta) ?? base;
+  let h = ok(hasta) ?? ok(desde) ?? base;
+  if (d > h) [d, h] = [h, d];
+  return { desde: d, hasta: h };
+}
+
 /** Separa "2026-05" en { anio: "2026", mes: "05" }. */
 export function partesPeriodo(periodo: string): { anio: string; mes: string } {
   const [anio = "", mes = ""] = periodo.split("-");
