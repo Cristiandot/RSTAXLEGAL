@@ -33,7 +33,7 @@ const INTRO_SUSCRIPCION =
 
 // Datos de la cuenta de la firma para transferencias (editable en el envío).
 const DATOS_CUENTA_DEFECTO =
-  "Rodríguez Samith Servicios Legales y Contables II Limitada\nRUT 78.073.973-8\nBanco: [COMPLETAR]\nTipo de cuenta: [COMPLETAR]\nN° de cuenta: [COMPLETAR]\nCorreo: pagos@rstaxlegal.cl";
+  "Rodríguez Samith Servicios Legales y Contables II Limitada\nRUT 78.073.973-8\nBanco: Mercado Pago\nTipo de cuenta: Cuenta Vista\nN° de cuenta: 1093709982\nCorreo: frodriguez@rstaxlegal.cl";
 
 function escaparHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
