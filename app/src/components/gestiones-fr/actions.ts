@@ -750,25 +750,29 @@ export async function enviarCobranza(input: {
     });
   }
 
+  const esSusc = input.modo === "suscripcion";
   const total = facturas.reduce((s, f) => s + num(f.monto), 0);
+  // Mismo estilo que el aviso F29/Previred (lib/f29-correo.ts): filas 9px con
+  // borde #e6e9f0, total en negrita, caja ámbar con los datos de transferencia.
+  const tdI = "padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;";
+  const tdD = "padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;";
   const filas = [...facturas]
     .sort((a, b) => ((a.periodo as string) < (b.periodo as string) ? -1 : 1))
     .map(
       (f) =>
-        `<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e9f0;">N° ${f.folio}</td><td style="padding:6px 10px;border-bottom:1px solid #e5e9f0;">${etiquetaPeriodo(f.periodo as string)}</td><td style="padding:6px 10px;border-bottom:1px solid #e5e9f0;text-align:right;">${montoCLP(Math.round(num(f.monto)))}</td></tr>`,
+        `<tr><td style="${tdI}">Factura N° ${f.folio} · ${etiquetaPeriodo(f.periodo as string)}</td><td style="${tdD}">${montoCLP(Math.round(num(f.monto)))}</td></tr>`,
     )
     .join("");
-  const tabla = `<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;"><thead><tr><th style="padding:6px 10px;text-align:left;border-bottom:2px solid #0b2545;">Factura</th><th style="padding:6px 10px;text-align:left;border-bottom:2px solid #0b2545;">Período</th><th style="padding:6px 10px;text-align:right;border-bottom:2px solid #0b2545;">Monto</th></tr></thead><tbody>${filas}<tr><td colspan="2" style="padding:8px 10px;text-align:right;font-weight:bold;">Total a pagar</td><td style="padding:8px 10px;text-align:right;font-weight:bold;">${montoCLP(Math.round(total))}</td></tr></tbody></table>`;
+  const tabla = `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;"><tr><td style="${tdI}">Empresa</td><td style="${tdD}">${cli.razon_social}</td></tr>${filas}<tr><td style="padding:9px 0;color:#0a1a2f;font-weight:bold;">Total a pagar</td><td style="padding:9px 0;text-align:right;font-weight:bold;">${montoCLP(Math.round(total))}</td></tr></table>`;
 
-  const esSusc = input.modo === "suscripcion";
   const cuenta =
     input.datosCuentaHtml && input.datosCuentaHtml.trim()
-      ? `<div style="margin:16px 0;padding:12px 14px;background:#f3f5f9;border-radius:8px;font-size:14px;"><strong>Datos para la transferencia</strong><br>${input.datosCuentaHtml}</div>`
+      ? `<div style="border:1px solid #ef9f27;background:#faeeda;border-radius:8px;padding:14px 16px;margin:0 0 16px;"><p style="margin:0 0 8px;font-weight:bold;color:#854f0b;font-size:14px;">Datos para la transferencia</p><div style="background:#ffffff;border:1px solid #f0d9a8;border-radius:6px;padding:10px 12px;font-size:13px;color:#3a2a10;line-height:1.7;">${input.datosCuentaHtml}</div></div>`
       : "";
   // La invitación a suscripción solo aplica a quienes transfieren (los suscritos ya la tienen).
   const suscripcion =
     !esSusc && input.planLink
-      ? `<p style="margin:16px 0 0;">Para evitar estas gestiones mes a mes, te invitamos a activar el <strong>pago automático por suscripción</strong>${input.planNombre ? ` (${input.planNombre})` : ""}: <a href="${input.planLink}" style="color:#17A2B8;font-weight:bold;">Activar suscripción</a>.</p>`
+      ? `<div style="border:1px solid #8fb8e8;background:#eaf2fb;border-radius:6px;padding:10px 12px;margin:0 0 16px;font-size:12px;color:#0c447c;line-height:1.55;"><strong style="color:#0b2545;">Pago automático.</strong> Para no repetir esta gestión cada mes, puede activar el pago por suscripción${input.planNombre ? ` (${input.planNombre})` : ""}: <a href="${input.planLink}" style="color:#0b2545;font-weight:bold;">Activar suscripción</a>.</div>`
       : "";
 
   const titulo = esSusc ? "Regularización de suscripción" : "Estado de cuenta";
