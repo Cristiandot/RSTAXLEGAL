@@ -222,6 +222,12 @@ export function F29Client({
   });
   // Opción de postergar el IVA — sí/no; lo postergable es el IVA del desglose.
   const [postergar, setPostergar] = useState(false);
+  // Postergación EJERCIDA al declarar: el cliente aceptó postergar y el F29 se
+  // presentó con el IVA postergado — pagó solo lo no postergable (PPM, etc.).
+  // El monto se precarga con el IVA del detalle pero es editable (el neteo con
+  // remanentes lo decide el SII; se copia del F29 declarado).
+  const [postergado, setPostergado] = useState(false);
+  const [ivaPost, setIvaPost] = useState("");
   // N° de operación del pago (cuando paga la oficina), editable desde el modal.
   const [numOp, setNumOp] = useState("");
   const [guardando, startGuardar] = useTransition();
@@ -239,6 +245,12 @@ export function F29Client({
       otros: c.monto_otros == null ? "" : String(c.monto_otros),
     });
     setPostergar(Boolean(c.postergar_iva));
+    setPostergado(c.iva_postergado != null && Number(c.iva_postergado) > 0);
+    setIvaPost(
+      c.iva_postergado == null || Number(c.iva_postergado) === 0
+        ? ""
+        : String(c.iva_postergado),
+    );
     setEditando(c);
   }
 
@@ -360,6 +372,7 @@ export function F29Client({
       numeroOperacion: numOp.trim() || null,
       correoCliente: correoCli.trim() || null,
       postergarIva: postergar,
+      ivaPostergado: postergado && ivaPost.trim() !== "" ? ivaPost.trim() : null,
       comentarioCorreo: get("comentario_correo"),
       montoIva: get("monto_iva"),
       impUnico: get("imp_unico"),
@@ -949,12 +962,76 @@ export function F29Client({
                     />
                   </div>
                 </div>
+                {/* Postergación EJERCIDA: el F29 se declaró con el IVA postergado
+                    y se pagó solo lo no postergable. El comprobante descuenta
+                    este monto e informa el nuevo plazo del IVA. */}
+                <label
+                  htmlFor="iva_postergado_check"
+                  className="flex items-center gap-2 text-sm text-emerald-900"
+                >
+                  <input
+                    id="iva_postergado_check"
+                    type="checkbox"
+                    className="size-4 accent-emerald-600"
+                    checked={postergado}
+                    onChange={(e) => {
+                      setPostergado(e.target.checked);
+                      if (e.target.checked && ivaPost.trim() === "") {
+                        setIvaPost(dg.iva);
+                      }
+                    }}
+                  />
+                  <span>Se postergó el IVA (se pagó solo lo no postergable)</span>
+                </label>
+                {postergado && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <Label
+                        htmlFor="iva_postergado"
+                        className="text-xs font-normal text-muted-foreground"
+                      >
+                        IVA postergado ($)
+                      </Label>
+                      <Input
+                        id="iva_postergado"
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="—"
+                        value={ivaPost}
+                        onChange={(e) => setIvaPost(e.target.value)}
+                        className="bg-card"
+                      />
+                    </div>
+                    <div className="flex flex-col justify-end gap-1.5 pb-0.5">
+                      <span className="text-xs text-muted-foreground">
+                        Pagado ahora
+                      </span>
+                      <span className="text-lg font-semibold tabular-nums text-emerald-900">
+                        {detalleVacio
+                          ? "—"
+                          : formatMonto(
+                              Math.max(0, totalPagar - num(ivaPost)),
+                            )}
+                      </span>
+                    </div>
+                    <span className="col-span-2 text-xs text-muted-foreground">
+                      Se precarga con el IVA del detalle, pero copia el monto
+                      postergado real del F29 declarado (el SII puede netear
+                      remanentes). El comprobante sale con «pagado ahora» y el
+                      IVA pendiente con su nuevo plazo (día 20 + 2 meses,
+                      corrido al hábil).
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-end">
                   <Button
                     type="button"
                     onClick={enviarAvisoPago}
                     disabled={
-                      enviandoPago || !numOp.trim() || !correoCli.trim()
+                      enviandoPago ||
+                      !numOp.trim() ||
+                      !correoCli.trim() ||
+                      (postergado && ivaPost.trim() === "")
                     }
                   >
                     <Send className="size-4" />

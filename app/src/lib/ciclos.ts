@@ -102,6 +102,7 @@ export type F29Row = {
   fecha_correo_pago_enviado: string | null; // último envío del aviso de pago al cliente
   postergacion_monto: number | string | null; // (dormido) monto histórico; la postergación hoy es booleana
   postergar_iva: boolean; // el cliente puede postergar el pago del IVA (lo postergable = IVA del desglose)
+  iva_postergado: number | string | null; // postergación EJERCIDA al declarar: IVA que quedó pendiente (null/0 = no se postergó)
   comentario_correo: string | null; // comentario personalizado del contador — sale en la Comunicación mensual
   // Desglose del F29 para el detalle al cliente (solo se muestran los con monto).
   monto_iva: number | string | null;

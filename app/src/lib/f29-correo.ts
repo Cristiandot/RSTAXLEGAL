@@ -265,12 +265,19 @@ export type DatosF29Pagado = {
   montoPagado: number | string;
   fechaPago: string; // YYYY-MM-DD
   numeroOperacion: string;
+  /** IVA postergado (postergación ejercida al declarar): si viene > 0, el
+   *  comprobante informa que se pagó solo lo no postergable. */
+  ivaPostergado?: number | string | null;
+  /** Plazo del IVA postergado ya corrido al día hábil (lo calcula la action). */
+  plazoIvaPostergado?: string | null;
 };
 
 /**
  * Comprobante de F29 pagado por la oficina: se envía cuando el cliente transfirió
- * los fondos a RS y nosotros pagamos el F29. Función pura (la usa la server action
- * y las vistas previas).
+ * los fondos a RS y nosotros pagamos el F29. Si el F29 se declaró con el IVA
+ * postergado, el monto pagado es solo lo no postergable (PPM, impuesto único,
+ * retenciones) y se agrega el detalle del IVA que quedó con nuevo plazo.
+ * Función pura (la usa la server action y las vistas previas).
  */
 export function construirCorreoF29Pagado(d: DatosF29Pagado): {
   asunto: string;
@@ -278,9 +285,20 @@ export function construirCorreoF29Pagado(d: DatosF29Pagado): {
   cuerpo: string;
 } {
   const etiqueta = etiquetaPeriodo(d.periodo);
+  const postergado = Number(d.ivaPostergado ?? 0);
+  const conPostergacion = postergado > 0;
+
+  const filaPostergado = conPostergacion
+    ? `<tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">IVA postergado (pendiente)</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${formatMonto(postergado)}</td></tr>`
+    : "";
+
+  const cajaPostergado = conPostergacion
+    ? `<div style="border:1px solid #8fb8e8;background:#eaf2fb;border-radius:6px;padding:10px 12px;margin:0 0 16px;font-size:12px;color:#0c447c;line-height:1.55;"><strong style="color:#0b2545;">IVA postergado.</strong> Su F29 se declaró acogiéndose a la postergación del pago del IVA: en esta fecha se pagaron solo los impuestos no postergables. El IVA del período, por <strong>${formatMonto(postergado)}</strong>, quedó con plazo de pago hasta el <strong>${d.plazoIvaPostergado ? fechaLarga(d.plazoIvaPostergado) : "día 20 del segundo mes siguiente al vencimiento original"}</strong>, sin multas ni intereses dentro de ese nuevo plazo.</div>`
+    : "";
+
   const cuerpo = `
     <div style="border:1px solid #1d9e75;background:#e6f6ef;border-radius:8px;padding:14px 16px;margin:0 0 18px;">
-      <p style="margin:0;font-weight:bold;color:#0f6e56;font-size:15px;">Su F29 quedó pagado</p>
+      <p style="margin:0;font-weight:bold;color:#0f6e56;font-size:15px;">${conPostergacion ? "Su F29 quedó pagado (con el IVA postergado)" : "Su F29 quedó pagado"}</p>
       <p style="margin:6px 0 0;color:#0f6e56;font-size:13px;line-height:1.55;">El pago fue gestionado por RS Tax &amp; Legal dentro de plazo. No requiere ninguna acción de su parte.</p>
     </div>
     <p style="margin:0 0 12px;">Estimados,</p>
@@ -288,15 +306,21 @@ export function construirCorreoF29Pagado(d: DatosF29Pagado): {
     <table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;">
       <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Empresa</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${d.razonSocial}</td></tr>
       <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Período</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${etiqueta}</td></tr>
-      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Monto total pagado</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;font-weight:bold;">${formatMonto(d.montoPagado)}</td></tr>
+      <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">${conPostergacion ? "Monto pagado (no postergable)" : "Monto total pagado"}</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;font-weight:bold;">${formatMonto(d.montoPagado)}</td></tr>
+      ${filaPostergado}
       <tr><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;">Fecha de pago</td><td style="padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;">${fechaLarga(d.fechaPago)}</td></tr>
       <tr><td style="padding:9px 0;color:#445;">N° de operación</td><td style="padding:9px 0;text-align:right;font-weight:bold;">${d.numeroOperacion}</td></tr>
     </table>
+    ${cajaPostergado}
     <p style="margin:0 0 16px;font-size:12px;color:#64748b;">Conserve este correo como respaldo del pago. El número de operación corresponde a la transacción con que se enteró el F29.</p>
     <p style="margin:0 0 4px;">Quedamos atentos a cualquier consulta.</p>`;
   return {
-    asunto: `F29 ${etiqueta} pagado — RS Tax & Legal`,
-    titulo: `F29 período ${etiqueta} — Pagado`,
+    asunto: conPostergacion
+      ? `F29 ${etiqueta} pagado (IVA postergado) — RS Tax & Legal`
+      : `F29 ${etiqueta} pagado — RS Tax & Legal`,
+    titulo: conPostergacion
+      ? `F29 período ${etiqueta} — Pagado (IVA postergado)`
+      : `F29 período ${etiqueta} — Pagado`,
     cuerpo,
   };
 }

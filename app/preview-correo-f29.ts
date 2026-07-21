@@ -1,8 +1,9 @@
 /**
  * Vistas previas REALES de los correos del módulo /f29 usando la misma librería
  * que el envío (lib/f29-correo.ts). Caso de muestra: LUCUMO SPA período 2026-06.
- * Genera 3 ejemplos: (1) aviso con detalle, (2) aviso con opción de postergar,
- * (3) comprobante de F29 pagado por la oficina.
+ * Genera 4 ejemplos: (1) aviso con detalle, (2) aviso con opción de postergar,
+ * (3) comprobante de F29 pagado por la oficina, (4) comprobante con el IVA
+ * postergado (se pagó solo lo no postergable).
  * Uso: npx tsx preview-correo-f29.ts <salida>
  */
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -66,6 +67,23 @@ const archivos: { archivo: string; titulo: string; cuerpo: string }[] = [];
     numeroOperacion: "104839271",
   });
   archivos.push({ archivo: "f29-3-pagado.html", titulo, cuerpo });
+}
+
+// 4) Comprobante con IVA POSTERGADO: se pagó solo lo no postergable (caso real
+//    Lúcumo 2026-06 — postergó 1.242.450 y pagó solo el PPM 12.227; el plazo
+//    del IVA lo corre al hábil la action: 20-09-2026 domingo → 21-09-2026).
+{
+  const ivaPostergado = 1242450;
+  const { titulo, cuerpo } = construirCorreoF29Pagado({
+    razonSocial: lucumo.razonSocial,
+    periodo: lucumo.periodo,
+    montoPagado: lucumo.montoTotal - ivaPostergado,
+    fechaPago: "2026-07-20",
+    numeroOperacion: "104839271",
+    ivaPostergado,
+    plazoIvaPostergado: "2026-09-21",
+  });
+  archivos.push({ archivo: "f29-4-pagado-postergado.html", titulo, cuerpo });
 }
 
 for (const { archivo, titulo, cuerpo } of archivos) {

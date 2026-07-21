@@ -8,6 +8,7 @@ import { correosCopiaCliente } from "@/lib/correos-cliente";
 import {
   construirCorreoAvisoF29,
   construirCorreoF29Pagado,
+  fechaLimitePostergacion,
 } from "@/lib/f29-correo";
 
 /** Marca "Observada" del F29 (único estado manual del semáforo del portal). */
@@ -50,6 +51,11 @@ export type GuardarF29Input = {
   numeroOperacion: string | null;
   correoCliente: string | null;
   postergarIva: boolean;
+  // Postergación EJERCIDA al declarar: monto del IVA que quedó postergado
+  // (null = no se postergó). Distinto de postergarIva, que solo OFRECE la
+  // opción en el aviso. Con monto, el comprobante de pago informa que se pagó
+  // solo lo no postergable.
+  ivaPostergado: string | null;
   comentarioCorreo: string | null;
   // Desglose del F29 (IVA, Imp. Único, Retenciones, Otros — PPM va aparte).
   montoIva: string | null;
@@ -103,6 +109,7 @@ export async function guardarF29(
       fecha_pago_f29: input.fechaPagoF29,
       numero_operacion: input.numeroOperacion,
       postergar_iva: input.postergarIva,
+      iva_postergado: input.ivaPostergado,
       comentario_correo: input.comentarioCorreo,
       monto_iva: input.montoIva,
       imp_unico: input.impUnico,
@@ -262,7 +269,7 @@ export async function enviarCorreoF29Pagado(
   const { data: row, error: errRow } = await supabase
     .from("ciclo_f29")
     .select(
-      "cliente_id, periodo, monto_a_pagar, fecha_pago_f29, folio_f29, declarado_sin_folio, clientes(razon_social, correo_empresa)",
+      "cliente_id, periodo, monto_a_pagar, iva_postergado, fecha_pago_f29, folio_f29, declarado_sin_folio, clientes(razon_social, correo_empresa)",
     )
     .eq("id", cicloId)
     .single();
@@ -303,12 +310,35 @@ export async function enviarCorreoF29Pagado(
   const hoy = new Date().toISOString().slice(0, 10);
   const fechaPago = (row.fecha_pago_f29 as string | null) ?? hoy;
 
+  // Postergación ejercida: lo pagado ahora es el total MENOS el IVA postergado
+  // (queda pendiente con nuevo plazo). El plazo se corre al día hábil con la
+  // misma RPC que usa el resto del módulo.
+  const ivaPostergado = Number(row.iva_postergado ?? 0);
+  if (ivaPostergado < 0 || ivaPostergado > Number(row.monto_a_pagar)) {
+    return {
+      ok: false,
+      error:
+        "El IVA postergado no puede ser negativo ni superar el TOTAL del F29. Corrige el monto en el paso 4 y reintenta.",
+    };
+  }
+  const montoPagado = Number(row.monto_a_pagar) - ivaPostergado;
+  let plazoIvaPostergado: string | null = null;
+  if (ivaPostergado > 0) {
+    const { data: habil } = await supabase.rpc("rs_proximo_dia_habil", {
+      d: fechaLimitePostergacion(row.periodo),
+    });
+    plazoIvaPostergado =
+      (habil as string | null) ?? fechaLimitePostergacion(row.periodo);
+  }
+
   const { asunto, titulo, cuerpo } = construirCorreoF29Pagado({
     razonSocial: cli?.razon_social ?? "",
     periodo: row.periodo,
-    montoPagado: row.monto_a_pagar,
+    montoPagado,
     fechaPago,
     numeroOperacion: numOp,
+    ivaPostergado,
+    plazoIvaPostergado,
   });
 
   const usuario = await getUsuarioActual();
