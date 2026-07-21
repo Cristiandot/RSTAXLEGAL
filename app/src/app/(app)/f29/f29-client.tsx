@@ -64,6 +64,7 @@ const ESTADOS = [
   "Fondos en RS",
   "Declarado, folio pendiente",
   "Pagado, folio pendiente",
+  "Giro TGR",
   "Declarado",
 ];
 
@@ -496,6 +497,11 @@ export function F29Client({
       // pagado). Reemplaza al antiguo conteo de "Pagados" (criterio 20-07-2026).
       label: "Declarados",
       valor: filas.filter((c) => c.estado === "Declarado").length,
+    },
+    {
+      // Declarados sin pago (giro a Tesorería): deuda pendiente por cobrar/pagar.
+      label: "Giro TGR",
+      valor: filas.filter((c) => c.estado === "Giro TGR").length,
     },
     {
       // F29 que quedaron declarados/pagados pero les falta cargar el folio

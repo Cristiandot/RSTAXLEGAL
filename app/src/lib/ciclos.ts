@@ -239,6 +239,10 @@ export function claseEstado(estado: string): string {
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "Declarado":
       return "border-indigo-200 bg-indigo-50 text-indigo-700";
+    case "Giro TGR":
+      // Declarado pero SIN pago (recibida por internet): giro a Tesorería, deuda
+      // pendiente. Rosa para que resalte como algo por cobrar/pagar.
+      return "border-rose-200 bg-rose-50 text-rose-700";
     case "Declarado, folio pendiente":
     case "Guardado y enviado":
       return "border-sky-200 bg-sky-50 text-sky-700";
@@ -272,6 +276,7 @@ export function f29Cerrado(estado: string): boolean {
     estado === "Declarado" ||
     estado === "Declarado, folio pendiente" ||
     estado === "Pagado, folio pendiente" ||
+    estado === "Giro TGR" || // declarado a tiempo; el pago/giro es seguimiento aparte
     estado === "Pagado"
   );
 }
