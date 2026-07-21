@@ -141,6 +141,11 @@ export function ModuloPendientes({
     [pendientes],
   );
   const manualesHechos = useMemo(() => pendientes.filter((p) => p.hecho), [pendientes]);
+  // "Otros" (area === "otro") va en un panel aparte; el resto en "Mis pendientes".
+  const misPend = useMemo(() => manualesPend.filter((p) => p.area !== "otro"), [manualesPend]);
+  const otrosPend = useMemo(() => manualesPend.filter((p) => p.area === "otro"), [manualesPend]);
+  const misHechos = useMemo(() => manualesHechos.filter((p) => p.area !== "otro"), [manualesHechos]);
+  const otrosHechos = useMemo(() => manualesHechos.filter((p) => p.area === "otro"), [manualesHechos]);
 
   /** Vencimientos derivados de causas, gestiones y prospección (solo lectura). */
   const derivados = useMemo(() => {
@@ -232,162 +237,108 @@ export function ModuloPendientes({
     setForm(false);
   }
 
+  const filaManualPend = (p: Pendiente) => (
+    <div key={p.id} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
+      <span className="w-6 shrink-0 text-right text-[11px] font-semibold tabular-nums text-muted-foreground">
+        {p.numero}
+      </span>
+      <button
+        type="button"
+        onClick={() => ejecutar(() => togglePendiente(p.id, true), "Marcado como hecho.")}
+        disabled={pendiente}
+        className="group flex size-5 shrink-0 items-center justify-center rounded border border-input hover:border-teal-500 hover:bg-muted"
+        title="Dar por terminado"
+      >
+        <Check className="size-3.5 text-muted-foreground/25 group-hover:text-teal-600" />
+      </button>
+      <button
+        type="button"
+        onClick={() => setFichaId(p.id)}
+        className="min-w-0 flex-1 text-left"
+        title="Abrir ficha"
+      >
+        <div className="truncate text-sm font-medium hover:underline">{p.titulo}</div>
+        {p.detalle ? (
+          <div className="truncate text-[11px] text-muted-foreground">{p.detalle}</div>
+        ) : null}
+      </button>
+      {p.hitos.length > 0 ? (
+        <span className="shrink-0 text-[11px] text-muted-foreground">📌 {p.hitos.length}</span>
+      ) : null}
+      {p.causa_id ? (
+        <span
+          className="shrink-0 text-[11px]"
+          title={`Causa: ${causaPorId.get(p.causa_id) ?? "—"}`}
+        >
+          ⚖
+        </span>
+      ) : null}
+      <AreaTag area={p.area} />
+      <Fecha fecha={p.fecha} hora={p.hora} />
+      <button
+        type="button"
+        onClick={() => ejecutar(() => eliminarPendiente(p.id), "Pendiente eliminado.")}
+        disabled={pendiente}
+        className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-600"
+        title="Eliminar"
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+    </div>
+  );
+
+  const listaManual = (items: Pendiente[], vacio: string) => (
+    <div className="overflow-hidden rounded-xl border bg-white">
+      {items.length === 0 ? (
+        <p className="px-3 py-6 text-center text-sm text-muted-foreground">{vacio}</p>
+      ) : (
+        items.map(filaManualPend)
+      )}
+    </div>
+  );
+
+  const hechosBloque = (items: Pendiente[]) =>
+    items.length > 0 ? (
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs text-muted-foreground">
+          Hechos ({items.length})
+        </summary>
+        <div className="mt-1 overflow-hidden rounded-xl border bg-white">
+          {items.map((p) => (
+            <div key={p.id} className="flex items-center gap-3 border-b px-3 py-1.5 last:border-b-0">
+              <span className="w-6 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground/60">
+                {p.numero}
+              </span>
+              <button
+                type="button"
+                onClick={() => ejecutar(() => togglePendiente(p.id, false), "Reabierto.")}
+                disabled={pendiente}
+                className="flex size-5 shrink-0 items-center justify-center rounded border border-teal-500 bg-teal-500"
+                title="Reabrir"
+              >
+                <Check className="size-3.5 text-white" />
+              </button>
+              <span className="flex-1 truncate text-sm text-muted-foreground line-through">
+                {p.titulo}
+              </span>
+              <button
+                type="button"
+                onClick={() => ejecutar(() => eliminarPendiente(p.id), "Pendiente eliminado.")}
+                disabled={pendiente}
+                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-600"
+                title="Eliminar"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </details>
+    ) : null;
+
   return (
     <div className="space-y-6">
-      {/* ===== Mis pendientes (manuales) ===== */}
-      <section>
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <h3 className="mr-auto text-sm font-semibold">Mis pendientes ({manualesPend.length})</h3>
-          <Button size="sm" onClick={() => setForm((v) => !v)}>
-            <Plus className="size-4" />
-            Nuevo pendiente
-          </Button>
-        </div>
-
-        {form ? (
-          <form
-            className="mb-3 rounded-xl border border-dashed border-[var(--brand-teal,#17A2B8)] bg-muted/30 p-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              enviarPendiente(e.currentTarget);
-            }}
-          >
-            <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="lg:col-span-2">
-                <label className={labelClase}>Título *</label>
-                <Input name="titulo" required placeholder="Llamar al CBR por inscripción" />
-              </div>
-              <div>
-                <label className={labelClase}>Área</label>
-                <select name="area" className={`${selectClase} w-full`} defaultValue="otro">
-                  {AREAS_PENDIENTE.map((a) => (
-                    <option key={a} value={a}>
-                      {AREA_PENDIENTE_LABEL[a] ?? a}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClase}>Vencimiento</label>
-                <div className="flex gap-2">
-                  <Input name="fecha" type="date" />
-                  <Input name="hora" type="time" className="w-24" />
-                </div>
-              </div>
-              <div className="sm:col-span-2 lg:col-span-4">
-                <label className={labelClase}>Detalle</label>
-                <Input name="detalle" placeholder="Opcional" />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button type="submit" size="sm" disabled={pendiente}>
-                Guardar
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setForm(false)}>
-                Cancelar
-              </Button>
-            </div>
-          </form>
-        ) : null}
-
-        <div className="overflow-hidden rounded-xl border bg-white">
-          {manualesPend.length === 0 ? (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-              Sin pendientes propios. Agrega uno o revisa los de abajo.
-            </p>
-          ) : (
-            manualesPend.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
-                <span className="w-6 shrink-0 text-right text-[11px] font-semibold tabular-nums text-muted-foreground">
-                  {p.numero}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => ejecutar(() => togglePendiente(p.id, true), "Marcado como hecho.")}
-                  disabled={pendiente}
-                  className="group flex size-5 shrink-0 items-center justify-center rounded border border-input hover:border-teal-500 hover:bg-muted"
-                  title="Dar por terminado"
-                >
-                  <Check className="size-3.5 text-muted-foreground/25 group-hover:text-teal-600" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFichaId(p.id)}
-                  className="min-w-0 flex-1 text-left"
-                  title="Abrir ficha"
-                >
-                  <div className="truncate text-sm font-medium hover:underline">{p.titulo}</div>
-                  {p.detalle ? (
-                    <div className="truncate text-[11px] text-muted-foreground">{p.detalle}</div>
-                  ) : null}
-                </button>
-                {p.hitos.length > 0 ? (
-                  <span className="shrink-0 text-[11px] text-muted-foreground">📌 {p.hitos.length}</span>
-                ) : null}
-                {p.causa_id ? (
-                  <span
-                    className="shrink-0 text-[11px]"
-                    title={`Causa: ${causaPorId.get(p.causa_id) ?? "—"}`}
-                  >
-                    ⚖
-                  </span>
-                ) : null}
-                <AreaTag area={p.area} />
-                <Fecha fecha={p.fecha} hora={p.hora} />
-                <button
-                  type="button"
-                  onClick={() => ejecutar(() => eliminarPendiente(p.id), "Pendiente eliminado.")}
-                  disabled={pendiente}
-                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-600"
-                  title="Eliminar"
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-
-        {manualesHechos.length > 0 ? (
-          <details className="mt-2">
-            <summary className="cursor-pointer text-xs text-muted-foreground">
-              Hechos ({manualesHechos.length})
-            </summary>
-            <div className="mt-1 overflow-hidden rounded-xl border bg-white">
-              {manualesHechos.map((p) => (
-                <div key={p.id} className="flex items-center gap-3 border-b px-3 py-1.5 last:border-b-0">
-                  <span className="w-6 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground/60">
-                    {p.numero}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => ejecutar(() => togglePendiente(p.id, false), "Reabierto.")}
-                    disabled={pendiente}
-                    className="flex size-5 shrink-0 items-center justify-center rounded border border-teal-500 bg-teal-500"
-                    title="Reabrir"
-                  >
-                    <Check className="size-3.5 text-white" />
-                  </button>
-                  <span className="flex-1 truncate text-sm text-muted-foreground line-through">
-                    {p.titulo}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => ejecutar(() => eliminarPendiente(p.id), "Pendiente eliminado.")}
-                    disabled={pendiente}
-                    className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-600"
-                    title="Eliminar"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </details>
-        ) : null}
-      </section>
-
-      {/* ===== Requerimientos del equipo asignados a mí ===== */}
+      {/* ===== 1. Requerimientos del equipo asignados a mí ===== */}
       <section>
         <h3 className="mb-2 text-sm font-semibold">
           Requerimientos del equipo asignados a mí ({requerimientos.length})
@@ -474,7 +425,75 @@ export function ModuloPendientes({
         </p>
       </section>
 
-      {/* ===== Vencimientos derivados de mis áreas ===== */}
+      {/* ===== 2. Mis pendientes (manuales) ===== */}
+      <section>
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h3 className="mr-auto text-sm font-semibold">Mis pendientes ({misPend.length})</h3>
+          <Button size="sm" onClick={() => setForm((v) => !v)}>
+            <Plus className="size-4" />
+            Nuevo pendiente
+          </Button>
+        </div>
+
+        {form ? (
+          <form
+            className="mb-3 rounded-xl border border-dashed border-[var(--brand-teal,#17A2B8)] bg-muted/30 p-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              enviarPendiente(e.currentTarget);
+            }}
+          >
+            <div className="mb-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="lg:col-span-2">
+                <label className={labelClase}>Título *</label>
+                <Input name="titulo" required placeholder="Llamar al CBR por inscripción" />
+              </div>
+              <div>
+                <label className={labelClase}>Área</label>
+                <select name="area" className={`${selectClase} w-full`} defaultValue="otro">
+                  {AREAS_PENDIENTE.map((a) => (
+                    <option key={a} value={a}>
+                      {AREA_PENDIENTE_LABEL[a] ?? a}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClase}>Vencimiento</label>
+                <div className="flex gap-2">
+                  <Input name="fecha" type="date" />
+                  <Input name="hora" type="time" className="w-24" />
+                </div>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-4">
+                <label className={labelClase}>Detalle</label>
+                <Input name="detalle" placeholder="Opcional" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" size="sm" disabled={pendiente}>
+                Guardar
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setForm(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        ) : null}
+
+        {listaManual(misPend, "Sin pendientes propios. Agrega uno o revisa los de abajo.")}
+
+        {hechosBloque(misHechos)}
+      </section>
+
+      {/* ===== 3. Otros pendientes ===== */}
+      <section>
+        <h3 className="mb-2 text-sm font-semibold">Otros pendientes ({otrosPend.length})</h3>
+        {listaManual(otrosPend, "Sin otros pendientes.")}
+        {hechosBloque(otrosHechos)}
+      </section>
+
+      {/* ===== 4. Vencimientos derivados de mis áreas ===== */}
       <section>
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <h3 className="mr-auto text-sm font-semibold">

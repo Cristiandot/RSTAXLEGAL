@@ -68,15 +68,17 @@ separa fecha+hora.
   + toggle "Histórico" (estado `cerrada`). Calendario (`calendario.tsx`) muestra audiencias/gestiones,
   **feriados nacionales de Chile** (`FERIADOS`, 2026-2027, solo nacionales) y la **capa "Mi calendario"**
   (agenda_externa, índigo). Clic en un evento abre la ficha de esa causa.
-- **Pendientes**: (1) *Mis pendientes* — manuales, ordenados por vencimiento, con `numero` visible,
+- **Pendientes** (orden de las secciones): (1) *Requerimientos del equipo asignados a mí* — espejo de
+  `v_gestiones_oficina` (`fuente=tareas_oficina`, `responsable_id=FELIPE_ID`, `pendiente`), misma info que
+  la bandeja de Inicio (#N, cliente + categoría/SLA con `lib/gestiones`, empresa, canal, semáforo);
+  "terminar" cierra la tarea en `tareas_oficina` (mismo mecanismo que la bandeja → aparece cerrada allá).
+  (2) *Mis pendientes* — manuales con `area != "otro"`, ordenados por vencimiento, con `numero` visible,
   días de atraso ("+N d"), bitácora y **"Causa relacionada"** (al completar un pendiente con `causa_id`
-  se inserta un hito en esa causa). (2) *Requerimientos del equipo* — espejo de `v_gestiones_oficina`
-  (`fuente=tareas_oficina`, `responsable_id=FELIPE_ID`, `pendiente`), misma info que la bandeja de Inicio
-  (#N, cliente + categoría/SLA con `lib/gestiones`, empresa, canal, semáforo); "terminar" cierra la tarea
-  en `tareas_oficina` (mismo mecanismo que la bandeja → aparece cerrada allá). (3) *Vencimientos de mis
-  áreas* — derivado (solo lectura) de próximas gestiones de causas/gestiones y próximas acciones de
-  prospección; ventana por defecto de **10 días** (+ vencidos), resto oculto. **Las audiencias NO son
-  pendientes** (viven en la causa y el calendario); sí las gestiones.
+  se inserta un hito en esa causa); incluye el formulario "Nuevo pendiente". (3) *Otros pendientes* —
+  los manuales con `area == "otro"`, en panel aparte (misma fila/ficha; helpers `listaManual`/`hechosBloque`
+  reutilizados). (4) *Vencimientos de mis áreas* — derivado (solo lectura) de próximas gestiones de
+  causas/gestiones y próximas acciones de prospección; ventana por defecto de **10 días** (+ vencidos),
+  resto oculto. **Las audiencias NO son pendientes** (viven en la causa y el calendario); sí las gestiones.
 - **Time Box**: bloques del día por hora (audiencias, gestiones, pendientes, prospección, agenda) + lo
   "sin hora" arriba + tarjeta con la `propuesta_diaria_fr` del día.
 
