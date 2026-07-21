@@ -99,12 +99,23 @@ export type TotalesRcv = {
   compras_iva_total: number | string | null;
 };
 
+/** Fila de `v_bte_totales_periodo`: brutos de BTE (boletas de terceros) por empresa y mes. */
+export type BteTotal = {
+  cliente_id: string;
+  periodo: string;
+  bte_emitidas_total: number | string | null;
+  bte_emitidas_docs: number | null;
+  bte_recibidas_total: number | string | null;
+  bte_recibidas_docs: number | null;
+};
+
 type Props = {
   periodos: string[];
   etiquetas: string[];
   empresas: EmpresaControl[];
   descargas: DescargaRcv[];
   totales: TotalesRcv[];
+  bteTotales: BteTotal[];
   /** Mes EN CURSO (no está en la grilla de meses): alimenta el reporte de avance del 23. */
   periodoEnCurso: string;
   reportes: ReporteAvance[];
@@ -174,7 +185,7 @@ function ResumenCard({ label, valor, tono }: { label: string; valor: number; ton
   );
 }
 
-export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetasTodas, empresas, descargas, totales, periodoEnCurso, reportes, errorCarga }: Props) {
+export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetasTodas, empresas, descargas, totales, bteTotales, periodoEnCurso, reportes, errorCarga }: Props) {
   const [buscar, setBuscar] = useState("");
   const [soloPendientes, setSoloPendientes] = useState(false);
   const [orden, setOrden] = useState<Orden>(null);
@@ -219,6 +230,12 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
     for (const t of totales) m.set(`${t.cliente_id}|${t.periodo}`, t);
     return m;
   }, [totales]);
+
+  const mapaBte = useMemo(() => {
+    const m = new Map<string, BteTotal>();
+    for (const b of bteTotales) m.set(`${b.cliente_id}|${b.periodo}`, b);
+    return m;
+  }, [bteTotales]);
 
   const mapaReportes = useMemo(() => {
     const m = new Map<string, ReporteAvance>();
@@ -275,10 +292,15 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
           return tot?.ventas_total !== null && tot?.ventas_total !== undefined ? Number(tot.ventas_total) : null;
         case "compras":
           return tot?.compras_total !== null && tot?.compras_total !== undefined ? Number(tot.compras_total) : null;
-        case "bhe_emitidas":
-          return tot?.bhe_emitidas_total !== null && tot?.bhe_emitidas_total !== undefined ? Number(tot.bhe_emitidas_total) : null;
-        case "bhe_recibidas":
-          return tot?.bhe_recibidas_total !== null && tot?.bhe_recibidas_total !== undefined ? Number(tot.bhe_recibidas_total) : null;
+        case "bhe": {
+          const hay = tot?.bhe_emitidas_total != null || tot?.bhe_recibidas_total != null;
+          return hay ? Number(tot?.bhe_emitidas_total ?? 0) + Number(tot?.bhe_recibidas_total ?? 0) : null;
+        }
+        case "bte": {
+          const b = mapaBte.get(`${f.empresa.id}|${mesTotales}`);
+          const hay = b?.bte_emitidas_total != null || b?.bte_recibidas_total != null;
+          return hay ? Number(b?.bte_emitidas_total ?? 0) + Number(b?.bte_recibidas_total ?? 0) : null;
+        }
         case "reporte": {
           // Avance del 23: pendientes primero (asc), enviados después, sin clave al final.
           if (!f.empresa.tieneClave) return 2;
@@ -296,7 +318,7 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
       }
     };
     return [...out].sort((a, b) => comparar(val(a), val(b), orden.dir));
-  }, [filas, buscar, soloPendientes, orden, periodos, mapaTotales, mesTotales, mapaReportes]);
+  }, [filas, buscar, soloPendientes, orden, periodos, mapaTotales, mapaBte, mesTotales, mapaReportes]);
 
   const resumen = useMemo(() => {
     let alDia = 0, porRevisar = 0, conFaltantes = 0, sinClave = 0, avanceEnviados = 0;
@@ -410,11 +432,11 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
               <ThSort col="compras" orden={orden} setOrden={setOrden} className="text-right">
                 Compras {etiquetaCorta(mesTotales, multiAnio)}
               </ThSort>
-              <ThSort col="bhe_emitidas" orden={orden} setOrden={setOrden} className="text-right">
-                <span title={`Boletas de honorarios emitidas — brutos de ${etiquetaCorta(mesTotales, multiAnio)}`}>BHE emit.</span>
+              <ThSort col="bhe" orden={orden} setOrden={setOrden} className="text-right">
+                <span title={`Boletas de honorarios — brutos de ${etiquetaCorta(mesTotales, multiAnio)} (emitidas arriba / recibidas abajo)`}>BHE</span>
               </ThSort>
-              <ThSort col="bhe_recibidas" orden={orden} setOrden={setOrden} className="text-right">
-                <span title={`Boletas de honorarios recibidas (incluye BTE) — brutos de ${etiquetaCorta(mesTotales, multiAnio)}`}>BHE recib.</span>
+              <ThSort col="bte" orden={orden} setOrden={setOrden} className="text-right">
+                <span title={`Boletas de terceros — brutos de ${etiquetaCorta(mesTotales, multiAnio)} (emitidas arriba / recibidas abajo)`}>BTE</span>
               </ThSort>
               <ThSort col="estado" orden={orden} setOrden={setOrden} className="text-center">
                 Estado
@@ -481,8 +503,18 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
                   d={mapa.get(`${f.empresa.id}|${mesTotales}`) ?? null}
                   registro="compras"
                 />
-                <CeldaBhe tot={mapaTotales.get(`${f.empresa.id}|${mesTotales}`) ?? null} tipo="emitidas" />
-                <CeldaBhe tot={mapaTotales.get(`${f.empresa.id}|${mesTotales}`) ?? null} tipo="recibidas" />
+                <CeldaDoble
+                  emit={mapaTotales.get(`${f.empresa.id}|${mesTotales}`)?.bhe_emitidas_total ?? null}
+                  emitDocs={mapaTotales.get(`${f.empresa.id}|${mesTotales}`)?.bhe_emitidas_docs ?? 0}
+                  recib={mapaTotales.get(`${f.empresa.id}|${mesTotales}`)?.bhe_recibidas_total ?? null}
+                  recibDocs={mapaTotales.get(`${f.empresa.id}|${mesTotales}`)?.bhe_recibidas_docs ?? 0}
+                />
+                <CeldaDoble
+                  emit={mapaBte.get(`${f.empresa.id}|${mesTotales}`)?.bte_emitidas_total ?? null}
+                  emitDocs={mapaBte.get(`${f.empresa.id}|${mesTotales}`)?.bte_emitidas_docs ?? 0}
+                  recib={mapaBte.get(`${f.empresa.id}|${mesTotales}`)?.bte_recibidas_total ?? null}
+                  recibDocs={mapaBte.get(`${f.empresa.id}|${mesTotales}`)?.bte_recibidas_docs ?? 0}
+                />
 
                 <TableCell className="text-center">
                   <EstadoEmpresa fila={f} totalMeses={periodos.length} />
@@ -620,17 +652,38 @@ function CeldaTotales({ tot, d, registro }: { tot: TotalesRcv | null; d: Descarg
  * Boletas de honorarios del mes seleccionado (brutos, anuladas excluidas):
  * emitidas por la empresa (profesionales que boletean) o recibidas (incluye BTE).
  */
-function CeldaBhe({ tot, tipo }: { tot: TotalesRcv | null; tipo: "emitidas" | "recibidas" }) {
-  const total = tipo === "emitidas" ? tot?.bhe_emitidas_total : tot?.bhe_recibidas_total;
-  const docs = (tipo === "emitidas" ? tot?.bhe_emitidas_docs : tot?.bhe_recibidas_docs) ?? 0;
-  if (total === null || total === undefined) {
-    return <TableCell className="text-right text-muted-foreground/50">—</TableCell>;
-  }
+/**
+ * Celda apilada para boletas: emitidas arriba, recibidas abajo (misma columna),
+ * para ahorrar ancho. Se usa para BHE y para BTE.
+ */
+function CeldaDoble({
+  emit,
+  emitDocs,
+  recib,
+  recibDocs,
+}: {
+  emit: number | string | null;
+  emitDocs: number;
+  recib: number | string | null;
+  recibDocs: number;
+}) {
+  const linea = (etq: string, val: number | string | null, docs: number) => (
+    <div className="flex items-baseline justify-between gap-2 tabular-nums leading-tight">
+      <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{etq}</span>
+      {val === null || val === undefined ? (
+        <span className="text-muted-foreground/40">—</span>
+      ) : (
+        <span className="font-medium" title={`${docs} boleta${docs === 1 ? "" : "s"}`}>
+          {formatMonto(Number(val))}
+        </span>
+      )}
+    </div>
+  );
   return (
     <TableCell className="text-right">
-      <div className="font-medium tabular-nums">{formatMonto(Number(total))}</div>
-      <div className="text-[10px] leading-tight text-muted-foreground tabular-nums">
-        {docs} boleta{docs === 1 ? "" : "s"}
+      <div className="flex min-w-[96px] flex-col gap-0.5">
+        {linea("Emit", emit, emitDocs)}
+        {linea("Recib", recib, recibDocs)}
       </div>
     </TableCell>
   );

@@ -5,6 +5,7 @@ import {
   type EmpresaControl,
   type DescargaRcv,
   type TotalesRcv,
+  type BteTotal,
   type ReporteAvance,
 } from "./control-rcv-client";
 
@@ -54,7 +55,7 @@ export default async function ControlRcvPage() {
   const periodosConActual = periodos; // el mes en curso ya está incluido
   const supabase = await createClient();
 
-  const [empresasRes, gruposRes, descargasAll, totalesAll, reportesRes] = await Promise.all([
+  const [empresasRes, gruposRes, descargasAll, totalesAll, bteTotalesAll, reportesRes] = await Promise.all([
     // Solo empresas a las que les llevamos el RCV/contabilidad: hacen F29 (que se
     // arma del RCV) o contabilidad completa. Excluye casa particular, solo-RRHH,
     // solo-legal y trabajos puntuales.
@@ -83,6 +84,16 @@ export default async function ControlRcvPage() {
     traerTodo<TotalesRcv>((from, to) =>
       supabase
         .from("v_rcv_totales_periodo")
+        .select("*")
+        .in("periodo", periodosConActual)
+        .order("cliente_id")
+        .order("periodo")
+        .range(from, to),
+    ),
+    // Totales de BTE (boletas de terceros) por empresa y mes: emitidas y recibidas.
+    traerTodo<BteTotal>((from, to) =>
+      supabase
+        .from("v_bte_totales_periodo")
         .select("*")
         .in("periodo", periodosConActual)
         .order("cliente_id")
@@ -122,6 +133,7 @@ export default async function ControlRcvPage() {
         empresas={empresas}
         descargas={descargas}
         totales={totales}
+        bteTotales={bteTotalesAll.rows}
         periodoEnCurso={periodoEnCurso}
         reportes={reportes}
         errorCarga={empresasRes.error?.message ?? descargasAll.error ?? totalesAll.error ?? null}
