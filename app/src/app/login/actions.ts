@@ -53,7 +53,12 @@ export async function enviarMagicLink(
 
   const { error: errAuth } = await supabase.auth.signInWithOtp({
     email: correo,
-    options: { emailRedirectTo: `${origin}/auth/callback` },
+    options: {
+      emailRedirectTo: `${origin}/auth/callback`,
+      // Solo usuarios ya provisionados en Auth: sin esto, cualquiera con la
+      // anon key puede auto-registrarse llamando /auth/v1/otp directo.
+      shouldCreateUser: false,
+    },
   });
 
   if (errAuth) {
