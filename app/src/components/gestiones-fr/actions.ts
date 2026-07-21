@@ -42,7 +42,7 @@ export async function cargarGestionesFR(): Promise<{
     await Promise.all([
       supabase
         .from("gestion_causas_rs")
-        .select("*, hitos:gestion_causas_hitos(id, causa_id, fecha, detalle)")
+        .select("*, hitos:gestion_causas_hitos(id, causa_id, fecha, hora, detalle)")
         .order("created_at", { ascending: true }),
       supabase
         .from("contactos")
@@ -53,11 +53,11 @@ export async function cargarGestionesFR(): Promise<{
       supabase.from("gestion_cotizaciones_rs").select("*").order("numero", { ascending: false }),
       supabase
         .from("gestion_legal_rs")
-        .select("*, hitos:gestion_legal_hitos(id, gestion_id, fecha, detalle)")
+        .select("*, hitos:gestion_legal_hitos(id, gestion_id, fecha, hora, detalle)")
         .order("created_at", { ascending: true }),
       supabase
         .from("pendientes_fr")
-        .select("*, hitos:pendientes_fr_hitos(id, pendiente_id, fecha, detalle)")
+        .select("*, hitos:pendientes_fr_hitos(id, pendiente_id, fecha, hora, detalle)")
         .order("created_at", { ascending: true }),
       supabase
         .from("tareas_oficina")
@@ -98,6 +98,7 @@ export async function crearCausa(input: {
   rit_rol: string | null;
   estado: string;
   proxima_gestion_fecha: string | null;
+  proxima_gestion_hora: string | null;
   proxima_gestion_detalle: string | null;
   carpeta_sharepoint: string | null;
 }): Promise<Resultado> {
@@ -114,8 +115,10 @@ export async function actualizarCausa(
       Causa,
       | "estado"
       | "proxima_gestion_fecha"
+      | "proxima_gestion_hora"
       | "proxima_gestion_detalle"
       | "proxima_audiencia_fecha"
+      | "proxima_audiencia_hora"
       | "proxima_audiencia_tipo"
       | "plazo_fatal"
       | "plazo_fatal_detalle"
@@ -158,13 +161,14 @@ export async function agregarHito(
   causaId: string,
   fecha: string,
   detalle: string,
+  hora?: string | null,
 ): Promise<Resultado> {
   if (!fecha || !detalle.trim())
     return { ok: false, error: "Fecha y detalle son obligatorios." };
   const supabase = await createClient();
   const { error } = await supabase
     .from("gestion_causas_hitos")
-    .insert({ causa_id: causaId, fecha, detalle: detalle.trim() });
+    .insert({ causa_id: causaId, fecha, hora: hora || null, detalle: detalle.trim() });
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
@@ -177,6 +181,7 @@ export async function crearGestion(input: {
   contraparte: string | null;
   estado: string;
   proxima_gestion_fecha: string | null;
+  proxima_gestion_hora: string | null;
   proxima_gestion_detalle: string | null;
   carpeta_sharepoint: string | null;
   notas: string | null;
@@ -198,6 +203,7 @@ export async function actualizarGestion(
       | "contraparte"
       | "estado"
       | "proxima_gestion_fecha"
+      | "proxima_gestion_hora"
       | "proxima_gestion_detalle"
       | "carpeta_sharepoint"
       | "notas"
@@ -216,19 +222,20 @@ export async function agregarHitoGestion(
   gestionId: string,
   fecha: string,
   detalle: string,
+  hora?: string | null,
 ): Promise<Resultado> {
   if (!fecha || !detalle.trim())
     return { ok: false, error: "Fecha y detalle son obligatorios." };
   const supabase = await createClient();
   const { error } = await supabase
     .from("gestion_legal_hitos")
-    .insert({ gestion_id: gestionId, fecha, detalle: detalle.trim() });
+    .insert({ gestion_id: gestionId, fecha, hora: hora || null, detalle: detalle.trim() });
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
 export async function editarHitoGestion(
   id: string,
-  patch: { fecha?: string; detalle?: string },
+  patch: { fecha?: string; hora?: string | null; detalle?: string },
 ): Promise<Resultado> {
   const supabase = await createClient();
   const { error } = await supabase.from("gestion_legal_hitos").update(patch).eq("id", id);
@@ -248,6 +255,7 @@ export async function crearPendiente(input: {
   detalle: string | null;
   area: string;
   fecha: string | null;
+  hora: string | null;
 }): Promise<Resultado> {
   if (!input.titulo.trim()) return { ok: false, error: "El título es obligatorio." };
   const supabase = await createClient();
@@ -257,7 +265,7 @@ export async function crearPendiente(input: {
 
 export async function actualizarPendiente(
   id: string,
-  patch: Partial<Pick<Pendiente, "titulo" | "detalle" | "area" | "fecha">>,
+  patch: Partial<Pick<Pendiente, "titulo" | "detalle" | "area" | "fecha" | "hora">>,
 ): Promise<Resultado> {
   const supabase = await createClient();
   const { error } = await supabase
@@ -271,19 +279,20 @@ export async function agregarHitoPendiente(
   pendienteId: string,
   fecha: string,
   detalle: string,
+  hora?: string | null,
 ): Promise<Resultado> {
   if (!fecha || !detalle.trim())
     return { ok: false, error: "Fecha y detalle son obligatorios." };
   const supabase = await createClient();
   const { error } = await supabase
     .from("pendientes_fr_hitos")
-    .insert({ pendiente_id: pendienteId, fecha, detalle: detalle.trim() });
+    .insert({ pendiente_id: pendienteId, fecha, hora: hora || null, detalle: detalle.trim() });
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
 export async function editarHitoPendiente(
   id: string,
-  patch: { fecha?: string; detalle?: string },
+  patch: { fecha?: string; hora?: string | null; detalle?: string },
 ): Promise<Resultado> {
   const supabase = await createClient();
   const { error } = await supabase.from("pendientes_fr_hitos").update(patch).eq("id", id);

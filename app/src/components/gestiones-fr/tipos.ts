@@ -4,6 +4,7 @@ export type HitoCausa = {
   id: string;
   causa_id: string;
   fecha: string;
+  hora: string | null;
   detalle: string;
 };
 
@@ -19,8 +20,10 @@ export type Causa = {
   fecha_notificacion: string | null;
   fecha_contestacion: string | null;
   proxima_gestion_fecha: string | null;
+  proxima_gestion_hora: string | null;
   proxima_gestion_detalle: string | null;
   proxima_audiencia_fecha: string | null;
+  proxima_audiencia_hora: string | null;
   proxima_audiencia_tipo: string | null;
   carpeta_sharepoint: string | null;
   estado: string | null;
@@ -100,6 +103,7 @@ export type HitoGestion = {
   id: string;
   gestion_id: string;
   fecha: string;
+  hora: string | null;
   detalle: string;
 };
 
@@ -111,6 +115,7 @@ export type GestionLegal = {
   contraparte: string | null;
   estado: string | null;
   proxima_gestion_fecha: string | null;
+  proxima_gestion_hora: string | null;
   proxima_gestion_detalle: string | null;
   carpeta_sharepoint: string | null;
   notas: string | null;
@@ -150,6 +155,7 @@ export type HitoPendiente = {
   id: string;
   pendiente_id: string;
   fecha: string;
+  hora: string | null;
   detalle: string;
 };
 
@@ -161,6 +167,7 @@ export type Pendiente = {
   detalle: string | null;
   area: string;
   fecha: string | null;
+  hora: string | null;
   hecho: boolean;
   hitos: HitoPendiente[];
 };

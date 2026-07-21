@@ -3,7 +3,6 @@
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Archive, ExternalLink, Plus, Trash2, X } from "lucide-react";
-import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,6 +19,7 @@ import {
   editarHitoGestion,
   eliminarHitoGestion,
 } from "./actions";
+import { dtLocal, fmtFechaHora, splitDT } from "./fecha-hora";
 import {
   ESTADOS_GESTION,
   ESTADO_GESTION_COLOR,
@@ -135,6 +135,7 @@ export function ModuloGestiones({
           contraparte: v("contraparte"),
           estado: (fd.get("estado") as string) || "En análisis",
           proxima_gestion_fecha: v("pg_fecha"),
+          proxima_gestion_hora: v("pg_hora"),
           proxima_gestion_detalle: v("pg_detalle"),
           carpeta_sharepoint: v("carpeta"),
           notas: v("notas"),
@@ -147,7 +148,13 @@ export function ModuloGestiones({
   function enviarHito(gestionId: string, form: HTMLFormElement) {
     const fd = new FormData(form);
     ejecutar(
-      () => agregarHitoGestion(gestionId, (fd.get("fecha") as string) ?? "", (fd.get("detalle") as string) ?? ""),
+      () =>
+        agregarHitoGestion(
+          gestionId,
+          (fd.get("fecha") as string) ?? "",
+          (fd.get("detalle") as string) ?? "",
+          (fd.get("hora") as string) || null,
+        ),
       "Hito agregado.",
     );
     form.reset();
@@ -212,7 +219,10 @@ export function ModuloGestiones({
             </div>
             <div>
               <label className={labelClase}>Próxima gestión — fecha</label>
-              <Input name="pg_fecha" type="date" />
+              <div className="flex gap-2">
+                <Input name="pg_fecha" type="date" />
+                <Input name="pg_hora" type="time" className="w-28" />
+              </div>
             </div>
             <div>
               <label className={labelClase}>Próxima gestión — detalle</label>
@@ -276,7 +286,7 @@ export function ModuloGestiones({
                       </div>
                       {g.proxima_gestion_fecha ? (
                         <span className="hidden shrink-0 items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium sm:inline-flex">
-                          📅 {formatFecha(g.proxima_gestion_fecha)}
+                          📅 {fmtFechaHora(g.proxima_gestion_fecha, g.proxima_gestion_hora)}
                         </span>
                       ) : null}
                       <span className="shrink-0 text-[11px] text-muted-foreground">
@@ -347,13 +357,20 @@ export function ModuloGestiones({
                   </h4>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <input
-                      key={`pgf-${ficha.id}-${ficha.proxima_gestion_fecha ?? ""}`}
-                      type="date"
-                      defaultValue={ficha.proxima_gestion_fecha ?? ""}
+                      key={`pgf-${ficha.id}-${ficha.proxima_gestion_fecha ?? ""}-${ficha.proxima_gestion_hora ?? ""}`}
+                      type="datetime-local"
+                      defaultValue={dtLocal(ficha.proxima_gestion_fecha, ficha.proxima_gestion_hora)}
                       onBlur={(e) => {
-                        const val = e.target.value || null;
-                        if (val !== (ficha.proxima_gestion_fecha ?? null))
-                          guardarCampo(ficha.id, { proxima_gestion_fecha: val }, "Próxima gestión actualizada.");
+                        const { fecha, hora } = splitDT(e.target.value);
+                        if (
+                          fecha !== (ficha.proxima_gestion_fecha ?? null) ||
+                          hora !== (ficha.proxima_gestion_hora ?? null)
+                        )
+                          guardarCampo(
+                            ficha.id,
+                            { proxima_gestion_fecha: fecha, proxima_gestion_hora: hora },
+                            "Próxima gestión actualizada.",
+                          );
                       }}
                       className={campoInput}
                     />
@@ -412,6 +429,17 @@ export function ModuloGestiones({
                             className="h-7 w-32 shrink-0 rounded-md border border-input bg-white px-1.5 text-[11px] font-semibold text-teal-700 shadow-xs focus:outline-2 focus:outline-ring/50"
                           />
                           <input
+                            key={`hh-${h.id}-${h.hora ?? ""}`}
+                            type="time"
+                            defaultValue={h.hora ?? ""}
+                            onBlur={(e) => {
+                              const val = e.target.value || null;
+                              if (val !== (h.hora ?? null))
+                                ejecutar(() => editarHitoGestion(h.id, { hora: val }), "Hito actualizado.");
+                            }}
+                            className="h-7 w-20 shrink-0 rounded-md border border-input bg-white px-1.5 text-[11px] shadow-xs focus:outline-2 focus:outline-ring/50"
+                          />
+                          <input
                             key={`hd-${h.id}-${h.detalle}`}
                             type="text"
                             defaultValue={h.detalle}
@@ -442,6 +470,7 @@ export function ModuloGestiones({
                       }}
                     >
                       <Input name="fecha" type="date" required className="h-8 w-36 text-xs" />
+                      <Input name="hora" type="time" className="h-8 w-24 text-xs" />
                       <Input
                         name="detalle"
                         required

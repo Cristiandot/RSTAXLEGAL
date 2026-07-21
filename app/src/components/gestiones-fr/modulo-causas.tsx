@@ -15,6 +15,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { CalendarioFR, LeyendaCalendario, type EventoCalendario } from "./calendario";
+import { dtLocal, fmtFechaHora, splitDT } from "./fecha-hora";
 import { actualizarCausa, agregarHito, crearCausa } from "./actions";
 import {
   ESTADOS_CAUSA,
@@ -123,12 +124,17 @@ export function ModuloCausas({
       if (c.estado === "cerrada") continue; // el histórico no ensucia el calendario
       const quien = c.cliente ?? c.caratula;
       if (c.proxima_gestion_fecha)
-        evs.push({ fecha: c.proxima_gestion_fecha, clase: "causa", texto: `Gestión — ${quien}`, id: c.id });
+        evs.push({
+          fecha: c.proxima_gestion_fecha,
+          clase: "causa",
+          texto: `${c.proxima_gestion_hora ? c.proxima_gestion_hora + " " : ""}Gestión — ${quien}`,
+          id: c.id,
+        });
       if (c.proxima_audiencia_fecha)
         evs.push({
           fecha: c.proxima_audiencia_fecha,
           clase: "causa",
-          texto: `${c.proxima_audiencia_tipo ?? "Audiencia"} — ${quien}`,
+          texto: `${c.proxima_audiencia_hora ? c.proxima_audiencia_hora + " " : ""}${c.proxima_audiencia_tipo ?? "Audiencia"} — ${quien}`,
           id: c.id,
         });
     }
@@ -205,6 +211,7 @@ export function ModuloCausas({
           rit_rol: v("rit_rol"),
           estado: (fd.get("estado") as string) || "prospecto",
           proxima_gestion_fecha: v("pg_fecha"),
+          proxima_gestion_hora: v("pg_hora"),
           proxima_gestion_detalle: v("pg_detalle"),
           carpeta_sharepoint: v("carpeta"),
         }),
@@ -216,7 +223,13 @@ export function ModuloCausas({
   function enviarHito(causaId: string, form: HTMLFormElement) {
     const fd = new FormData(form);
     ejecutar(
-      () => agregarHito(causaId, (fd.get("fecha") as string) ?? "", (fd.get("detalle") as string) ?? ""),
+      () =>
+        agregarHito(
+          causaId,
+          (fd.get("fecha") as string) ?? "",
+          (fd.get("detalle") as string) ?? "",
+          (fd.get("hora") as string) || null,
+        ),
       "Hito agregado.",
     );
     form.reset();
@@ -339,7 +352,10 @@ export function ModuloCausas({
               </div>
               <div>
                 <label className={labelClase}>Próxima gestión — fecha</label>
-                <Input name="pg_fecha" type="date" />
+                <div className="flex gap-2">
+                  <Input name="pg_fecha" type="date" />
+                  <Input name="pg_hora" type="time" className="w-28" />
+                </div>
               </div>
               <div>
                 <label className={labelClase}>Próxima gestión — detalle</label>
@@ -518,15 +534,18 @@ export function ModuloCausas({
                     <div>
                       <label className={labelClase}>Próxima gestión</label>
                       <input
-                        key={`pgf-${ficha.id}-${ficha.proxima_gestion_fecha ?? ""}`}
-                        type="date"
-                        defaultValue={ficha.proxima_gestion_fecha ?? ""}
+                        key={`pgf-${ficha.id}-${ficha.proxima_gestion_fecha ?? ""}-${ficha.proxima_gestion_hora ?? ""}`}
+                        type="datetime-local"
+                        defaultValue={dtLocal(ficha.proxima_gestion_fecha, ficha.proxima_gestion_hora)}
                         onBlur={(e) => {
-                          const val = e.target.value || null;
-                          if (val !== (ficha.proxima_gestion_fecha ?? null))
+                          const { fecha, hora } = splitDT(e.target.value);
+                          if (
+                            fecha !== (ficha.proxima_gestion_fecha ?? null) ||
+                            hora !== (ficha.proxima_gestion_hora ?? null)
+                          )
                             guardarCampo(
                               ficha.id,
-                              { proxima_gestion_fecha: val },
+                              { proxima_gestion_fecha: fecha, proxima_gestion_hora: hora },
                               "Próxima gestión actualizada.",
                             );
                         }}
@@ -552,15 +571,18 @@ export function ModuloCausas({
                     <div>
                       <label className={labelClase}>Próxima audiencia</label>
                       <input
-                        key={`paf-${ficha.id}-${ficha.proxima_audiencia_fecha ?? ""}`}
-                        type="date"
-                        defaultValue={ficha.proxima_audiencia_fecha ?? ""}
+                        key={`paf-${ficha.id}-${ficha.proxima_audiencia_fecha ?? ""}-${ficha.proxima_audiencia_hora ?? ""}`}
+                        type="datetime-local"
+                        defaultValue={dtLocal(ficha.proxima_audiencia_fecha, ficha.proxima_audiencia_hora)}
                         onBlur={(e) => {
-                          const val = e.target.value || null;
-                          if (val !== (ficha.proxima_audiencia_fecha ?? null))
+                          const { fecha, hora } = splitDT(e.target.value);
+                          if (
+                            fecha !== (ficha.proxima_audiencia_fecha ?? null) ||
+                            hora !== (ficha.proxima_audiencia_hora ?? null)
+                          )
                             guardarCampo(
                               ficha.id,
-                              { proxima_audiencia_fecha: val },
+                              { proxima_audiencia_fecha: fecha, proxima_audiencia_hora: hora },
                               "Audiencia actualizada.",
                             );
                         }}
@@ -603,8 +625,8 @@ export function ModuloCausas({
                     ) : (
                       hitosFicha.map((h) => (
                         <div key={h.id} className="flex gap-3 py-0.5 text-xs">
-                          <span className="w-20 shrink-0 font-bold text-teal-700">
-                            {formatFecha(h.fecha)}
+                          <span className="w-28 shrink-0 font-bold text-teal-700">
+                            {fmtFechaHora(h.fecha, h.hora)}
                           </span>
                           <span>{h.detalle}</span>
                         </div>
@@ -618,6 +640,7 @@ export function ModuloCausas({
                       }}
                     >
                       <Input name="fecha" type="date" required className="h-8 w-36 text-xs" />
+                      <Input name="hora" type="time" className="h-8 w-24 text-xs" />
                       <Input
                         name="detalle"
                         required

@@ -3,7 +3,6 @@
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Check, Plus, Trash2, X } from "lucide-react";
-import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,6 +22,7 @@ import {
   terminarRequerimiento,
   togglePendiente,
 } from "./actions";
+import { dtLocal, fmtFechaHora, splitDT } from "./fecha-hora";
 import {
   AREAS_PENDIENTE,
   AREA_PENDIENTE_LABEL,
@@ -70,13 +70,13 @@ function AreaTag({ area }: { area: string }) {
   );
 }
 
-function Fecha({ fecha }: { fecha: string | null }) {
+function Fecha({ fecha, hora = null }: { fecha: string | null; hora?: string | null }) {
   if (!fecha) return <span className="text-[11px] text-muted-foreground">—</span>;
   const vencido = fecha < hoyIso();
   return (
     <span className={`shrink-0 text-[11px] font-medium ${vencido ? "text-red-600" : "text-muted-foreground"}`}>
       {vencido ? "⚠ " : "📅 "}
-      {formatFecha(fecha)}
+      {fmtFechaHora(fecha, hora)}
     </span>
   );
 }
@@ -111,26 +111,33 @@ export function ModuloPendientes({
 
   /** Vencimientos derivados de causas, gestiones y prospección (solo lectura). */
   const derivados = useMemo(() => {
-    const items: { key: string; fecha: string; titulo: string; area: string; detalle: string }[] = [];
+    const items: {
+      key: string;
+      fecha: string;
+      hora: string | null;
+      titulo: string;
+      area: string;
+      detalle: string;
+    }[] = [];
     for (const c of causas) {
       if (c.estado === "cerrada") continue;
       const quien = c.cliente ?? c.caratula;
       // Solo la próxima gestión de la causa es pendiente; las audiencias no.
       if (c.proxima_gestion_fecha)
-        items.push({ key: `c-g-${c.id}`, fecha: c.proxima_gestion_fecha, titulo: quien, area: "causas", detalle: c.proxima_gestion_detalle ?? "Próxima gestión" });
+        items.push({ key: `c-g-${c.id}`, fecha: c.proxima_gestion_fecha, hora: c.proxima_gestion_hora, titulo: quien, area: "causas", detalle: c.proxima_gestion_detalle ?? "Próxima gestión" });
     }
     for (const g of gestiones) {
       if (g.estado === "Terminada") continue;
       if (g.proxima_gestion_fecha)
-        items.push({ key: `g-${g.id}`, fecha: g.proxima_gestion_fecha, titulo: g.titulo, area: "gestiones", detalle: g.proxima_gestion_detalle ?? "Próxima gestión" });
+        items.push({ key: `g-${g.id}`, fecha: g.proxima_gestion_fecha, hora: g.proxima_gestion_hora, titulo: g.titulo, area: "gestiones", detalle: g.proxima_gestion_detalle ?? "Próxima gestión" });
     }
     for (const ct of contactos) {
       if (ct.fecha_proxima_accion)
-        items.push({ key: `pc-${ct.id}`, fecha: ct.fecha_proxima_accion, titulo: ct.nombre, area: "prospeccion", detalle: "Próxima acción (contacto)" });
+        items.push({ key: `pc-${ct.id}`, fecha: ct.fecha_proxima_accion, hora: null, titulo: ct.nombre, area: "prospeccion", detalle: "Próxima acción (contacto)" });
     }
     for (const q of cotizaciones) {
       if (q.proxima_accion_fecha)
-        items.push({ key: `pq-${q.id}`, fecha: q.proxima_accion_fecha, titulo: q.destinatario, area: "prospeccion", detalle: q.proxima_accion_detalle ?? "Próxima acción (cotización)" });
+        items.push({ key: `pq-${q.id}`, fecha: q.proxima_accion_fecha, hora: null, titulo: q.destinatario, area: "prospeccion", detalle: q.proxima_accion_detalle ?? "Próxima acción (cotización)" });
     }
     return items.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
   }, [causas, gestiones, contactos, cotizaciones]);
@@ -163,7 +170,13 @@ export function ModuloPendientes({
   function enviarHitoPendiente(pid: string, f: HTMLFormElement) {
     const fd = new FormData(f);
     ejecutar(
-      () => agregarHitoPendiente(pid, (fd.get("fecha") as string) ?? "", (fd.get("detalle") as string) ?? ""),
+      () =>
+        agregarHitoPendiente(
+          pid,
+          (fd.get("fecha") as string) ?? "",
+          (fd.get("detalle") as string) ?? "",
+          (fd.get("hora") as string) || null,
+        ),
       "Anotación agregada.",
     );
     f.reset();
@@ -179,6 +192,7 @@ export function ModuloPendientes({
           detalle: v("detalle"),
           area: (fd.get("area") as string) || "otro",
           fecha: v("fecha"),
+          hora: v("hora"),
         }),
       "Pendiente agregado.",
     );
@@ -221,8 +235,11 @@ export function ModuloPendientes({
                 </select>
               </div>
               <div>
-                <label className={labelClase}>Fecha</label>
-                <Input name="fecha" type="date" />
+                <label className={labelClase}>Vencimiento</label>
+                <div className="flex gap-2">
+                  <Input name="fecha" type="date" />
+                  <Input name="hora" type="time" className="w-24" />
+                </div>
               </div>
               <div className="sm:col-span-2 lg:col-span-4">
                 <label className={labelClase}>Detalle</label>
@@ -275,7 +292,7 @@ export function ModuloPendientes({
                   <span className="shrink-0 text-[11px] text-muted-foreground">📌 {p.hitos.length}</span>
                 ) : null}
                 <AreaTag area={p.area} />
-                <Fecha fecha={p.fecha} />
+                <Fecha fecha={p.fecha} hora={p.hora} />
                 <button
                   type="button"
                   onClick={() => ejecutar(() => eliminarPendiente(p.id), "Pendiente eliminado.")}
@@ -405,7 +422,7 @@ export function ModuloPendientes({
                   <div className="truncate text-[11px] text-muted-foreground">{d.detalle}</div>
                 </div>
                 <AreaTag area={d.area} />
-                <Fecha fecha={d.fecha} />
+                <Fecha fecha={d.fecha} hora={d.hora} />
               </div>
             ))
           )}
@@ -472,13 +489,13 @@ export function ModuloPendientes({
                   <div>
                     <label className={labelClase}>Vencimiento</label>
                     <input
-                      key={`f-${ficha.id}-${ficha.fecha ?? ""}`}
-                      type="date"
-                      defaultValue={ficha.fecha ?? ""}
+                      key={`f-${ficha.id}-${ficha.fecha ?? ""}-${ficha.hora ?? ""}`}
+                      type="datetime-local"
+                      defaultValue={dtLocal(ficha.fecha, ficha.hora)}
                       onBlur={(e) => {
-                        const val = e.target.value || null;
-                        if (val !== (ficha.fecha ?? null))
-                          guardarPendiente(ficha.id, { fecha: val }, "Vencimiento actualizado.");
+                        const { fecha, hora } = splitDT(e.target.value);
+                        if (fecha !== (ficha.fecha ?? null) || hora !== (ficha.hora ?? null))
+                          guardarPendiente(ficha.id, { fecha, hora }, "Vencimiento actualizado.");
                       }}
                       className={campoInput}
                     />
@@ -523,6 +540,17 @@ export function ModuloPendientes({
                             className="h-7 w-32 shrink-0 rounded-md border border-input bg-white px-1.5 text-[11px] font-semibold text-teal-700 shadow-xs focus:outline-2 focus:outline-ring/50"
                           />
                           <input
+                            key={`hh-${h.id}-${h.hora ?? ""}`}
+                            type="time"
+                            defaultValue={h.hora ?? ""}
+                            onBlur={(e) => {
+                              const val = e.target.value || null;
+                              if (val !== (h.hora ?? null))
+                                ejecutar(() => editarHitoPendiente(h.id, { hora: val }), "Anotación actualizada.");
+                            }}
+                            className="h-7 w-20 shrink-0 rounded-md border border-input bg-white px-1.5 text-[11px] shadow-xs focus:outline-2 focus:outline-ring/50"
+                          />
+                          <input
                             key={`hd-${h.id}-${h.detalle}`}
                             type="text"
                             defaultValue={h.detalle}
@@ -553,6 +581,7 @@ export function ModuloPendientes({
                       }}
                     >
                       <Input name="fecha" type="date" required className="h-8 w-36 text-xs" />
+                      <Input name="hora" type="time" className="h-8 w-24 text-xs" />
                       <Input
                         name="detalle"
                         required
