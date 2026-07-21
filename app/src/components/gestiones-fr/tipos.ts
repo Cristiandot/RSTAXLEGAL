@@ -149,6 +149,7 @@ export const ESTADO_GESTION_COLOR: Record<string, string> = {
 /** Pendiente manual propio del panel (tabla pendientes_fr). */
 export type Pendiente = {
   id: string;
+  numero: number;
   titulo: string;
   detalle: string | null;
   area: string;

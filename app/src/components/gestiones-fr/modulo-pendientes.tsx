@@ -212,10 +212,10 @@ export function ModuloPendientes({
               Sin pendientes propios. Agrega uno o revisa los de abajo.
             </p>
           ) : (
-            manualesPend.map((p, i) => (
+            manualesPend.map((p) => (
               <div key={p.id} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
-                <span className="w-5 shrink-0 text-right text-[11px] font-semibold tabular-nums text-muted-foreground">
-                  {i + 1}
+                <span className="w-6 shrink-0 text-right text-[11px] font-semibold tabular-nums text-muted-foreground">
+                  {p.numero}
                 </span>
                 <button
                   type="button"
@@ -256,6 +256,9 @@ export function ModuloPendientes({
             <div className="mt-1 overflow-hidden rounded-xl border bg-white">
               {manualesHechos.map((p) => (
                 <div key={p.id} className="flex items-center gap-3 border-b px-3 py-1.5 last:border-b-0">
+                  <span className="w-6 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground/60">
+                    {p.numero}
+                  </span>
                   <button
                     type="button"
                     onClick={() => ejecutar(() => togglePendiente(p.id, false), "Reabierto.")}
