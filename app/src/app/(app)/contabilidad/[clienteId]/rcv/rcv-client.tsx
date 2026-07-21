@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, Lock, LockOpen, Plus, Trash2, Upload } from "lucide-react";
 import { formatFecha, formatMonto } from "@/lib/format";
 import { etiquetaPeriodo } from "@/lib/periodos";
 import { SelectorPeriodo } from "@/components/selector-periodo";
@@ -15,12 +15,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   actualizarDocRcv,
   actualizarHonorario,
+  actualizarMontosHonorario,
+  actualizarMontosRcv,
   crearCuentaGasto,
   eliminarRcvPeriodo,
   guardarMontosF29,
   importarRcv,
+  verificarClaveEdicion,
 } from "./actions";
 
 export type CuentaOpcion = {
@@ -303,6 +314,54 @@ function PagadoCell({
   );
 }
 
+/**
+ * Celda de monto: texto formateado en régimen; input editable solo con el
+ * modo de edición de montos desbloqueado (clave verificada en el servidor).
+ * Guarda al salir del campo o con Enter.
+ */
+function MontoCell({
+  valor,
+  editable,
+  ocupado,
+  destacar,
+  onGuardar,
+}: {
+  valor: number;
+  editable: boolean;
+  ocupado: boolean;
+  destacar?: boolean;
+  onGuardar: (nuevo: number) => void;
+}) {
+  if (!editable) {
+    return (
+      <td className={`${tdNum}${destacar ? " font-medium" : ""}`}>
+        {formatMonto(valor)}
+      </td>
+    );
+  }
+  return (
+    <td className="px-2 py-1 text-right">
+      <input
+        key={valor}
+        type="number"
+        defaultValue={valor}
+        disabled={ocupado}
+        onBlur={(e) => {
+          const n = Number(e.target.value);
+          if (Number.isFinite(n) && Math.round(n) !== valor) {
+            onGuardar(Math.round(n));
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className="h-7 w-24 rounded-md border border-amber-300 bg-amber-50 px-1.5 text-right text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="Monto"
+      />
+    </td>
+  );
+}
+
 /** Selector inline de cuenta de gasto (solo compras). */
 function CuentaCell({
   doc,
@@ -434,6 +493,12 @@ export function RcvClient({
   const [ocupado, startOcupado] = useTransition();
   const inputArchivo = useRef<HTMLInputElement>(null);
   const [editandoF29, setEditandoF29] = useState(false);
+  // Edición excepcional de montos: null = bloqueada; con clave verificada se
+  // guarda para reenviarla en cada escritura (el servidor la revalida siempre).
+  const [claveEdicion, setClaveEdicion] = useState<string | null>(null);
+  const [dialogoClave, setDialogoClave] = useState(false);
+  const [claveInput, setClaveInput] = useState("");
+  const [claveError, setClaveError] = useState<string | null>(null);
   const [nuevaCuentaDoc, setNuevaCuentaDoc] = useState<string | null>(null);
   const [nuevoCodigo, setNuevoCodigo] = useState("");
   const [nuevoNombre, setNuevoNombre] = useState("");
@@ -469,6 +534,49 @@ export function RcvClient({
       const res = await actualizarHonorario(id, patch);
       if (res.ok) router.refresh();
       else toast.error(res.error ?? "Error al guardar");
+    });
+  }
+
+  function desbloquearEdicion() {
+    const clave = claveInput;
+    startOcupado(async () => {
+      const res = await verificarClaveEdicion(clave);
+      if (res.ok) {
+        setClaveEdicion(clave);
+        setDialogoClave(false);
+        setClaveInput("");
+        setClaveError(null);
+        toast.success("Edición de montos habilitada. Cada cambio queda auditado.");
+      } else {
+        setClaveError(res.error ?? "Clave incorrecta.");
+      }
+    });
+  }
+
+  function guardarMontoDoc(id: string, campo: string, valor: number) {
+    if (!claveEdicion || tab === "honorario") return;
+    const libro = tab;
+    startOcupado(async () => {
+      const res = await actualizarMontosRcv(libro, id, claveEdicion, {
+        [campo]: valor,
+      });
+      if (res.ok) {
+        toast.success("Monto corregido");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al guardar");
+    });
+  }
+
+  function guardarMontoHonorario(id: string, campo: string, valor: number) {
+    if (!claveEdicion) return;
+    startOcupado(async () => {
+      const res = await actualizarMontosHonorario(id, claveEdicion, {
+        [campo]: valor,
+      });
+      if (res.ok) {
+        toast.success("Monto corregido");
+        router.refresh();
+      } else toast.error(res.error ?? "Error al guardar");
     });
   }
 
@@ -810,6 +918,35 @@ export function RcvClient({
             ))}
           </div>
           <div className="flex items-center gap-2 pb-2">
+            {docs.length > 0 ? (
+              claveEdicion ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900"
+                  onClick={() => setClaveEdicion(null)}
+                >
+                  <LockOpen className="size-3.5" />
+                  Cerrar edición de montos
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted-foreground"
+                  onClick={() => {
+                    setClaveError(null);
+                    setClaveInput("");
+                    setDialogoClave(true);
+                  }}
+                >
+                  <Lock className="size-3.5" />
+                  Editar montos
+                </Button>
+              )
+            ) : null}
             {tab !== "honorario" && docs.length > 0 ? (
               <Button
                 type="button"
@@ -845,6 +982,15 @@ export function RcvClient({
             </Button>
           </div>
         </div>
+
+        {claveEdicion ? (
+          <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+            <LockOpen className="size-3.5 shrink-0" />
+            Modo edición de montos activo: corrige solo casos puntuales. Cada
+            cambio queda registrado en la auditoría (quién, documento, valor
+            anterior y nuevo).
+          </div>
+        ) : null}
 
         {nuevaCuentaDoc !== null || (nuevoCodigo && !nuevaCuentaDoc) ? null : null}
         {nuevaCuentaDoc !== null ? (
@@ -946,9 +1092,25 @@ export function RcvClient({
                         {h.nombre_emisor}
                       </td>
                       <td className="px-2 py-1">{h.soc_profesional ? "Sí" : "No"}</td>
-                      <td className={tdNum}>{formatMonto(h.brutos)}</td>
-                      <td className={tdNum}>{formatMonto(h.retencion)}</td>
-                      <td className={`${tdNum} font-medium`}>{formatMonto(h.liquido)}</td>
+                      <MontoCell
+                        valor={h.brutos}
+                        editable={claveEdicion !== null}
+                        ocupado={ocupado}
+                        onGuardar={(n) => guardarMontoHonorario(h.id, "brutos", n)}
+                      />
+                      <MontoCell
+                        valor={h.retencion}
+                        editable={claveEdicion !== null}
+                        ocupado={ocupado}
+                        onGuardar={(n) => guardarMontoHonorario(h.id, "retencion", n)}
+                      />
+                      <MontoCell
+                        valor={h.liquido}
+                        editable={claveEdicion !== null}
+                        ocupado={ocupado}
+                        destacar
+                        onGuardar={(n) => guardarMontoHonorario(h.id, "liquido", n)}
+                      />
                       <td className="px-2 py-1 text-right">
                         <input
                           type="number"
@@ -1077,12 +1239,31 @@ export function RcvClient({
                         >
                           {d.razon_social}
                         </td>
-                        <td className={tdNum}>{formatMonto(d.monto_exento)}</td>
-                        <td className={tdNum}>{formatMonto(d.monto_neto)}</td>
-                        <td className={tdNum}>{formatMonto(d.iva_recuperable)}</td>
-                        <td className={`${tdNum} font-medium`}>
-                          {formatMonto(d.monto_total)}
-                        </td>
+                        <MontoCell
+                          valor={d.monto_exento}
+                          editable={claveEdicion !== null}
+                          ocupado={ocupado}
+                          onGuardar={(n) => guardarMontoDoc(d.id, "monto_exento", n)}
+                        />
+                        <MontoCell
+                          valor={d.monto_neto}
+                          editable={claveEdicion !== null}
+                          ocupado={ocupado}
+                          onGuardar={(n) => guardarMontoDoc(d.id, "monto_neto", n)}
+                        />
+                        <MontoCell
+                          valor={d.iva_recuperable}
+                          editable={claveEdicion !== null}
+                          ocupado={ocupado}
+                          onGuardar={(n) => guardarMontoDoc(d.id, "iva_recuperable", n)}
+                        />
+                        <MontoCell
+                          valor={d.monto_total}
+                          editable={claveEdicion !== null}
+                          ocupado={ocupado}
+                          destacar
+                          onGuardar={(n) => guardarMontoDoc(d.id, "monto_total", n)}
+                        />
                         <td className="px-2 py-1 text-right">
                           <PagadoCell libro="compra" doc={d} ocupado={ocupado} />
                         </td>
@@ -1119,12 +1300,31 @@ export function RcvClient({
                         >
                           {d.razon_social}
                         </td>
-                        <td className={tdNum}>{formatMonto(d.monto_exento)}</td>
-                        <td className={tdNum}>{formatMonto(d.monto_neto)}</td>
-                        <td className={tdNum}>{formatMonto(d.monto_iva)}</td>
-                        <td className={`${tdNum} font-medium`}>
-                          {formatMonto(d.monto_total)}
-                        </td>
+                        <MontoCell
+                          valor={d.monto_exento}
+                          editable={claveEdicion !== null}
+                          ocupado={ocupado}
+                          onGuardar={(n) => guardarMontoDoc(d.id, "monto_exento", n)}
+                        />
+                        <MontoCell
+                          valor={d.monto_neto}
+                          editable={claveEdicion !== null}
+                          ocupado={ocupado}
+                          onGuardar={(n) => guardarMontoDoc(d.id, "monto_neto", n)}
+                        />
+                        <MontoCell
+                          valor={d.monto_iva}
+                          editable={claveEdicion !== null}
+                          ocupado={ocupado}
+                          onGuardar={(n) => guardarMontoDoc(d.id, "monto_iva", n)}
+                        />
+                        <MontoCell
+                          valor={d.monto_total}
+                          editable={claveEdicion !== null}
+                          ocupado={ocupado}
+                          destacar
+                          onGuardar={(n) => guardarMontoDoc(d.id, "monto_total", n)}
+                        />
                         <td className="px-2 py-1 text-right">
                           <PagadoCell libro="venta" doc={d} ocupado={ocupado} />
                         </td>
@@ -1158,6 +1358,75 @@ export function RcvClient({
           actualiza los datos del SII sin pisar % pagado ni cuentas asignadas.
         </p>
       </div>
+
+      {/* ── Diálogo de clave: doble verificación para editar montos ── */}
+      <Dialog
+        open={dialogoClave}
+        onOpenChange={(abierto) => {
+          if (!abierto) {
+            setDialogoClave(false);
+            setClaveInput("");
+            setClaveError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="size-4" />
+              Editar montos del SII
+            </DialogTitle>
+            <DialogDescription>
+              Los montos vienen del RCV / registro de BHE oficial y en régimen
+              no se tocan. Ingresa la clave de edición para habilitar la
+              corrección; cada cambio queda auditado con tu usuario, el
+              documento y el valor anterior y nuevo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-2 py-1">
+            <Input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              autoFocus
+              value={claveInput}
+              onChange={(e) => {
+                setClaveInput(e.target.value);
+                setClaveError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && claveInput) desbloquearEdicion();
+              }}
+              placeholder="••••"
+              className="h-11 w-40 text-center !text-xl tracking-[0.5em]"
+              aria-label="Clave de edición"
+            />
+            {claveError ? (
+              <p className="text-sm text-red-600">{claveError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDialogoClave(false);
+                setClaveInput("");
+                setClaveError(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={desbloquearEdicion}
+              disabled={!claveInput || ocupado}
+            >
+              {ocupado ? "Verificando…" : "Habilitar edición"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

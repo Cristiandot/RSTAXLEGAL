@@ -10,6 +10,25 @@ import {
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
+/**
+ * Los libros RCV/BHE alimentan varias pantallas además de /contabilidad
+ * (balance al vuelo, cuentas por cobrar/pagar, control RCV, conciliación
+ * bancaria, F29). Toda mutación de estos datos revalida el set completo para
+ * que la información viaje en vivo a cada consumidor.
+ */
+function revalidarConsumidoresRcv() {
+  for (const ruta of [
+    "/contabilidad",
+    "/control-rcv",
+    "/tesoreria",
+    "/conciliacion",
+    "/f29",
+    "/comunicacion",
+  ]) {
+    revalidatePath(ruta, "layout");
+  }
+}
+
 async function usuarioActualId(supabase: Supabase): Promise<string | null> {
   const {
     data: { user },
@@ -150,7 +169,7 @@ export async function importarRcv(
       .eq("id", (ciclo as Record<string, unknown>).id as string);
   }
 
-  revalidatePath("/contabilidad", "layout");
+  revalidarConsumidoresRcv();
   return {
     ok: true,
     resumen: {
@@ -190,7 +209,7 @@ export async function actualizarDocRcv(
     .update(payload)
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/contabilidad", "layout");
+  revalidarConsumidoresRcv();
   return { ok: true };
 }
 
@@ -216,8 +235,119 @@ export async function actualizarHonorario(
   const supabase = await createClient();
   const { error } = await supabase.from("honorarios_periodo").update(payload).eq("id", id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/contabilidad", "layout");
+  revalidarConsumidoresRcv();
   return { ok: true };
+}
+
+// ─── Edición excepcional de montos (doble verificación) ──────────────────────
+// Los montos vienen del SII y en régimen NO se tocan. Para casos muy puntuales
+// (documento mal informado, CSV corrupto) se permite editarlos, pero cada
+// escritura exige sesión activa + clave de edición verificada EN EL SERVIDOR,
+// y queda registrada en audit_log (quién, documento, valor anterior → nuevo).
+
+const CLAVE_EDICION_MONTOS = process.env.CLAVE_EDICION_MONTOS ?? "5753";
+
+const CAMPOS_MONTO: Record<string, readonly string[]> = {
+  compra: ["monto_exento", "monto_neto", "iva_recuperable", "monto_total"],
+  venta: ["monto_exento", "monto_neto", "monto_iva", "monto_total"],
+  honorario: ["brutos", "retencion", "liquido"],
+};
+
+/** Valida la clave de edición para habilitar el modo en la UI. */
+export async function verificarClaveEdicion(
+  clave: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Sesión expirada." };
+  if (clave !== CLAVE_EDICION_MONTOS) {
+    return { ok: false, error: "Clave incorrecta." };
+  }
+  return { ok: true };
+}
+
+async function editarMontos(
+  tabla: "rcv_compras" | "rcv_ventas" | "honorarios_periodo",
+  tipo: keyof typeof CAMPOS_MONTO,
+  id: string,
+  clave: string,
+  montos: Record<string, number>,
+): Promise<{ ok: boolean; error?: string }> {
+  const permitidos = CAMPOS_MONTO[tipo];
+  const payload: Record<string, number> = {};
+  for (const [campo, valor] of Object.entries(montos)) {
+    if (!permitidos.includes(campo)) {
+      return { ok: false, error: `Campo no editable: ${campo}` };
+    }
+    if (!Number.isFinite(valor)) return { ok: false, error: "Monto inválido." };
+    payload[campo] = Math.round(valor);
+  }
+  if (Object.keys(payload).length === 0) return { ok: true };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Sesión expirada." };
+  if (clave !== CLAVE_EDICION_MONTOS) {
+    return { ok: false, error: "Clave de edición incorrecta." };
+  }
+
+  const { data: antes, error: errAntes } = await supabase
+    .from(tabla)
+    .select(`cliente_id, periodo, ${Object.keys(payload).join(", ")}`)
+    .eq("id", id)
+    .maybeSingle();
+  if (errAntes) return { ok: false, error: errAntes.message };
+  if (!antes) return { ok: false, error: "Documento no encontrado." };
+  const fila = antes as unknown as Record<string, unknown>;
+
+  const { error } = await supabase.from(tabla).update(payload).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  // Auditoría; si falla el registro no se bloquea la corrección ya hecha.
+  await supabase.rpc("registrar_edicion_montos", {
+    p_tabla: tabla,
+    p_registro_id: id,
+    p_cliente_id: fila.cliente_id,
+    p_periodo: fila.periodo,
+    p_cambios: Object.fromEntries(
+      Object.entries(payload).map(([campo, nuevo]) => [
+        campo,
+        { antes: fila[campo], despues: nuevo },
+      ]),
+    ),
+  });
+
+  revalidarConsumidoresRcv();
+  return { ok: true };
+}
+
+/** Edición excepcional de montos de un documento del RCV (requiere clave). */
+export async function actualizarMontosRcv(
+  libro: LibroRcv,
+  id: string,
+  clave: string,
+  montos: Record<string, number>,
+): Promise<{ ok: boolean; error?: string }> {
+  return editarMontos(
+    libro === "compra" ? "rcv_compras" : "rcv_ventas",
+    libro,
+    id,
+    clave,
+    montos,
+  );
+}
+
+/** Edición excepcional de montos de una boleta de honorarios (requiere clave). */
+export async function actualizarMontosHonorario(
+  id: string,
+  clave: string,
+  montos: Record<string, number>,
+): Promise<{ ok: boolean; error?: string }> {
+  return editarMontos("honorarios_periodo", "honorario", id, clave, montos);
 }
 
 /** Borra TODOS los documentos del libro en el período (para reimportar limpio). */
@@ -233,7 +363,7 @@ export async function eliminarRcvPeriodo(
     .eq("cliente_id", clienteId)
     .eq("periodo", periodo);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/contabilidad", "layout");
+  revalidarConsumidoresRcv();
   return { ok: true };
 }
 
@@ -266,7 +396,7 @@ export async function crearCuentaGasto(
     .select("id")
     .single();
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/contabilidad", "layout");
+  revalidarConsumidoresRcv();
   return { ok: true, id: data.id };
 }
 
@@ -312,6 +442,6 @@ export async function guardarMontosF29(
       ).error;
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/contabilidad", "layout");
+  revalidarConsumidoresRcv();
   return { ok: true };
 }
