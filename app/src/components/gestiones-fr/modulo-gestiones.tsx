@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Archive, ExternalLink, Plus, X } from "lucide-react";
+import { Archive, ExternalLink, Plus, Trash2, X } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { actualizarGestion, agregarHitoGestion, crearGestion } from "./actions";
+import {
+  actualizarGestion,
+  agregarHitoGestion,
+  crearGestion,
+  editarHitoGestion,
+  eliminarHitoGestion,
+} from "./actions";
 import {
   ESTADOS_GESTION,
   ESTADO_GESTION_COLOR,
@@ -393,11 +399,38 @@ export function ModuloGestiones({
                       <p className="text-xs text-muted-foreground italic">Sin hitos todavía.</p>
                     ) : (
                       hitosFicha.map((h) => (
-                        <div key={h.id} className="flex gap-3 py-0.5 text-xs">
-                          <span className="w-20 shrink-0 font-bold text-teal-700">
-                            {formatFecha(h.fecha)}
-                          </span>
-                          <span>{h.detalle}</span>
+                        <div key={h.id} className="group flex items-center gap-2 py-0.5">
+                          <input
+                            key={`hf-${h.id}-${h.fecha}`}
+                            type="date"
+                            defaultValue={h.fecha}
+                            onBlur={(e) => {
+                              const val = e.target.value;
+                              if (val && val !== h.fecha)
+                                ejecutar(() => editarHitoGestion(h.id, { fecha: val }), "Hito actualizado.");
+                            }}
+                            className="h-7 w-32 shrink-0 rounded-md border border-input bg-white px-1.5 text-[11px] font-semibold text-teal-700 shadow-xs focus:outline-2 focus:outline-ring/50"
+                          />
+                          <input
+                            key={`hd-${h.id}-${h.detalle}`}
+                            type="text"
+                            defaultValue={h.detalle}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val && val !== h.detalle)
+                                ejecutar(() => editarHitoGestion(h.id, { detalle: val }), "Hito actualizado.");
+                            }}
+                            className="h-7 min-w-0 flex-1 rounded-md border border-input bg-white px-1.5 text-xs shadow-xs focus:outline-2 focus:outline-ring/50"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => ejecutar(() => eliminarHitoGestion(h.id), "Hito eliminado.")}
+                            disabled={pendiente}
+                            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-600"
+                            title="Eliminar hito"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
                         </div>
                       ))
                     )}

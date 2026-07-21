@@ -17,6 +17,8 @@ import {
   actualizarPendiente,
   agregarHitoPendiente,
   crearPendiente,
+  editarHitoPendiente,
+  eliminarHitoPendiente,
   eliminarPendiente,
   terminarRequerimiento,
   togglePendiente,
@@ -508,11 +510,38 @@ export function ModuloPendientes({
                       <p className="text-xs text-muted-foreground italic">Sin anotaciones todavía.</p>
                     ) : (
                       hitosFicha.map((h) => (
-                        <div key={h.id} className="flex gap-3 py-0.5 text-xs">
-                          <span className="w-20 shrink-0 font-bold text-teal-700">
-                            {formatFecha(h.fecha)}
-                          </span>
-                          <span>{h.detalle}</span>
+                        <div key={h.id} className="flex items-center gap-2 py-0.5">
+                          <input
+                            key={`hf-${h.id}-${h.fecha}`}
+                            type="date"
+                            defaultValue={h.fecha}
+                            onBlur={(e) => {
+                              const val = e.target.value;
+                              if (val && val !== h.fecha)
+                                ejecutar(() => editarHitoPendiente(h.id, { fecha: val }), "Anotación actualizada.");
+                            }}
+                            className="h-7 w-32 shrink-0 rounded-md border border-input bg-white px-1.5 text-[11px] font-semibold text-teal-700 shadow-xs focus:outline-2 focus:outline-ring/50"
+                          />
+                          <input
+                            key={`hd-${h.id}-${h.detalle}`}
+                            type="text"
+                            defaultValue={h.detalle}
+                            onBlur={(e) => {
+                              const val = e.target.value.trim();
+                              if (val && val !== h.detalle)
+                                ejecutar(() => editarHitoPendiente(h.id, { detalle: val }), "Anotación actualizada.");
+                            }}
+                            className="h-7 min-w-0 flex-1 rounded-md border border-input bg-white px-1.5 text-xs shadow-xs focus:outline-2 focus:outline-ring/50"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => ejecutar(() => eliminarHitoPendiente(h.id), "Anotación eliminada.")}
+                            disabled={pendiente}
+                            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-600"
+                            title="Eliminar anotación"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
                         </div>
                       ))
                     )}

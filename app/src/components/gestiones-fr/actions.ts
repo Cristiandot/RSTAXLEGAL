@@ -226,6 +226,21 @@ export async function agregarHitoGestion(
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
+export async function editarHitoGestion(
+  id: string,
+  patch: { fecha?: string; detalle?: string },
+): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("gestion_legal_hitos").update(patch).eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function eliminarHitoGestion(id: string): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("gestion_legal_hitos").delete().eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
 // ===================== Pendientes =====================
 
 export async function crearPendiente(input: {
@@ -263,6 +278,21 @@ export async function agregarHitoPendiente(
   const { error } = await supabase
     .from("pendientes_fr_hitos")
     .insert({ pendiente_id: pendienteId, fecha, detalle: detalle.trim() });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function editarHitoPendiente(
+  id: string,
+  patch: { fecha?: string; detalle?: string },
+): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("pendientes_fr_hitos").update(patch).eq("id", id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export async function eliminarHitoPendiente(id: string): Promise<Resultado> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("pendientes_fr_hitos").delete().eq("id", id);
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
