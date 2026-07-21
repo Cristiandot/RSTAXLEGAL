@@ -377,6 +377,30 @@ export type EmisionItem = {
   activo: boolean;
 };
 
+/** Una factura RS impaga (tabla facturas) para la cobranza. */
+export type CobranzaFactura = {
+  id: string;
+  folio: number;
+  periodo: string; // YYYY-MM
+  monto: number;
+  archivo_path: string;
+  tipo: string | null;
+};
+
+/** Un cliente con facturas RS impagas, agrupado para el correo de cobranza. */
+export type CobranzaCliente = {
+  cliente_id: string;
+  razon_social: string;
+  correo: string | null; // destinatario (contacto_correo ?? correo_empresa)
+  facturas: CobranzaFactura[];
+  total: number;
+  docs: number;
+  suscrito: boolean; // ya tiene suscripción de pago automático
+  planNombre: string | null; // plan de suscripción sugerido según UF
+  planLink: string | null;
+  ultimoEnvio: string | null; // created_at del último correo de cobranza enviado
+};
+
 export type DatosGerencia = {
   cartera: CarteraItem[];
   metasCategoria: MetaCategoria[];
@@ -387,6 +411,7 @@ export type DatosGerencia = {
   deudas: DeudaCliente[];
   links: LinkPlan[];
   emision: EmisionItem[];
+  cobranza: CobranzaCliente[];
   ufActual: number;
   pendienteMes: number;
 };

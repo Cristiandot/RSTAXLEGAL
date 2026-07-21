@@ -38,6 +38,7 @@ import {
 } from "./actions";
 import { GraficoCrecimiento, TabCrecimiento, etiquetaMes } from "./gerencia-crecimiento";
 import { TabEmision } from "./gerencia-emision";
+import { TabCobranza } from "./gerencia-cobranza";
 import {
   CATEGORIAS_GERENCIA,
   type CarteraItem,
@@ -62,6 +63,7 @@ const TABS = [
   { id: "crecimiento", label: "Crecimiento" },
   { id: "metas", label: "META RS" },
   { id: "emision", label: "Emisión del mes" },
+  { id: "cobranza", label: "Cobranza" },
   { id: "posiciones", label: "Posiciones" },
   { id: "ads", label: "Ads · Deudas" },
   { id: "links", label: "Links de pago" },
@@ -101,7 +103,7 @@ export function ModuloGerencia({
   const [formLink, setFormLink] = useState(false);
   const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
 
-  const { cartera, metasCategoria, hitos, crecimiento, posiciones, ads, deudas, links, emision, ufActual } =
+  const { cartera, metasCategoria, hitos, crecimiento, posiciones, ads, deudas, links, emision, cobranza, ufActual } =
     datos;
 
   const mesActual = new Date().toISOString().slice(0, 7);
@@ -192,6 +194,7 @@ export function ModuloGerencia({
 
   const contadorTab: Partial<Record<TabId, string>> = {
     emision: porEmitir.length ? `${porEmitir.length}` : undefined,
+    cobranza: cobranza.length ? `${cobranza.length}` : undefined,
     posiciones: posicionesActivas.length ? `${posicionesActivas.length}` : undefined,
     "ads": deudasPendientes.length ? `${deudasPendientes.length}` : undefined,
   };
@@ -344,6 +347,9 @@ export function ModuloGerencia({
           recargar={recargar}
         />
       ) : null}
+
+      {/* ===================== COBRANZA ===================== */}
+      {tab === "cobranza" ? <TabCobranza cobranza={cobranza} recargar={recargar} /> : null}
 
       {/* ===================== META RS ===================== */}
       {tab === "metas" ? (

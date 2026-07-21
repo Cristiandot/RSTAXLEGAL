@@ -81,6 +81,16 @@ separa fecha+hora.
   resto oculto. **Las audiencias NO son pendientes** (viven en la causa y el calendario); sí las gestiones.
 - **Time Box**: bloques del día por hora (audiencias, gestiones, pendientes, prospección, agenda) + lo
   "sin hora" arriba + tarjeta con la `propuesta_diaria_fr` del día.
+- **Gerencia › Cobranza** (`gerencia-cobranza.tsx`, `TabCobranza`): sistema de cobro de honorarios RS.
+  Agrupa las **facturas impagas** (`facturas.pagada = false`, con `cliente_id`) por cliente con su total y
+  documentos. Por cliente, una ficha (Sheet) arma el **correo de cobranza**: mensaje editable + detalle de
+  facturas + total (auto) + invitación a **suscripción** (link de `gerencia_links_planes` elegido por el
+  tramo de UF ≈ monto/UF), y **adjunta los PDF** (bucket `facturas`, `archivo_path`). Se envía vía
+  `enviarCobranza` (server action → Resend, a nombre del usuario, bcc a su buzón; ver `@/lib/enviar-correo`)
+  y queda registrado en **`gerencia_cobranza_envios`** (cliente, correo, folios, docs, total, enviado_por).
+  El destinatario es `contacto_correo ?? correo_empresa`. NO confundir con `cobranza_actividad`, que es de
+  Tesorería (cobranza a los deudores de los clientes). La cobranza se carga dentro de `cargarGerencia`
+  (`DatosGerencia.cobranza`).
 
 ## Propuesta diaria automática
 Agente programado **local** `propuesta-diaria-fr` (`~/.claude/scheduled-tasks/`), ~07:00 hora Chile:

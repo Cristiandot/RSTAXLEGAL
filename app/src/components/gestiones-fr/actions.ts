@@ -1,11 +1,17 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { getUsuarioActual } from "@/lib/auth";
+import { enviarCorreo, htmlCorreoDocumento } from "@/lib/enviar-correo";
+import { correosCopiaCliente } from "@/lib/correos-cliente";
+import { etiquetaPeriodo } from "@/lib/periodos";
+import { nombreArchivo, montoCLP } from "@/lib/format";
 import type {
   AdItem,
   AgendaEvento,
   CarteraItem,
   Causa,
+  CobranzaCliente,
   Contacto,
   Cotizacion,
   DatosGerencia,
@@ -26,6 +32,15 @@ type Resultado = { ok: boolean; error?: string };
 
 /** Usuario Felipe Rodríguez (dueño de este panel), para filtrar sus requerimientos. */
 const FELIPE_ID = "a93e8f17-7f21-418a-9895-c612aa02dd0c";
+
+/** Extrae el valor UF de un plan de suscripción desde su monto ("1,2 UF") o nombre ("Plan UF 1,2"). */
+function parsePlanUF(monto: string | null, nombre: string | null): number | null {
+  const src = `${monto ?? ""} ${nombre ?? ""}`;
+  const m = src.match(/(\d+(?:[.,]\d+)?)/);
+  if (!m) return null;
+  const x = Number(m[1].replace(",", "."));
+  return Number.isFinite(x) ? x : null;
+}
 
 /** Carga todo el módulo de una vez (se llama al desbloquear la sección). */
 export async function cargarGestionesFR(): Promise<{
@@ -520,6 +535,86 @@ export async function cargarGerencia(): Promise<
   const ufActual =
     ufIndicadores ?? serie.find((p) => p.mes === mesActual)?.uf ?? 40823;
 
+  // ---- Cobranza: facturas RS impagas agrupadas por cliente ----
+  const [impagasRes, cobranzaLogRes] = await Promise.all([
+    supabase
+      .from("facturas")
+      .select(
+        "id, folio, periodo, monto, archivo_path, tipo, cliente_id, clientes(razon_social, contacto_correo, correo_empresa, suscripcion_pago)",
+      )
+      .eq("pagada", false)
+      .not("cliente_id", "is", null),
+    supabase
+      .from("gerencia_cobranza_envios")
+      .select("cliente_id, created_at")
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const planes = (links.data ?? [])
+    .map((l) => ({
+      uf: parsePlanUF(l.monto as string | null, l.nombre as string | null),
+      link: l.link as string,
+      nombre: l.nombre as string,
+    }))
+    .filter((p): p is { uf: number; link: string; nombre: string } => p.uf != null);
+
+  const ultimoEnvio = new Map<string, string>();
+  for (const e of cobranzaLogRes.data ?? []) {
+    if (e.cliente_id && !ultimoEnvio.has(e.cliente_id as string))
+      ultimoEnvio.set(e.cliente_id as string, e.created_at as string);
+  }
+
+  const porCliente = new Map<string, CobranzaCliente>();
+  for (const f of impagasRes.data ?? []) {
+    const cid = f.cliente_id as string;
+    const cli = f.clientes as unknown as {
+      razon_social: string;
+      contacto_correo: string | null;
+      correo_empresa: string | null;
+      suscripcion_pago: boolean | null;
+    } | null;
+    if (!porCliente.has(cid)) {
+      porCliente.set(cid, {
+        cliente_id: cid,
+        razon_social: cli?.razon_social ?? "—",
+        correo: cli?.contacto_correo ?? cli?.correo_empresa ?? null,
+        facturas: [],
+        total: 0,
+        docs: 0,
+        suscrito: !!cli?.suscripcion_pago,
+        planNombre: null,
+        planLink: null,
+        ultimoEnvio: ultimoEnvio.get(cid) ?? null,
+      });
+    }
+    const g = porCliente.get(cid)!;
+    const monto = num(f.monto);
+    g.facturas.push({
+      id: f.id as string,
+      folio: f.folio as number,
+      periodo: f.periodo as string,
+      monto,
+      archivo_path: f.archivo_path as string,
+      tipo: (f.tipo as string) ?? null,
+    });
+    g.total += monto;
+    g.docs += 1;
+  }
+
+  for (const g of porCliente.values()) {
+    const ufAprox = ufActual ? Math.max(...g.facturas.map((f) => f.monto)) / ufActual : null;
+    if (ufAprox != null && planes.length) {
+      const mejor = planes.reduce((a, b) =>
+        Math.abs(b.uf - ufAprox) < Math.abs(a.uf - ufAprox) ? b : a,
+      );
+      g.planNombre = mejor.nombre;
+      g.planLink = mejor.link;
+    }
+    g.facturas.sort((a, b) => (a.periodo < b.periodo ? -1 : 1));
+  }
+
+  const cobranza = [...porCliente.values()].sort((a, b) => b.total - a.total);
+
   return {
     ok: true,
     datos: {
@@ -548,10 +643,105 @@ export async function cargarGerencia(): Promise<
       deudas: (deudas.data ?? []).map((d) => ({ ...d, monto: num(d.monto) })) as DeudaCliente[],
       links: (links.data ?? []) as LinkPlan[],
       emision: (emision.data ?? []).map((e) => ({ ...e, valor: num(e.valor) })) as EmisionItem[],
+      cobranza,
       ufActual,
       pendienteMes: netoPorMes.get(mesActual)?.pendiente ?? 0,
     },
   };
+}
+
+/**
+ * Envía el correo de cobranza a un cliente: adjunta las facturas RS impagas
+ * seleccionadas, detalla y suma el total, e invita a la suscripción. Sale a
+ * nombre del usuario conectado (Resend), con copia oculta a su buzón, y queda
+ * registrado en gerencia_cobranza_envios.
+ */
+export async function enviarCobranza(input: {
+  clienteId: string;
+  facturaIds: string[];
+  introHtml: string;
+  planNombre: string | null;
+  planLink: string | null;
+}): Promise<{ ok: boolean; error?: string; enviadoA?: string }> {
+  const { clienteId, facturaIds } = input;
+  if (!facturaIds.length) return { ok: false, error: "Selecciona al menos una factura." };
+  const supabase = await createClient();
+
+  const { data: cli } = await supabase
+    .from("clientes")
+    .select("razon_social, contacto_correo, correo_empresa")
+    .eq("id", clienteId)
+    .single();
+  if (!cli) return { ok: false, error: "Cliente no encontrado." };
+  const destino = cli.contacto_correo ?? cli.correo_empresa;
+  if (!destino)
+    return { ok: false, error: `${cli.razon_social} no tiene correo en su ficha. Cárgalo y reintenta.` };
+
+  const { data: facturas, error: errF } = await supabase
+    .from("facturas")
+    .select("folio, periodo, monto, archivo_path, razon_social_factura")
+    .in("id", facturaIds)
+    .eq("pagada", false);
+  if (errF) return { ok: false, error: errF.message };
+  if (!facturas || !facturas.length)
+    return { ok: false, error: "No hay facturas impagas para cobrar." };
+
+  const adjuntos: { filename: string; content: string }[] = [];
+  for (const f of facturas) {
+    const { data: pdf, error: errPdf } = await supabase.storage
+      .from("facturas")
+      .download(f.archivo_path as string);
+    if (errPdf || !pdf)
+      return { ok: false, error: `No se pudo leer el PDF de la factura ${f.folio}: ${errPdf?.message ?? ""}` };
+    adjuntos.push({
+      filename: nombreArchivo(`Factura ${f.folio} - ${f.razon_social_factura ?? cli.razon_social}`) + ".pdf",
+      content: Buffer.from(await pdf.arrayBuffer()).toString("base64"),
+    });
+  }
+
+  const total = facturas.reduce((s, f) => s + num(f.monto), 0);
+  const filas = [...facturas]
+    .sort((a, b) => ((a.periodo as string) < (b.periodo as string) ? -1 : 1))
+    .map(
+      (f) =>
+        `<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e9f0;">N° ${f.folio}</td><td style="padding:6px 10px;border-bottom:1px solid #e5e9f0;">${etiquetaPeriodo(f.periodo as string)}</td><td style="padding:6px 10px;border-bottom:1px solid #e5e9f0;text-align:right;">${montoCLP(Math.round(num(f.monto)))}</td></tr>`,
+    )
+    .join("");
+  const tabla = `<table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:14px;"><thead><tr><th style="padding:6px 10px;text-align:left;border-bottom:2px solid #0b2545;">Factura</th><th style="padding:6px 10px;text-align:left;border-bottom:2px solid #0b2545;">Período</th><th style="padding:6px 10px;text-align:right;border-bottom:2px solid #0b2545;">Monto</th></tr></thead><tbody>${filas}<tr><td colspan="2" style="padding:8px 10px;text-align:right;font-weight:bold;">Total a pagar</td><td style="padding:8px 10px;text-align:right;font-weight:bold;">${montoCLP(Math.round(total))}</td></tr></tbody></table>`;
+
+  const suscripcion = input.planLink
+    ? `<p style="margin:16px 0 0;">Para evitar estas gestiones mes a mes, te invitamos a activar el <strong>pago automático por suscripción</strong>${input.planNombre ? ` (${input.planNombre})` : ""}: <a href="${input.planLink}" style="color:#17A2B8;font-weight:bold;">Activar suscripción</a>.</p>`
+    : "";
+
+  const usuario = await getUsuarioActual();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const res = await enviarCorreo({
+    para: destino,
+    cc: await correosCopiaCliente([clienteId], [destino]),
+    asunto: `Estado de cuenta — RS Tax & Legal (${facturas.length} ${facturas.length === 1 ? "factura pendiente" : "facturas pendientes"})`,
+    html: htmlCorreoDocumento({
+      titulo: "Estado de cuenta",
+      cuerpo: `${input.introHtml}${tabla}${suscripcion}`,
+    }),
+    adjuntos,
+    de: { nombre: usuario.nombre, correo: usuario.correo },
+  });
+  if (!res.ok) return { ok: false, error: res.error };
+
+  await supabase.from("gerencia_cobranza_envios").insert({
+    cliente_id: clienteId,
+    correo: destino,
+    folios: facturas.map((f) => f.folio as number),
+    docs: facturas.length,
+    total: Math.round(total),
+    asunto: `Estado de cuenta — ${facturas.length} doc(s)`,
+    enviado_por: user?.id ?? null,
+  });
+
+  return { ok: true, enviadoA: destino };
 }
 
 /** Edita un mes del plan de crecimiento (meta, real manual u UF). El mes es YYYY-MM. */
