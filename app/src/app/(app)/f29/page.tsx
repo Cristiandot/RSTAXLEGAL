@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { normalizarPeriodo } from "@/lib/periodos";
-import type { F29Row, UsuarioOpcion } from "@/lib/ciclos";
+import type { F29Row, PostergacionRow, UsuarioOpcion } from "@/lib/ciclos";
 import { F29Client } from "./f29-client";
 
 export const metadata = { title: "F29 — RS Tax & Legal" };
@@ -14,7 +14,7 @@ export default async function F29Page({
   const periodo = normalizarPeriodo(p);
   const supabase = await createClient();
 
-  const [usuariosRes, filasRes, clavesRes] = await Promise.all([
+  const [usuariosRes, filasRes, clavesRes, postergRes] = await Promise.all([
     supabase.from("usuarios").select("id, nombre").eq("activo", true).order("nombre"),
     supabase
       .from("v_checklist_f29")
@@ -22,6 +22,13 @@ export default async function F29Page({
       .eq("periodo", periodo)
       .order("razon_social"),
     supabase.from("clientes").select("id, clave_sii"),
+    // Todas las postergaciones de IVA abiertas (cualquier período) para el panel
+    // de seguimiento de cobro — independiente del período seleccionado.
+    supabase
+      .from("v_iva_postergado")
+      .select("*")
+      .is("iva_postergado_pagado_en", null)
+      .order("vencimiento"),
   ]);
 
   // Solo el booleano viaja al navegador; la clave se revela vía server action.
@@ -37,6 +44,7 @@ export default async function F29Page({
         filas={(filasRes.data ?? []) as F29Row[]}
         usuarios={(usuariosRes.data ?? []) as UsuarioOpcion[]}
         clavesSii={clavesSii}
+        postergaciones={(postergRes.data ?? []) as PostergacionRow[]}
         errorCarga={filasRes.error?.message ?? null}
       />
     </main>

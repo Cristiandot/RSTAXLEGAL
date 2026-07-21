@@ -33,6 +33,22 @@ export async function marcarObservadaF29(
   return { ok: true };
 }
 
+/** Marca (o revierte) como pagado el IVA postergado de un ciclo F29. */
+export async function marcarPostergadoPagado(
+  cicloId: string,
+  pagado: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const supabase = await createClient();
+  const hoy = new Date().toISOString().slice(0, 10);
+  const { error } = await supabase
+    .from("ciclo_f29")
+    .update({ iva_postergado_pagado_en: pagado ? hoy : null })
+    .eq("id", cicloId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/f29");
+  return { ok: true };
+}
+
 export type GuardarF29Input = {
   cicloId: string;
   clienteId: string;

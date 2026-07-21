@@ -124,6 +124,20 @@ export type F29Row = {
   sii_sincronizado_en: string | null; // última vez que se bajó del SII
 };
 
+/** Fila de `v_iva_postergado`: seguimiento de cobro del IVA postergado. */
+export type PostergacionRow = {
+  ciclo_id: string;
+  cliente_id: string;
+  razon_social: string;
+  rut_empresa: string | null;
+  grupo_codigo: string | null;
+  periodo: string;
+  monto: number | string | null; // IVA postergado pendiente
+  folio_f29: string | null;
+  iva_postergado_pagado_en: string | null; // null = pendiente de cobro
+  vencimiento: string | null; // vence a los 2 meses (art. 64 LIVS)
+};
+
 /** Fila de `v_comunicacion_mensual` (resumen mensual de pagos por empresa). */
 export type ComunicacionRow = {
   comunicacion_id: string;

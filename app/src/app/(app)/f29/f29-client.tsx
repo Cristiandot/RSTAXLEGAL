@@ -15,6 +15,7 @@ import {
   claseEstado,
   f29Cerrado,
   type F29Row,
+  type PostergacionRow,
   type UsuarioOpcion,
 } from "@/lib/ciclos";
 import {
@@ -23,6 +24,7 @@ import {
   guardarF29,
   getObservadaF29,
   marcarObservadaF29,
+  marcarPostergadoPagado,
 } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -223,6 +225,124 @@ function SiiCelda({ fila }: { fila: F29Row }) {
 const selectCls =
   "h-9 rounded-md border border-input bg-card px-3 text-sm shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
+/**
+ * Panel de seguimiento del IVA postergado (art. 64 LIVS, vence a los 2 meses).
+ * Vive arriba de la grilla /f29 y es INDEPENDIENTE del período seleccionado:
+ * lista todas las postergaciones abiertas de la cartera para poder cobrarlas.
+ */
+function PostergacionesPanel({ filas }: { filas: PostergacionRow[] }) {
+  const router = useRouter();
+  const [abierto, setAbierto] = useState(true);
+  const [guardando, startGuardar] = useTransition();
+  const hoy = new Date().toISOString().slice(0, 10);
+  const total = filas.reduce((s, f) => s + (Number(f.monto) || 0), 0);
+  const vencidos = filas.filter((f) => f.vencimiento && f.vencimiento < hoy).length;
+
+  function marcarPagado(cicloId: string) {
+    startGuardar(async () => {
+      const r = await marcarPostergadoPagado(cicloId, true);
+      if (r.ok) {
+        toast.success("IVA postergado marcado como pagado");
+        router.refresh();
+      } else {
+        toast.error(r.error ?? "No se pudo marcar como pagado");
+      }
+    });
+  }
+
+  if (filas.length === 0) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-sm text-emerald-700">
+        <CheckCircle2 className="size-4 shrink-0" />
+        Sin IVA postergado pendiente de cobro.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-amber-200 bg-amber-50/40">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        className="flex w-full items-center gap-2 p-3 text-left"
+      >
+        <AlertTriangle className="size-4 shrink-0 text-amber-600" />
+        <span className="font-medium text-amber-900">
+          IVA postergado — seguimiento de cobro
+        </span>
+        <span className="text-sm text-amber-800">
+          {filas.length} pendiente{filas.length === 1 ? "" : "s"} ·{" "}
+          {formatMonto(total)}
+          {vencidos > 0 ? ` · ${vencidos} vencido${vencidos === 1 ? "" : "s"}` : ""}
+        </span>
+        <span className="ml-auto text-xs text-muted-foreground">
+          {abierto ? "ocultar" : "ver"}
+        </span>
+      </button>
+      {abierto && (
+        <div className="overflow-x-auto border-t border-amber-200 bg-card">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th className="px-3 py-1.5 font-medium">Cliente</th>
+                <th className="px-3 py-1.5 font-medium">Período</th>
+                <th className="px-3 py-1.5 text-right font-medium">Monto</th>
+                <th className="px-3 py-1.5 font-medium">Folio</th>
+                <th className="px-3 py-1.5 font-medium">Vence</th>
+                <th className="px-3 py-1.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((f) => {
+                const vencido = Boolean(f.vencimiento && f.vencimiento < hoy);
+                return (
+                  <tr key={f.ciclo_id} className="border-t border-border">
+                    <td className="px-3 py-1.5">
+                      <span className="flex items-center gap-1.5">
+                        {f.grupo_codigo && (
+                          <span className="rounded bg-muted px-1 text-[11px] font-semibold text-muted-foreground">
+                            {f.grupo_codigo}
+                          </span>
+                        )}
+                        <span className="truncate" title={f.razon_social}>
+                          {f.razon_social}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="px-3 py-1.5 tabular-nums">{f.periodo}</td>
+                    <td className="px-3 py-1.5 text-right font-medium tabular-nums">
+                      {formatMonto(f.monto ?? 0)}
+                    </td>
+                    <td className="px-3 py-1.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+                      {f.folio_f29 ?? "—"}
+                    </td>
+                    <td
+                      className={`px-3 py-1.5 tabular-nums ${vencido ? "font-semibold text-red-600" : ""}`}
+                    >
+                      {formatFecha(f.vencimiento)}
+                      {vencido ? " · vencido" : ""}
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      <button
+                        type="button"
+                        disabled={guardando}
+                        onClick={() => marcarPagado(f.ciclo_id)}
+                        className="rounded border border-input bg-card px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+                      >
+                        Marcar pagado
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ResumenCard({ label, valor }: { label: string; valor: number }) {
   return (
     <div className="card-soft rounded-xl bg-card px-4 py-3">
@@ -237,6 +357,7 @@ export function F29Client({
   filas,
   usuarios,
   clavesSii,
+  postergaciones,
   errorCarga,
 }: {
   periodo: string;
@@ -244,6 +365,8 @@ export function F29Client({
   usuarios: UsuarioOpcion[];
   /** cliente_id → tiene clave SII guardada (el valor se revela on demand). */
   clavesSii: Record<string, boolean>;
+  /** Postergaciones de IVA abiertas (todos los períodos) para el seguimiento de cobro. */
+  postergaciones: PostergacionRow[];
   errorCarga: string | null;
 }) {
   const router = useRouter();
@@ -528,6 +651,8 @@ export function F29Client({
           Armado y presentación mensual del F29. Plazo uniforme: día 20.
         </p>
       </div>
+
+      <PostergacionesPanel filas={postergaciones} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {resumen.map((r) => (
