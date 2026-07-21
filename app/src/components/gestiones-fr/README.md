@@ -90,7 +90,12 @@ separa fecha+hora.
   y queda registrado en **`gerencia_cobranza_envios`** (cliente, correo, folios, docs, total, enviado_por).
   El destinatario es `contacto_correo ?? correo_empresa`. NO confundir con `cobranza_actividad`, que es de
   Tesorería (cobranza a los deudores de los clientes). La cobranza se carga dentro de `cargarGerencia`
-  (`DatosGerencia.cobranza`).
+  (`DatosGerencia.cobranza`). **Notas de crédito**: las `facturas.tipo='nota_credito'` NO se cobran; si su
+  `folio_ref` apunta a una factura pendiente del cliente, esa factura queda **acreditada** (se excluye del
+  cobro); las NC sin match quedan como **advertencia** (`ncCount`/`ncMonto`) — así se evita netear montos
+  anómalos (p. ej. NC folio 81 Panaderías $81M cuyo ref no existe). **Forma de pago**: `facturas.forma_pago`
+  ('T' transfiere / 'S' suscripción), backfilleada por folio desde la hoja "Facturación RS" (columna L);
+  Cobranza muestra el badge por cliente (moda de sus facturas).
 
 ## Propuesta diaria automática
 Agente programado **local** `propuesta-diaria-fr` (`~/.claude/scheduled-tasks/`), ~07:00 hora Chile:
