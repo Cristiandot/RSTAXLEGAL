@@ -217,7 +217,7 @@ export const AREA_PENDIENTE_LABEL: Record<string, string> = {
 };
 
 /** Materias, según catálogo de ClickUp. */
-export const MATERIAS_CAUSA = ["Laboral", "Familia", "Civil"] as const;
+export const MATERIAS_CAUSA = ["Laboral", "Familia", "Civil", "Penal"] as const;
 
 /** Tribunales frecuentes (catálogo de ClickUp). El campo admite además texto
  *  libre para tribunales fuera de esta lista. */
@@ -234,6 +234,7 @@ export const TRIBUNALES_CAUSA = [
   "JF de San Fernando",
   "JLT Puerto Montt",
   "29° JC Santiago",
+  "JG Viña del Mar",
 ] as const;
 
 /** Deben calzar EXACTO con el CHECK de la tabla `contactos`. */
