@@ -172,14 +172,19 @@ export type Pendiente = {
   hitos: HitoPendiente[];
 };
 
-/** Requerimiento del equipo asignado a Felipe (espejo de tareas_oficina). */
+/** Requerimiento del equipo asignado a Felipe (espejo de v_gestiones_oficina,
+ *  fuente tareas_oficina) — misma info que la bandeja de Inicio. */
 export type Requerimiento = {
-  id: string;
-  titulo: string;
+  id: string; // gestion_id = tareas_oficina.id
+  numero: number | null;
+  titulo: string | null;
   detalle: string | null;
   canal: string | null;
   plazo: string | null;
-  estado: string;
+  cliente: string | null; // grupo
+  cliente_codigo: string | null;
+  razon_social: string | null; // empresa
+  created_at: string;
 };
 
 /** Propuesta de trabajo diaria (tabla propuesta_diaria_fr). */

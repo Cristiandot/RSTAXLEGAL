@@ -22,6 +22,13 @@ import {
   terminarRequerimiento,
   togglePendiente,
 } from "./actions";
+import {
+  CANAL_LABEL,
+  categoriaDe,
+  claseCategoria,
+  formatDuracion,
+  semaforoSla,
+} from "@/lib/gestiones";
 import { dtLocal, fmtFechaHora, splitDT } from "./fecha-hora";
 import {
   AREAS_PENDIENTE,
@@ -55,7 +62,6 @@ function isoMasDias(n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-const hoyIso = () => isoMasDias(0);
 const VENTANA_DIAS = 10;
 
 function AreaTag({ area }: { area: string }) {
@@ -70,13 +76,23 @@ function AreaTag({ area }: { area: string }) {
   );
 }
 
+function diasAtraso(fecha: string): number {
+  const [y, m, d] = fecha.split("-").map(Number);
+  const hoy = new Date();
+  const a = Date.UTC(y, m - 1, d);
+  const b = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  return Math.round((b - a) / 86_400_000);
+}
+
 function Fecha({ fecha, hora = null }: { fecha: string | null; hora?: string | null }) {
   if (!fecha) return <span className="text-[11px] text-muted-foreground">—</span>;
-  const vencido = fecha < hoyIso();
+  const atraso = diasAtraso(fecha);
+  const vencido = atraso > 0;
   return (
     <span className={`shrink-0 text-[11px] font-medium ${vencido ? "text-red-600" : "text-muted-foreground"}`}>
       {vencido ? "⚠ " : "📅 "}
       {fmtFechaHora(fecha, hora)}
+      {vencido ? ` · +${atraso} d de atraso` : ""}
     </span>
   );
 }
@@ -106,7 +122,20 @@ export function ModuloPendientes({
   const ficha = fichaId ? (pendientes.find((p) => p.id === fichaId) ?? null) : null;
   const hitosFicha = ficha ? [...ficha.hitos].sort((a, b) => (a.fecha < b.fecha ? -1 : 1)) : [];
 
-  const manualesPend = useMemo(() => pendientes.filter((p) => !p.hecho), [pendientes]);
+  const manualesPend = useMemo(
+    () =>
+      pendientes
+        .filter((p) => !p.hecho)
+        .sort((a, b) => {
+          const fa = a.fecha ?? "";
+          const fb = b.fecha ?? "";
+          if (fa && fb && fa !== fb) return fa < fb ? -1 : 1;
+          if (fa && !fb) return -1;
+          if (!fa && fb) return 1;
+          return a.numero - b.numero;
+        }),
+    [pendientes],
+  );
   const manualesHechos = useMemo(() => pendientes.filter((p) => p.hecho), [pendientes]);
 
   /** Vencimientos derivados de causas, gestiones y prospección (solo lectura). */
@@ -357,35 +386,75 @@ export function ModuloPendientes({
               Sin requerimientos pendientes asignados a ti.
             </p>
           ) : (
-            requerimientos.map((r) => (
-              <div key={r.id} className="flex items-center gap-3 border-b px-3 py-2 last:border-b-0">
-                <button
-                  type="button"
-                  onClick={() =>
-                    ejecutar(
-                      () => terminarRequerimiento(r.id),
-                      "Requerimiento cerrado (también en la bandeja).",
-                    )
-                  }
-                  disabled={pendiente}
-                  className="group flex size-5 shrink-0 items-center justify-center rounded border border-input hover:border-teal-500 hover:bg-muted"
-                  title="Dar por terminado (cierra también en la bandeja común)"
-                >
-                  <Check className="size-3.5 text-muted-foreground/25 group-hover:text-teal-600" />
-                </button>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{r.titulo}</div>
-                  {r.detalle ? (
-                    <div className="truncate text-[11px] text-muted-foreground">{r.detalle}</div>
+            requerimientos.map((r) => {
+              const cat = categoriaDe(r.cliente_codigo);
+              const sem = cat ? semaforoSla(r.created_at, cat.horas) : null;
+              const semCls = !sem
+                ? ""
+                : sem.estado === "rojo"
+                  ? "border-red-200 bg-red-50 text-red-700"
+                  : sem.estado === "amarillo"
+                    ? "border-amber-200 bg-amber-50 text-amber-700"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700";
+              const semTxt = !sem
+                ? ""
+                : sem.estado === "rojo"
+                  ? `vencido +${formatDuracion(-sem.restante)}`
+                  : `quedan ${formatDuracion(sem.restante)}`;
+              return (
+                <div key={r.id} className="flex flex-wrap items-center gap-2 border-b px-3 py-2 last:border-b-0">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      ejecutar(
+                        () => terminarRequerimiento(r.id),
+                        "Requerimiento cerrado (también en la bandeja).",
+                      )
+                    }
+                    disabled={pendiente}
+                    className="group flex size-5 shrink-0 items-center justify-center rounded border border-input hover:border-teal-500 hover:bg-muted"
+                    title="Dar por terminado (cierra también en la bandeja común)"
+                  >
+                    <Check className="size-3.5 text-muted-foreground/25 group-hover:text-teal-600" />
+                  </button>
+                  {r.numero != null ? (
+                    <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground">
+                      #{r.numero}
+                    </span>
                   ) : null}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">{r.titulo ?? r.detalle ?? "—"}</div>
+                    <div className="truncate text-[11px] text-muted-foreground">
+                      {[r.cliente, r.razon_social].filter(Boolean).join(" · ") || "—"}
+                      {r.titulo && r.detalle ? ` — ${r.detalle}` : ""}
+                    </div>
+                  </div>
+                  {r.cliente_codigo ? (
+                    cat ? (
+                      <span
+                        className={`shrink-0 rounded border px-1 py-px text-[10px] font-semibold ${claseCategoria(cat.letra)}`}
+                        title={`${r.cliente_codigo} · ${cat.label} · SLA ${cat.horas}h`}
+                      >
+                        {r.cliente_codigo} · {cat.label}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{r.cliente_codigo}</span>
+                    )
+                  ) : null}
+                  {r.canal ? (
+                    <span className="shrink-0 rounded border border-slate-200 bg-slate-50 px-1.5 py-px text-[10px] text-slate-600">
+                      {CANAL_LABEL[r.canal] ?? r.canal}
+                    </span>
+                  ) : null}
+                  {sem ? (
+                    <span className={`shrink-0 rounded-full border px-1.5 py-px text-[11px] font-semibold ${semCls}`}>
+                      {semTxt}
+                    </span>
+                  ) : null}
+                  {r.plazo ? <Fecha fecha={r.plazo} /> : null}
                 </div>
-                {r.canal ? (
-                  <span className="hidden shrink-0 text-[11px] text-muted-foreground sm:block">{r.canal}</span>
-                ) : null}
-                <AreaTag area="requerimiento" />
-                <Fecha fecha={r.plazo} />
-              </div>
-            ))
+              );
+            })
           )}
         </div>
         <p className="mt-1 text-[11px] text-muted-foreground">

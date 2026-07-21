@@ -72,11 +72,14 @@ export async function cargarGestionesFR(): Promise<{
         .select("*, hitos:pendientes_fr_hitos(id, pendiente_id, fecha, hora, detalle)")
         .order("created_at", { ascending: true }),
       supabase
-        .from("tareas_oficina")
-        .select("id, titulo, detalle, canal, plazo, estado")
+        .from("v_gestiones_oficina")
+        .select(
+          "id:gestion_id, numero, titulo, detalle:detalle_raw, canal, plazo, cliente, cliente_codigo, razon_social, created_at",
+        )
+        .eq("fuente", "tareas_oficina")
         .eq("responsable_id", FELIPE_ID)
-        .eq("estado", "pendiente")
-        .order("plazo", { ascending: true, nullsFirst: false }),
+        .eq("pendiente", true)
+        .order("created_at", { ascending: true }),
       supabase.from("agenda_externa").select("*").order("fecha", { ascending: true }),
       supabase.from("propuesta_diaria_fr").select("*").order("fecha", { ascending: false }).limit(14),
     ]);
