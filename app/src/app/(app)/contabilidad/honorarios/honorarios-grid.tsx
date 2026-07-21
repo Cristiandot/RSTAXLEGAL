@@ -30,6 +30,11 @@ export type FilaHonorarios = {
   liquido: number;
   sinClasificar: number;
   actualizado: string | null;
+  // BTE (boletas de prestación de servicios de terceros): retención vigente + N°.
+  bteEmiN: number;
+  bteEmiRet: number;
+  bteRecN: number;
+  bteRecRet: number;
 };
 
 const selectCls =
@@ -94,6 +99,8 @@ export function HonorariosGrid({
         case "bruto": return f.cargado ? f.bruto : null;
         case "retencion": return f.cargado ? f.retencion : null;
         case "liquido": return f.cargado ? f.liquido : null;
+        case "bte_emi": return f.bteEmiN > 0 ? f.bteEmiRet : null;
+        case "bte_rec": return f.bteRecN > 0 ? f.bteRecRet : null;
         default: return null;
       }
     };
@@ -207,6 +214,12 @@ export function HonorariosGrid({
               <ThSort col="bruto" orden={orden} setOrden={setOrden} className="text-right">Brutos</ThSort>
               <ThSort col="retencion" orden={orden} setOrden={setOrden} className="text-right">Retención</ThSort>
               <ThSort col="liquido" orden={orden} setOrden={setOrden} className="text-right">Líquido</ThSort>
+              <ThSort col="bte_emi" orden={orden} setOrden={setOrden} className="text-right">
+                <span title="Boletas de terceros EMITIDAS — retención (obligación del emisor, suma al F29)">BTE emit.</span>
+              </ThSort>
+              <ThSort col="bte_rec" orden={orden} setOrden={setOrden} className="text-right">
+                <span title="Boletas de terceros RECIBIDAS — retención">BTE recib.</span>
+              </ThSort>
               <TableHead className="w-8" />
             </TableRow>
           </TableHeader>
@@ -214,7 +227,7 @@ export function HonorariosGrid({
             {filtradas.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={10}
                   className="py-10 text-center text-muted-foreground"
                 >
                   Sin resultados para estos filtros.
@@ -273,6 +286,12 @@ export function HonorariosGrid({
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
                     {f.cargado ? formatMonto(f.liquido) : "—"}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums" title={f.bteEmiN ? `${f.bteEmiN} BTE emitidas` : ""}>
+                    {f.bteEmiN > 0 ? formatMonto(f.bteEmiRet) : <span className="text-muted-foreground/40">—</span>}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums" title={f.bteRecN ? `${f.bteRecN} BTE recibidas` : ""}>
+                    {f.bteRecN > 0 ? formatMonto(f.bteRecRet) : <span className="text-muted-foreground/40">—</span>}
                   </TableCell>
                   <TableCell>
                     <ChevronRight className="size-4 text-muted-foreground/50" />

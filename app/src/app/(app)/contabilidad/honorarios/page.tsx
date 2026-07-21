@@ -12,7 +12,7 @@ export default async function HonorariosGridPage({
   const anio = /^\d{4}$/.test(a ?? "") ? Number(a) : 2026;
   const supabase = await createClient();
 
-  const [clientesRes, honRes] = await Promise.all([
+  const [clientesRes, honRes, bteEmiRes, bteRecRes] = await Promise.all([
     supabase
       .from("clientes")
       .select("id, razon_social, rut_empresa, activo, fecha_termino_servicio, grupo:grupos_cliente(codigo)")
@@ -22,7 +22,25 @@ export default async function HonorariosGridPage({
       .select("cliente_id, brutos, retencion, liquido, cuenta_id, estado, updated_at")
       .like("periodo", `${anio}-%`)
       .limit(20000),
+    supabase.from("bte_emitidas").select("cliente_id, retencion, estado").like("periodo", `${anio}-%`).limit(20000),
+    supabase.from("bte_recibidas").select("cliente_id, retencion, estado").like("periodo", `${anio}-%`).limit(20000),
   ]);
+
+  // BTE (boletas de terceros): retención vigente + N° por cliente, emitidas y recibidas.
+  type AggBte = { n: number; ret: number };
+  const aggBte = (rows: { cliente_id: string; retencion: number | null; estado: string | null }[] | null) => {
+    const m = new Map<string, AggBte>();
+    for (const b of rows ?? []) {
+      if ((b.estado ?? "") === "ANULADA") continue;
+      const cur = m.get(b.cliente_id) ?? { n: 0, ret: 0 };
+      cur.n += 1;
+      cur.ret += Number(b.retencion ?? 0);
+      m.set(b.cliente_id, cur);
+    }
+    return m;
+  };
+  const bteEmi = aggBte(bteEmiRes.data as never);
+  const bteRec = aggBte(bteRecRes.data as never);
 
   type Agg = {
     n: number;
@@ -73,6 +91,10 @@ export default async function HonorariosGridPage({
       liquido: a?.liquido ?? 0,
       sinClasificar: a?.sinClasificar ?? 0,
       actualizado: a?.actualizado ?? null,
+      bteEmiN: bteEmi.get(c.id as string)?.n ?? 0,
+      bteEmiRet: bteEmi.get(c.id as string)?.ret ?? 0,
+      bteRecN: bteRec.get(c.id as string)?.n ?? 0,
+      bteRecRet: bteRec.get(c.id as string)?.ret ?? 0,
     };
   });
 
