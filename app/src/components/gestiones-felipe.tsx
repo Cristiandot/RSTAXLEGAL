@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
+  CalendarClock,
   FileText,
   LayoutDashboard,
   ListChecks,
@@ -30,6 +31,7 @@ import { ModuloComercial } from "@/components/gestiones-fr/modulo-comercial";
 import { ModuloGerencia } from "@/components/gestiones-fr/modulo-gerencia";
 import { ModuloGestiones } from "@/components/gestiones-fr/modulo-gestiones";
 import { ModuloPendientes } from "@/components/gestiones-fr/modulo-pendientes";
+import { ModuloTimeBox } from "@/components/gestiones-fr/modulo-timebox";
 import type {
   Causa,
   Contacto,
@@ -52,7 +54,7 @@ type Datos = {
   requerimientos: Requerimiento[];
 };
 
-type Modulo = "causas" | "gestiones" | "comercial" | "gerencia" | "pendientes";
+type Modulo = "timebox" | "causas" | "gestiones" | "comercial" | "gerencia" | "pendientes";
 
 export default function GestionesFelipe() {
   const router = useRouter();
@@ -62,7 +64,7 @@ export default function GestionesFelipe() {
   const [datos, setDatos] = useState<Datos | null>(null);
   const [gerencia, setGerencia] = useState<DatosGerencia | null>(null);
   const [cargando, setCargando] = useState(false);
-  const [modulo, setModulo] = useState<Modulo>("causas");
+  const [modulo, setModulo] = useState<Modulo>("timebox");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // El desbloqueo dura mientras viva la pestaña. Se lee tras montar para no
@@ -205,6 +207,21 @@ export default function GestionesFelipe() {
       <div className="mb-4 flex flex-wrap gap-2">
         <button
           type="button"
+          onClick={() => setModulo("timebox")}
+          className={`flex min-w-56 flex-1 items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition ${
+            modulo === "timebox"
+              ? "border-[var(--brand-teal,#17A2B8)] bg-accent"
+              : "border-transparent bg-white hover:bg-muted/50"
+          }`}
+        >
+          <CalendarClock className="size-5 shrink-0 text-[var(--brand-teal,#17A2B8)]" />
+          <span>
+            <span className="block text-sm font-semibold">Time Box</span>
+            <span className="block text-xs text-muted-foreground">agenda del día por bloques</span>
+          </span>
+        </button>
+        <button
+          type="button"
           onClick={() => setModulo("causas")}
           className={`flex min-w-64 flex-1 items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition ${
             modulo === "causas"
@@ -303,6 +320,14 @@ export default function GestionesFelipe() {
             Cargando gestiones…
           </CardContent>
         </Card>
+      ) : modulo === "timebox" ? (
+        <ModuloTimeBox
+          causas={datos.causas}
+          gestiones={datos.gestiones}
+          contactos={datos.contactos}
+          cotizaciones={datos.cotizaciones}
+          pendientes={datos.pendientes}
+        />
       ) : modulo === "causas" ? (
         <ModuloCausas causas={datos.causas} recargar={recargar} />
       ) : modulo === "gestiones" ? (
