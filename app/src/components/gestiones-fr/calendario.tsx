@@ -24,6 +24,43 @@ const CLASE_CHIP: Record<EventoCalendario["clase"], string> = {
   cotiz: "border-l-sky-600 bg-sky-50 text-sky-800",
 };
 
+/** Feriados legales NACIONALES de Chile (no incluye regionales). Viernes/Sábado
+ *  Santo, San Pedro y Encuentro de Dos Mundos ya vienen con su fecha trasladada. */
+const FERIADOS: Record<string, string> = {
+  "2026-01-01": "Año Nuevo",
+  "2026-04-03": "Viernes Santo",
+  "2026-04-04": "Sábado Santo",
+  "2026-05-01": "Día del Trabajo",
+  "2026-05-21": "Glorias Navales",
+  "2026-06-21": "Pueblos Indígenas",
+  "2026-06-29": "San Pedro y San Pablo",
+  "2026-07-16": "Virgen del Carmen",
+  "2026-08-15": "Asunción de la Virgen",
+  "2026-09-18": "Independencia",
+  "2026-09-19": "Glorias del Ejército",
+  "2026-10-12": "Encuentro de Dos Mundos",
+  "2026-10-31": "Iglesias Evangélicas",
+  "2026-11-01": "Todos los Santos",
+  "2026-12-08": "Inmaculada Concepción",
+  "2026-12-25": "Navidad",
+  "2027-01-01": "Año Nuevo",
+  "2027-03-26": "Viernes Santo",
+  "2027-03-27": "Sábado Santo",
+  "2027-05-01": "Día del Trabajo",
+  "2027-05-21": "Glorias Navales",
+  "2027-06-21": "Pueblos Indígenas",
+  "2027-06-28": "San Pedro y San Pablo",
+  "2027-07-16": "Virgen del Carmen",
+  "2027-08-15": "Asunción de la Virgen",
+  "2027-09-18": "Independencia",
+  "2027-09-19": "Glorias del Ejército",
+  "2027-10-11": "Encuentro de Dos Mundos",
+  "2027-10-31": "Iglesias Evangélicas",
+  "2027-11-01": "Todos los Santos",
+  "2027-12-08": "Inmaculada Concepción",
+  "2027-12-25": "Navidad",
+};
+
 function iso(y: number, m: number, d: number): string {
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
@@ -99,23 +136,34 @@ export function CalendarioFR({
           const dnum = d < 1 ? diasPrev + d : d > diasMes ? d - diasMes : d;
           const key = fuera ? null : iso(anio, mes, d);
           const esHoy = key === isoHoy;
+          const feriado = key ? FERIADOS[key] : undefined;
           const delDia = key ? (porDia.get(key) ?? []) : [];
           return (
             <div
               key={i}
               className={`min-h-[84px] border-r border-b p-1.5 text-xs last:border-r-0 [&:nth-child(7n)]:border-r-0 ${
-                fuera ? "bg-muted/40 text-muted-foreground/50" : ""
+                fuera ? "bg-muted/40 text-muted-foreground/50" : feriado ? "bg-rose-50/70" : ""
               } ${esHoy ? "bg-accent" : ""}`}
             >
               <span
                 className={`mb-1 inline-block text-[11px] font-bold ${
                   esHoy
                     ? "rounded-md bg-[var(--brand-teal,#17A2B8)] px-1.5 py-0.5 text-white"
-                    : ""
+                    : feriado
+                      ? "text-rose-600"
+                      : ""
                 }`}
               >
                 {dnum}
               </span>
+              {feriado ? (
+                <span
+                  title={feriado}
+                  className="mb-0.5 block truncate rounded bg-rose-100 px-1 text-[9.5px] leading-tight text-rose-700"
+                >
+                  {feriado}
+                </span>
+              ) : null}
               {delDia.map((ev, j) => {
                 const chip = `mb-0.5 block w-full truncate rounded border-l-[3px] px-1.5 py-0.5 text-left text-[10.5px] leading-tight ${CLASE_CHIP[ev.clase]}`;
                 return onEventoClick && ev.id ? (

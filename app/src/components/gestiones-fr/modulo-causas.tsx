@@ -229,6 +229,7 @@ export function ModuloCausas({
         <LeyendaCalendario
           items={[
             { color: "bg-red-500", label: "Audiencia / gestión" },
+            { color: "bg-rose-300", label: "Feriado" },
             { color: "bg-[var(--brand-teal,#17A2B8)]", label: "Hoy" },
           ]}
         />
