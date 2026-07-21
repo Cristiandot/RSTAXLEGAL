@@ -156,6 +156,15 @@ const ESTILO_CELDA: Record<EstadoCelda, { clase: string; glifo: string }> = {
   "sin-clave": { clase: "border-transparent text-slate-300", glifo: "·" },
 };
 
+const GLOSA_ESTADO: Record<EstadoCelda, string> = {
+  "cuadra": "cuadra con el SII",
+  "revisar": "no cuadra — revisar",
+  "parcial": "parcial (falta descarga asíncrona)",
+  "sin-verificar": "descargado, sin verificar",
+  "falta": "no cargado",
+  "sin-clave": "sin clave SII",
+};
+
 function ResumenCard({ label, valor, tono }: { label: string; valor: number; tono?: string }) {
   return (
     <div className="rounded-xl border bg-card px-4 py-3">
@@ -259,6 +268,9 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
       switch (orden.col) {
         case "empresa":
           return f.empresa.razon_social;
+        case "descargados":
+          // Más meses descargados primero (los "al día" arriba en desc).
+          return f.descargados;
         case "ventas":
           return tot?.ventas_total !== null && tot?.ventas_total !== undefined ? Number(tot.ventas_total) : null;
         case "compras":
@@ -387,11 +399,11 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
               <ThSort col="empresa" orden={orden} setOrden={setOrden} className="min-w-[170px]">
                 Empresa
               </ThSort>
-              {periodos.map((p, i) => (
-                <ThSort key={p} col={p} orden={orden} setOrden={setOrden} className="w-12 px-1 text-center">
-                  <span title={etiquetas[i]}>{etiquetaCorta(p, multiAnio)}</span>
-                </ThSort>
-              ))}
+              <ThSort col="descargados" orden={orden} setOrden={setOrden} className="min-w-[220px]">
+                <span title="Un cuadrito por mes; el color indica el estado (verde=cuadra, rojo=no cargado, ámbar=revisar, celeste=sin verificar). Clic en un mes para su detalle.">
+                  Meses{multiAnio ? "" : ` ${periodos[0]?.slice(0, 4) ?? ""}`}
+                </span>
+              </ThSort>
               <ThSort col="ventas" orden={orden} setOrden={setOrden} className="text-right">
                 Ventas {etiquetaCorta(mesTotales, multiAnio)}
               </ThSort>
@@ -433,17 +445,31 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
                   </div>
                 </TableCell>
 
-                {f.celdas.map((c, i) => (
-                  <TableCell key={periodos[i]} className="px-1 text-center">
-                    {f.empresa.tieneClave ? (
-                      <Link href={`/control-rcv/${f.empresa.id}?periodo=${periodos[i]}`} className="inline-block hover:opacity-80" title="Ver detalle del mes">
-                        <CeldaEstado estado={c.estado} d={c.d} tot={c.tot} />
-                      </Link>
-                    ) : (
-                      <CeldaEstado estado={c.estado} d={c.d} tot={c.tot} />
-                    )}
-                  </TableCell>
-                ))}
+                <TableCell className="px-1.5">
+                  <div className="flex flex-wrap gap-0.5">
+                    {f.celdas.map((c, i) => {
+                      const mesNum = Number(periodos[i].slice(5, 7));
+                      const cuadro = (
+                        <span
+                          className={cn(
+                            "inline-flex size-[18px] items-center justify-center rounded border text-[9px] font-semibold tabular-nums",
+                            ESTILO_CELDA[c.estado].clase,
+                          )}
+                          title={tituloMes(c.estado, c.d, c.tot, etiquetas[i])}
+                        >
+                          {mesNum}
+                        </span>
+                      );
+                      return f.empresa.tieneClave && c.estado !== "sin-clave" ? (
+                        <Link key={periodos[i]} href={`/control-rcv/${f.empresa.id}?periodo=${periodos[i]}`} className="hover:opacity-70">
+                          {cuadro}
+                        </Link>
+                      ) : (
+                        <span key={periodos[i]}>{cuadro}</span>
+                      );
+                    })}
+                  </div>
+                </TableCell>
 
                 <CeldaTotales
                   tot={mapaTotales.get(`${f.empresa.id}|${mesTotales}`) ?? null}
@@ -476,7 +502,7 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
             ))}
             {filtradas.length === 0 && (
               <TableRow>
-                <TableCell colSpan={periodos.length + 7} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                   Sin empresas para el filtro.
                 </TableCell>
               </TableRow>
@@ -527,40 +553,23 @@ function LeyendaItem({ clase, texto }: { clase: string; texto: string }) {
   );
 }
 
-/** Celda por (empresa, período): estado de descarga + cuadratura, con el detalle en el tooltip. */
-function CeldaEstado({ estado, d, tot }: { estado: EstadoCelda; d: DescargaRcv | null; tot: TotalesRcv | null }) {
-  const { clase, glifo } = ESTILO_CELDA[estado];
-  if (estado === "sin-clave") return <span className="text-slate-300">·</span>;
-
+/** Tooltip de un mes: estado de descarga + cuadratura contra el SII (docs, montos, fecha). */
+function tituloMes(estado: EstadoCelda, d: DescargaRcv | null, tot: TotalesRcv | null, etiqueta: string): string {
+  const cab = `${etiqueta} — ${GLOSA_ESTADO[estado]}`;
+  if (estado === "sin-clave") return cab;
+  if (estado === "falta") return `${cab}\nNo descargado`;
   const nuestros = d ? `${d.ventas_docs} ventas / ${d.compras_docs} compras` : "—";
-  const sii =
-    d && d.ventas_docs_sii !== null
-      ? `${d.ventas_docs_sii} ventas / ${d.compras_docs_sii} compras`
-      : "sin verificar";
-  // Cuadratura por monto: solo cuando la descarga guardó los totales del SII.
-  // Se muestran las sumas comparables (sin tipos fuera del RCV, ej. DIN 914).
+  const sii = d && d.ventas_docs_sii !== null ? `${d.ventas_docs_sii} ventas / ${d.compras_docs_sii} compras` : "sin verificar";
   const montos =
     d && d.ventas_total_sii !== null
       ? `\nVentas: ${formatMonto(Number(tot?.ventas_total_rcv ?? 0))} (SII ${formatMonto(Number(d.ventas_total_sii))})` +
         `\nCompras: ${formatMonto(Number(tot?.compras_total_rcv ?? 0))} (SII ${formatMonto(Number(d.compras_total_sii ?? 0))})`
       : "";
-  const titulo =
-    estado === "falta"
-      ? "No descargado"
-      : `Descargado: ${nuestros}\nSegún SII: ${sii}` +
-        montos +
-        (estado === "parcial" ? "\nAlto volumen: falta descarga asíncrona" : "") +
-        (estado === "revisar" ? "\n⚠ No cuadra con el SII" : "") +
-        (d?.ultima_descarga ? `\nDescargado el ${new Date(d.ultima_descarga).toLocaleDateString("es-CL")}` : "");
-
-  return (
-    <span
-      className={cn("inline-flex size-5 items-center justify-center rounded-md border text-[10px] font-medium", clase)}
-      title={titulo}
-    >
-      {glifo}
-    </span>
-  );
+  return `${cab}\nDescargado: ${nuestros}\nSegún SII: ${sii}` +
+    montos +
+    (estado === "parcial" ? "\nAlto volumen: falta descarga asíncrona" : "") +
+    (estado === "revisar" ? "\n⚠ No cuadra con el SII" : "") +
+    (d?.ultima_descarga ? `\nDescargado el ${new Date(d.ultima_descarga).toLocaleDateString("es-CL")}` : "");
 }
 
 /**
