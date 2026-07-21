@@ -541,7 +541,7 @@ export async function cargarGerencia(): Promise<
     supabase
       .from("facturas")
       .select(
-        "id, folio, periodo, monto, archivo_path, tipo, cliente_id, clientes(razon_social, contacto_correo, correo_empresa, suscripcion_pago)",
+        "id, folio, folio_ref, periodo, monto, archivo_path, tipo, forma_pago, cliente_id, clientes(razon_social, contacto_correo, correo_empresa, suscripcion_pago)",
       )
       .eq("pagada", false)
       .not("cliente_id", "is", null),
@@ -574,6 +574,9 @@ export async function cargarGerencia(): Promise<
   }
 
   const porCliente = new Map<string, CobranzaCliente>();
+  const ncsPorCliente = new Map<string, { monto: number; ref: number | null }[]>();
+  const formaCount = new Map<string, { T: number; S: number }>();
+
   for (const f of impagasRes.data ?? []) {
     const cid = f.cliente_id as string;
     const cli = f.clientes as unknown as {
@@ -599,16 +602,15 @@ export async function cargarGerencia(): Promise<
         ultimoEnvio: enviosPorCliente.get(cid)?.[0]?.created_at ?? null,
         envios: enviosPorCliente.get(cid) ?? [],
       });
+      ncsPorCliente.set(cid, []);
+      formaCount.set(cid, { T: 0, S: 0 });
     }
-    const g = porCliente.get(cid)!;
     const monto = num(f.monto);
-    // Las notas de crédito NO se cobran: reducen la deuda. Se cuentan aparte como advertencia.
     if ((f.tipo as string) === "nota_credito") {
-      g.ncCount += 1;
-      g.ncMonto += monto;
+      ncsPorCliente.get(cid)!.push({ monto, ref: (f.folio_ref as number) ?? null });
       continue;
     }
-    g.facturas.push({
+    porCliente.get(cid)!.facturas.push({
       id: f.id as string,
       folio: f.folio as number,
       periodo: f.periodo as string,
@@ -616,11 +618,31 @@ export async function cargarGerencia(): Promise<
       archivo_path: f.archivo_path as string,
       tipo: (f.tipo as string) ?? null,
     });
-    g.total += monto;
-    g.docs += 1;
+    const forma = f.forma_pago as string | null;
+    if (forma === "T") formaCount.get(cid)!.T += 1;
+    else if (forma === "S") formaCount.get(cid)!.S += 1;
   }
 
-  for (const g of porCliente.values()) {
+  for (const [cid, g] of porCliente) {
+    // Netea solo las NC cuyo folio_ref apunta a una factura pendiente del cliente:
+    // esa factura queda acreditada (no se cobra). El resto de NC va como advertencia.
+    const folios = new Set(g.facturas.map((f) => f.folio));
+    const creditados = new Set<number>();
+    for (const nc of ncsPorCliente.get(cid) ?? []) {
+      if (nc.ref != null && folios.has(nc.ref)) creditados.add(nc.ref);
+      else {
+        g.ncCount += 1;
+        g.ncMonto += nc.monto;
+      }
+    }
+    g.facturas = g.facturas.filter((f) => !creditados.has(f.folio));
+    g.docs = g.facturas.length;
+    g.total = g.facturas.reduce((s, f) => s + f.monto, 0);
+    g.facturas.sort((a, b) => (a.periodo < b.periodo ? -1 : 1));
+
+    const fc = formaCount.get(cid)!;
+    g.formaPago = fc.T === 0 && fc.S === 0 ? null : fc.S > fc.T ? "S" : "T";
+
     const ufAprox =
       ufActual && g.facturas.length ? Math.max(...g.facturas.map((f) => f.monto)) / ufActual : null;
     if (ufAprox != null && planes.length) {
@@ -630,10 +652,11 @@ export async function cargarGerencia(): Promise<
       g.planNombre = mejor.nombre;
       g.planLink = mejor.link;
     }
-    g.facturas.sort((a, b) => (a.periodo < b.periodo ? -1 : 1));
   }
 
-  const cobranza = [...porCliente.values()].sort((a, b) => b.total - a.total);
+  const cobranza = [...porCliente.values()]
+    .filter((g) => g.facturas.length > 0 || g.ncCount > 0)
+    .sort((a, b) => b.total - a.total);
 
   return {
     ok: true,

@@ -160,6 +160,18 @@ export function TabCobranza({
                   {c.ultimoEnvio ? ` · último cobro ${fechaCorta(c.ultimoEnvio)}` : ""}
                 </div>
               </div>
+              {c.formaPago ? (
+                <span
+                  className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                    c.formaPago === "S"
+                      ? "border border-violet-200 bg-violet-50 text-violet-700"
+                      : "border border-sky-200 bg-sky-50 text-sky-700"
+                  }`}
+                  title={c.formaPago === "S" ? "Suscripción (pago automático)" : "Transfiere"}
+                >
+                  {c.formaPago === "S" ? "Suscripción" : "Transfiere"}
+                </span>
+              ) : null}
               {c.ncCount > 0 ? (
                 <span
                   className="shrink-0 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
