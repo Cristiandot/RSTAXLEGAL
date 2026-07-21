@@ -591,6 +591,9 @@ export async function cargarGerencia(): Promise<
         total: 0,
         docs: 0,
         suscrito: !!cli?.suscripcion_pago,
+        formaPago: null,
+        ncCount: 0,
+        ncMonto: 0,
         planNombre: null,
         planLink: null,
         ultimoEnvio: enviosPorCliente.get(cid)?.[0]?.created_at ?? null,
@@ -599,6 +602,12 @@ export async function cargarGerencia(): Promise<
     }
     const g = porCliente.get(cid)!;
     const monto = num(f.monto);
+    // Las notas de crédito NO se cobran: reducen la deuda. Se cuentan aparte como advertencia.
+    if ((f.tipo as string) === "nota_credito") {
+      g.ncCount += 1;
+      g.ncMonto += monto;
+      continue;
+    }
     g.facturas.push({
       id: f.id as string,
       folio: f.folio as number,
@@ -612,7 +621,8 @@ export async function cargarGerencia(): Promise<
   }
 
   for (const g of porCliente.values()) {
-    const ufAprox = ufActual ? Math.max(...g.facturas.map((f) => f.monto)) / ufActual : null;
+    const ufAprox =
+      ufActual && g.facturas.length ? Math.max(...g.facturas.map((f) => f.monto)) / ufActual : null;
     if (ufAprox != null && planes.length) {
       const mejor = planes.reduce((a, b) =>
         Math.abs(b.uf - ufAprox) < Math.abs(a.uf - ufAprox) ? b : a,

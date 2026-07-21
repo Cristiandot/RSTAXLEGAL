@@ -405,6 +405,9 @@ export type CobranzaCliente = {
   total: number;
   docs: number;
   suscrito: boolean; // ya tiene suscripción de pago automático
+  formaPago: "T" | "S" | null; // T = transfiere, S = suscripción (col L de Facturación RS)
+  ncCount: number; // notas de crédito pendientes del cliente (advertencia)
+  ncMonto: number; // monto total de esas notas de crédito
   planNombre: string | null; // plan de suscripción sugerido según UF
   planLink: string | null;
   ultimoEnvio: string | null; // created_at del último correo de cobranza enviado

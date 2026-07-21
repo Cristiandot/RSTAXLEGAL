@@ -160,6 +160,14 @@ export function TabCobranza({
                   {c.ultimoEnvio ? ` · último cobro ${fechaCorta(c.ultimoEnvio)}` : ""}
                 </div>
               </div>
+              {c.ncCount > 0 ? (
+                <span
+                  className="shrink-0 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                  title={`${c.ncCount} nota(s) de crédito por ${montoCLP(Math.round(c.ncMonto))} — revisar/rebajar de la deuda`}
+                >
+                  ⚠ {c.ncCount} NC
+                </span>
+              ) : null}
               <span className="shrink-0 text-[11px] text-muted-foreground">{c.docs} doc{c.docs === 1 ? "" : "s"}</span>
               <span className="shrink-0 text-sm font-semibold tabular-nums">{montoCLP(Math.round(c.total))}</span>
               <Button size="sm" variant="outline" onClick={() => abrir(c)} className="shrink-0">
@@ -201,6 +209,14 @@ export function TabCobranza({
                     El correo sale a tu nombre, con copia a tu buzón. Se adjuntan los PDF de las facturas seleccionadas.
                   </span>
                 </div>
+
+                {ficha.ncCount > 0 ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                    ⚠ Este cliente tiene <strong>{ficha.ncCount} nota(s) de crédito</strong> pendiente(s) por{" "}
+                    <strong>{montoCLP(Math.round(ficha.ncMonto))}</strong>. Las notas de crédito no se cobran;
+                    revisa si corresponde rebajarlas de la deuda antes de enviar.
+                  </div>
+                ) : null}
 
                 <div>
                   <label className={labelClase}>Mensaje (editable)</label>
