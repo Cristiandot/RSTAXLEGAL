@@ -121,6 +121,10 @@ export function ModuloPendientes({
 
   const ficha = fichaId ? (pendientes.find((p) => p.id === fichaId) ?? null) : null;
   const hitosFicha = ficha ? [...ficha.hitos].sort((a, b) => (a.fecha < b.fecha ? -1 : 1)) : [];
+  const causaPorId = useMemo(
+    () => new Map(causas.map((c) => [c.id, c.cliente ?? c.caratula])),
+    [causas],
+  );
 
   const manualesPend = useMemo(
     () =>
@@ -319,6 +323,14 @@ export function ModuloPendientes({
                 </button>
                 {p.hitos.length > 0 ? (
                   <span className="shrink-0 text-[11px] text-muted-foreground">📌 {p.hitos.length}</span>
+                ) : null}
+                {p.causa_id ? (
+                  <span
+                    className="shrink-0 text-[11px]"
+                    title={`Causa: ${causaPorId.get(p.causa_id) ?? "—"}`}
+                  >
+                    ⚖
+                  </span>
                 ) : null}
                 <AreaTag area={p.area} />
                 <Fecha fecha={p.fecha} hora={p.hora} />
@@ -585,6 +597,34 @@ export function ModuloPendientes({
                     }}
                     className="w-full rounded-md border border-input bg-white px-2 py-1.5 text-xs shadow-xs focus:outline-2 focus:outline-ring/50"
                   />
+                </div>
+
+                <div>
+                  <label className={labelClase}>Causa relacionada</label>
+                  <select
+                    value={ficha.causa_id ?? ""}
+                    onChange={(e) =>
+                      guardarPendiente(
+                        ficha.id,
+                        { causa_id: e.target.value || null },
+                        "Causa relacionada actualizada.",
+                      )
+                    }
+                    className={campoInput}
+                  >
+                    <option value="">— ninguna —</option>
+                    {[...causas]
+                      .sort((a, b) => (a.cliente ?? a.caratula).localeCompare(b.cliente ?? b.caratula))
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.cliente ?? c.caratula}
+                          {c.rit_rol ? ` (${c.rit_rol})` : ""}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Al dar por terminado el pendiente, se registra un hito en esta causa.
+                  </p>
                 </div>
 
                 <section>

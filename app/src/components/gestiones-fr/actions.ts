@@ -286,7 +286,7 @@ export async function crearPendiente(input: {
 
 export async function actualizarPendiente(
   id: string,
-  patch: Partial<Pick<Pendiente, "titulo" | "detalle" | "area" | "fecha" | "hora">>,
+  patch: Partial<Pick<Pendiente, "titulo" | "detalle" | "area" | "fecha" | "hora" | "causa_id">>,
 ): Promise<Resultado> {
   const supabase = await createClient();
   const { error } = await supabase
@@ -328,9 +328,29 @@ export async function eliminarHitoPendiente(id: string): Promise<Resultado> {
 
 export async function togglePendiente(id: string, hecho: boolean): Promise<Resultado> {
   const supabase = await createClient();
+  // Al completar un pendiente ligado a una causa, deja un hito en esa causa.
+  if (hecho) {
+    const { data: prev } = await supabase
+      .from("pendientes_fr")
+      .select("hecho, causa_id, titulo")
+      .eq("id", id)
+      .single();
+    const { error } = await supabase
+      .from("pendientes_fr")
+      .update({ hecho: true, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    if (prev && !prev.hecho && prev.causa_id) {
+      const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Santiago" });
+      await supabase
+        .from("gestion_causas_hitos")
+        .insert({ causa_id: prev.causa_id, fecha: hoy, detalle: `Cumplido (pendiente): ${prev.titulo}` });
+    }
+    return { ok: true };
+  }
   const { error } = await supabase
     .from("pendientes_fr")
-    .update({ hecho, updated_at: new Date().toISOString() })
+    .update({ hecho: false, updated_at: new Date().toISOString() })
     .eq("id", id);
   return error ? { ok: false, error: error.message } : { ok: true };
 }

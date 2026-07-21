@@ -169,6 +169,7 @@ export type Pendiente = {
   fecha: string | null;
   hora: string | null;
   hecho: boolean;
+  causa_id: string | null;
   hitos: HitoPendiente[];
 };
 
