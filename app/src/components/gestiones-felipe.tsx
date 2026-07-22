@@ -68,7 +68,7 @@ export default function GestionesFelipe() {
   const [datos, setDatos] = useState<Datos | null>(null);
   const [gerencia, setGerencia] = useState<DatosGerencia | null>(null);
   const [cargando, setCargando] = useState(false);
-  const [modulo, setModulo] = useState<Modulo>("timebox");
+  const [modulo, setModulo] = useState<Modulo>("pendientes");
   const inputRef = useRef<HTMLInputElement>(null);
 
   // El desbloqueo dura mientras viva la pestaña. Se lee tras montar para no
