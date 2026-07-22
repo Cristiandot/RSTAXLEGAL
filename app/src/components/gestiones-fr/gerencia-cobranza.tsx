@@ -70,6 +70,7 @@ export function TabCobranza({
 }) {
   const [busqueda, setBusqueda] = useState("");
   const [filtro, setFiltro] = useState<FiltroId>("todos");
+  const [soloPendientes, setSoloPendientes] = useState(false);
   const [fichaId, setFichaId] = useState<string | null>(null);
   const [enviando, startTransition] = useTransition();
 
@@ -81,18 +82,19 @@ export function TabCobranza({
 
   const ficha = fichaId ? (cobranza.find((c) => c.cliente_id === fichaId) ?? null) : null;
   const modo: "transfiere" | "suscripcion" = ficha?.formaPago === "S" ? "suscripcion" : "transfiere";
+  const mesActual = new Date().toISOString().slice(0, 7);
 
   const filtrada = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return cobranza.filter((c) => {
       if (filtro !== "todos" && c.formaPago !== filtro) return false;
+      if (soloPendientes && c.ultimoEnvio?.slice(0, 7) === mesActual) return false;
       if (!q) return true;
       return `${c.razon_social} ${c.correo ?? ""}`.toLowerCase().includes(q);
     });
-  }, [cobranza, busqueda, filtro]);
+  }, [cobranza, busqueda, filtro, soloPendientes, mesActual]);
 
   const totalGlobal = useMemo(() => cobranza.reduce((s, c) => s + c.total, 0), [cobranza]);
-  const mesActual = new Date().toISOString().slice(0, 7);
   const conteo = useMemo(
     () => ({
       T: cobranza.filter((c) => c.formaPago === "T").length,
@@ -206,6 +208,15 @@ export function TabCobranza({
             className="pl-8"
           />
         </div>
+        <label className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={soloPendientes}
+            onChange={(e) => setSoloPendientes(e.target.checked)}
+            className="size-3.5"
+          />
+          Solo pendientes de cobrar este mes
+        </label>
       </div>
 
       <div className="overflow-hidden rounded-xl border bg-white">
