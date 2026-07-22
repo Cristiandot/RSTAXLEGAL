@@ -545,7 +545,7 @@ export async function cargarGerencia(): Promise<
     supabase
       .from("facturas")
       .select(
-        "id, folio, folio_ref, periodo, monto, archivo_path, tipo, forma_pago, cliente_id, clientes(razon_social, contacto_correo, correo_empresa, suscripcion_pago, correos_adicionales)",
+        "id, folio, folio_ref, periodo, monto, archivo_path, tipo, forma_pago, cliente_id, clientes(razon_social, contacto_correo, correo_empresa, cobranza_correo, suscripcion_pago, correos_adicionales)",
       )
       .eq("pagada", false)
       .not("cliente_id", "is", null),
@@ -586,11 +586,13 @@ export async function cargarGerencia(): Promise<
       razon_social: string;
       contacto_correo: string | null;
       correo_empresa: string | null;
+      cobranza_correo: string | null;
       suscripcion_pago: boolean | null;
       correos_adicionales: unknown;
     } | null;
     if (!porCliente.has(cid)) {
-      const principal = cli?.contacto_correo ?? cli?.correo_empresa ?? null;
+      // Prioridad: correo de cobranza específico → contacto → correo empresa.
+      const principal = cli?.cobranza_correo ?? cli?.contacto_correo ?? cli?.correo_empresa ?? null;
       const cc = (Array.isArray(cli?.correos_adicionales) ? cli!.correos_adicionales : [])
         .map((c) => String(c ?? "").trim())
         .filter((c) => c.includes("@") && c.toLowerCase() !== (principal ?? "").toLowerCase());
@@ -727,11 +729,11 @@ export async function enviarCobranza(input: {
 
   const { data: cli } = await supabase
     .from("clientes")
-    .select("razon_social, contacto_correo, correo_empresa")
+    .select("razon_social, contacto_correo, correo_empresa, cobranza_correo")
     .eq("id", clienteId)
     .single();
   if (!cli) return { ok: false, error: "Cliente no encontrado." };
-  const destino = cli.contacto_correo ?? cli.correo_empresa;
+  const destino = cli.cobranza_correo ?? cli.contacto_correo ?? cli.correo_empresa;
   if (!destino)
     return { ok: false, error: `${cli.razon_social} no tiene correo en su ficha. Cárgalo y reintenta.` };
 
