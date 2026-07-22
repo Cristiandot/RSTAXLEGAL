@@ -53,6 +53,43 @@ function tipoInput(campo: string): string {
 const inputCls =
   "h-10 w-full rounded-md border border-input bg-white px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#17A2B8]";
 
+// Nacionalidad: desplegable Chileno/Extranjero; si es extranjero, se debe
+// especificar cuál. Se guarda como gentilicio ("Chilena" o, ej., "Venezolana");
+// un extranjero sin especificar no se guarda.
+function CampoNacionalidad({ onChange }: { onChange: (v: string) => void }) {
+  const [tipo, setTipo] = useState<"" | "chileno" | "extranjero">("");
+  const [detalle, setDetalle] = useState("");
+  return (
+    <div className="space-y-2">
+      <select
+        className={inputCls}
+        value={tipo}
+        onChange={(e) => {
+          const t = e.target.value as "" | "chileno" | "extranjero";
+          setTipo(t);
+          onChange(t === "chileno" ? "Chilena" : t === "extranjero" ? detalle : "");
+        }}
+      >
+        <option value="">Seleccionar…</option>
+        <option value="chileno">Chileno</option>
+        <option value="extranjero">Extranjero</option>
+      </select>
+      {tipo === "extranjero" ? (
+        <input
+          type="text"
+          className={inputCls}
+          placeholder="¿Cuál? Ej: Venezolana, Peruana…"
+          value={detalle}
+          onChange={(e) => {
+            setDetalle(e.target.value);
+            onChange(e.target.value);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function TarjetaTrabajador({
   token,
   t,
@@ -117,7 +154,11 @@ function TarjetaTrabajador({
           return (
             <label key={c.campo} className="block">
               <span className="mb-1 block text-xs font-medium text-muted-foreground">{c.etiqueta}</span>
-              {ops ? (
+              {c.campo === "nacionalidad" ? (
+                <CampoNacionalidad
+                  onChange={(v) => setValores((s) => ({ ...s, nacionalidad: v }))}
+                />
+              ) : ops ? (
                 <select
                   className={inputCls}
                   value={valores[c.campo] ?? ""}

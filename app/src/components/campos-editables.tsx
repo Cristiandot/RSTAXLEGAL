@@ -52,7 +52,22 @@ export function EditorCampo({
   /** Si se entrega, muestra un botón para cancelar la edición. */
   onCancel?: () => void;
 }) {
-  const [valor, setValor] = useState(inicial);
+  // Nacionalidad: desplegable Chileno/Extranjero; si es extranjero se exige
+  // especificar cuál. Se guarda siempre en `nacionalidad` como gentilicio
+  // ("Chilena" o, p. ej., "Venezolana"). Un "Extranjero" a secas (dato antiguo
+  // sin especificar) parte con el texto vacío para obligar a completarlo.
+  const esNacionalidad = item.campo === "nacionalidad";
+  const [tipoNac, setTipoNac] = useState<"" | "chilena" | "extranjera">(() => {
+    if (!esNacionalidad || !inicial.trim()) return "";
+    return /^chilen/i.test(inicial.trim()) ? "chilena" : "extranjera";
+  });
+  const [valor, setValor] = useState(() => {
+    if (!esNacionalidad) return inicial;
+    const t = inicial.trim();
+    if (/^chilen/i.test(t)) return "Chilena";
+    if (/^extranjer/i.test(t)) return "";
+    return inicial;
+  });
   const [confirmando, setConfirmando] = useState(false);
   const [saving, startSave] = useTransition();
   const tipo = tipoCampo(item.campo);
@@ -117,7 +132,39 @@ export function EditorCampo({
         </select>
       ) : null}
       <div className="flex w-full items-start gap-1.5">
-        {selector ? (
+        {esNacionalidad ? (
+          <div className="flex w-full min-w-0 flex-col gap-1.5">
+            <select
+              aria-label={item.etiqueta}
+              className={`${selectCls} h-8 w-full min-w-0`}
+              value={tipoNac}
+              onChange={(e) => {
+                const t = e.target.value as "" | "chilena" | "extranjera";
+                setTipoNac(t);
+                setValor(t === "chilena" ? "Chilena" : "");
+                setConfirmando(false);
+              }}
+            >
+              <option value="">— Elegir —</option>
+              <option value="chilena">Chileno</option>
+              <option value="extranjera">Extranjero</option>
+            </select>
+            {tipoNac === "extranjera" ? (
+              <Input
+                className="h-8 w-full min-w-0 bg-card text-sm"
+                placeholder="Especificar (ej: Venezolana)"
+                value={valor}
+                onChange={(e) => {
+                  setValor(e.target.value);
+                  setConfirmando(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") intentarGuardar();
+                }}
+              />
+            ) : null}
+          </div>
+        ) : selector ? (
           <select
             aria-label={item.etiqueta}
             className={`${selectCls} h-8 w-full min-w-0`}
