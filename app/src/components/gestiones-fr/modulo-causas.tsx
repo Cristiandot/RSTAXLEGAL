@@ -125,7 +125,7 @@ export function ModuloCausas({
     const evs: EventoCalendario[] = [];
     for (const c of causas) {
       if (c.estado === "cerrada") continue; // el histórico no ensucia el calendario
-      const quien = c.cliente ?? c.caratula;
+      const quien = c.caratula;
       if (c.proxima_gestion_fecha)
         evs.push({
           fecha: c.proxima_gestion_fecha,
@@ -182,7 +182,7 @@ export function ModuloCausas({
           if (fx && fy && fx !== fy) return fx < fy ? -1 : 1;
           if (fx && !fy) return -1;
           if (!fx && fy) return 1;
-          return (x.cliente ?? x.caratula).localeCompare(y.cliente ?? y.caratula);
+          return x.caratula.localeCompare(y.caratula);
         }),
       }));
   }, [causasFiltradas]);
@@ -421,7 +421,7 @@ export function ModuloCausas({
                           className="flex w-full items-center gap-3 border-b px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/50"
                         >
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-medium">{c.cliente ?? c.caratula}</div>
+                            <div className="truncate text-sm font-medium">{c.caratula}</div>
                             <div className="truncate text-[11px] text-muted-foreground">
                               {[c.rit_rol, c.tribunal].filter(Boolean).join(" · ") || "—"}
                             </div>
@@ -460,7 +460,7 @@ export function ModuloCausas({
               <SheetHeader className="border-b">
                 <div className="flex items-start justify-between gap-2">
                   <SheetTitle className="text-base leading-snug">
-                    {ficha.cliente ?? ficha.caratula}
+                    {ficha.caratula}
                   </SheetTitle>
                   <button
                     type="button"
