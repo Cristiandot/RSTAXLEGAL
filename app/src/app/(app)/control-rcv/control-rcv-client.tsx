@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Send } from "lucide-react";
+import { ExternalLink, Send } from "lucide-react";
 import {
   Table,
   TableBody,
   TableCell,
+  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -26,6 +27,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { RutCopiable } from "@/components/rut-copiable";
+import { ClaveCell } from "@/components/credencial-celdas";
 import { formatMonto, formatFecha } from "@/lib/format";
 import { etiquetaPeriodo } from "@/lib/periodos";
 import { ThSort } from "@/components/th-sort";
@@ -123,6 +126,11 @@ type Props = {
 };
 
 const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
+/** Login del SII que, tras autenticar, redirige al Registro de Compras y Ventas
+ * (el mismo botón "Abrir RCV en el SII" de la vista interior por empresa). */
+const URL_RCV_SII =
+  "https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?https://www4.sii.cl/consdcvinternetui/";
 
 /** "2026-01" → "Ene" (o "Ene 25" si el rango cruza de año, para no confundir). */
 function etiquetaCorta(periodo: string, multiAnio: boolean): string {
@@ -438,6 +446,11 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
               <ThSort col="bte" orden={orden} setOrden={setOrden} className="text-right">
                 <span title={`Boletas de terceros — brutos de ${etiquetaCorta(mesTotales, multiAnio)} (emitidas arriba / recibidas abajo)`}>BTE</span>
               </ThSort>
+              <TableHead className="min-w-[140px]">
+                <span title="Clave SII copiable (auditada) y acceso directo al RCV en el SII, para revisar sin entrar empresa por empresa">
+                  Clave SII
+                </span>
+              </TableHead>
               <ThSort col="estado" orden={orden} setOrden={setOrden} className="text-center">
                 Estado
               </ThSort>
@@ -462,7 +475,9 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
                       <div className="truncate font-medium leading-tight" title={f.empresa.razon_social}>
                         {f.empresa.razon_social}
                       </div>
-                      <div className="text-[10px] leading-tight text-muted-foreground">{f.empresa.rut_empresa}</div>
+                      <div className="text-[10px] leading-tight text-muted-foreground">
+                        <RutCopiable rut={f.empresa.rut_empresa} />
+                      </div>
                     </div>
                   </div>
                 </TableCell>
@@ -516,6 +531,28 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
                   recibDocs={mapaBte.get(`${f.empresa.id}|${mesTotales}`)?.bte_recibidas_docs ?? 0}
                 />
 
+                <TableCell>
+                  <div className="flex items-center gap-0.5">
+                    <ClaveCell
+                      clienteId={f.empresa.id}
+                      campo="clave_sii"
+                      etiqueta="Clave SII"
+                      razonSocial={f.empresa.razon_social}
+                      tiene={f.empresa.tieneClave}
+                      compacto
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      title="Abrir RCV en el SII"
+                      aria-label="Abrir RCV en el SII"
+                      render={<a href={URL_RCV_SII} target="_blank" rel="noopener noreferrer" />}
+                    >
+                      <ExternalLink className="size-3.5" />
+                    </Button>
+                  </div>
+                </TableCell>
+
                 <TableCell className="text-center">
                   <EstadoEmpresa fila={f} totalMeses={periodos.length} />
                 </TableCell>
@@ -534,7 +571,7 @@ export function ControlRcvClient({ periodos: periodosTodos, etiquetas: etiquetas
             ))}
             {filtradas.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">
                   Sin empresas para el filtro.
                 </TableCell>
               </TableRow>
