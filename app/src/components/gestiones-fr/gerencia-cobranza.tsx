@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Mail, Paperclip, Search, X } from "lucide-react";
+import { Check, Mail, Paperclip, Search, X } from "lucide-react";
 import { montoCLP } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,6 +92,7 @@ export function TabCobranza({
   }, [cobranza, busqueda, filtro]);
 
   const totalGlobal = useMemo(() => cobranza.reduce((s, c) => s + c.total, 0), [cobranza]);
+  const mesActual = new Date().toISOString().slice(0, 7);
   const conteo = useMemo(
     () => ({
       T: cobranza.filter((c) => c.formaPago === "T").length,
@@ -222,7 +223,15 @@ export function TabCobranza({
               title="Ver detalle de la deuda"
             >
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{c.razon_social}</div>
+                <div className="flex items-center gap-1.5 truncate text-sm font-medium">
+                  {c.ultimoEnvio?.slice(0, 7) === mesActual ? (
+                    <Check
+                      className="size-4 shrink-0 text-emerald-600"
+                      aria-label="Ya cobrado este mes"
+                    />
+                  ) : null}
+                  {c.razon_social}
+                </div>
                 <div className="truncate text-[11px] text-muted-foreground">
                   {c.correo ?? <span className="text-red-600">sin correo en ficha</span>}
                   {c.consolidado ? ` · ${new Set(c.facturas.map((f) => f.empresa)).size} empresas` : ""}
