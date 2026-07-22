@@ -225,6 +225,7 @@ export function TabCobranza({
                 <div className="truncate text-sm font-medium">{c.razon_social}</div>
                 <div className="truncate text-[11px] text-muted-foreground">
                   {c.correo ?? <span className="text-red-600">sin correo en ficha</span>}
+                  {c.consolidado ? ` · ${new Set(c.facturas.map((f) => f.empresa)).size} empresas` : ""}
                   {c.ultimoEnvio ? ` · último cobro ${fechaCorta(c.ultimoEnvio)}` : ""}
                 </div>
               </div>
@@ -329,7 +330,9 @@ export function TabCobranza({
                           className="size-3.5"
                         />
                         <span className="w-16 shrink-0 font-mono text-muted-foreground">N° {f.folio}</span>
-                        <span className="flex-1 truncate">{f.periodo}</span>
+                        <span className="flex-1 truncate">
+                          {ficha.consolidado ? `${f.empresa} · ${f.periodo}` : f.periodo}
+                        </span>
                         <span className="shrink-0 font-medium tabular-nums">{montoCLP(Math.round(f.monto))}</span>
                       </label>
                     ))}

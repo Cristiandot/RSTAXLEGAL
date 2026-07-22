@@ -385,6 +385,7 @@ export type CobranzaFactura = {
   monto: number;
   archivo_path: string;
   tipo: string | null;
+  empresa: string; // razón social de la empresa emisora (para cobranza consolidada)
 };
 
 /** Un correo de cobranza ya enviado (tabla gerencia_cobranza_envios). */
@@ -413,6 +414,7 @@ export type CobranzaCliente = {
   planLink: string | null;
   ultimoEnvio: string | null; // created_at del último correo de cobranza enviado
   envios: CobranzaEnvio[]; // historial de cobros enviados (desc)
+  consolidado: boolean; // agrupa varias empresas de un mismo dueño en un correo
 };
 
 export type DatosGerencia = {

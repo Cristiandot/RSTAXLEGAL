@@ -545,7 +545,7 @@ export async function cargarGerencia(): Promise<
     supabase
       .from("facturas")
       .select(
-        "id, folio, folio_ref, periodo, monto, archivo_path, tipo, forma_pago, cliente_id, clientes(razon_social, contacto_correo, correo_empresa, cobranza_correo, suscripcion_pago, correos_adicionales)",
+        "id, folio, folio_ref, periodo, monto, archivo_path, tipo, forma_pago, cliente_id, clientes(razon_social, contacto_nombre, contacto_correo, correo_empresa, cobranza_correo, suscripcion_pago, correos_adicionales, grupo_id, cobranza_consolida)",
       )
       .eq("pagada", false)
       .not("cliente_id", "is", null),
@@ -579,18 +579,27 @@ export async function cargarGerencia(): Promise<
   const porCliente = new Map<string, CobranzaCliente>();
   const ncsPorCliente = new Map<string, { monto: number; ref: number | null }[]>();
   const formaCount = new Map<string, { T: number; S: number }>();
+  const meta = new Map<string, { grupoId: string | null; consolida: boolean; contacto: string | null }>();
 
   for (const f of impagasRes.data ?? []) {
     const cid = f.cliente_id as string;
     const cli = f.clientes as unknown as {
       razon_social: string;
+      contacto_nombre: string | null;
       contacto_correo: string | null;
       correo_empresa: string | null;
       cobranza_correo: string | null;
       suscripcion_pago: boolean | null;
       correos_adicionales: unknown;
+      grupo_id: string | null;
+      cobranza_consolida: boolean | null;
     } | null;
     if (!porCliente.has(cid)) {
+      meta.set(cid, {
+        grupoId: cli?.grupo_id ?? null,
+        consolida: !!cli?.cobranza_consolida,
+        contacto: cli?.contacto_nombre ?? null,
+      });
       // Prioridad: correo de cobranza específico → contacto → correo empresa.
       const principal = cli?.cobranza_correo ?? cli?.contacto_correo ?? cli?.correo_empresa ?? null;
       const cc = (Array.isArray(cli?.correos_adicionales) ? cli!.correos_adicionales : [])
@@ -612,6 +621,7 @@ export async function cargarGerencia(): Promise<
         planLink: null,
         ultimoEnvio: enviosPorCliente.get(cid)?.[0]?.created_at ?? null,
         envios: enviosPorCliente.get(cid) ?? [],
+        consolidado: false,
       });
       ncsPorCliente.set(cid, []);
       formaCount.set(cid, { T: 0, S: 0 });
@@ -628,6 +638,7 @@ export async function cargarGerencia(): Promise<
       monto,
       archivo_path: f.archivo_path as string,
       tipo: (f.tipo as string) ?? null,
+      empresa: porCliente.get(cid)!.razon_social,
     });
     const forma = f.forma_pago as string | null;
     if (forma === "T") formaCount.get(cid)!.T += 1;
@@ -668,9 +679,50 @@ export async function cargarGerencia(): Promise<
     }
   }
 
-  const cobranza = [...porCliente.values()]
-    .filter((g) => g.facturas.length > 0 || g.ncCount > 0)
-    .sort((a, b) => b.total - a.total);
+  const individuales = [...porCliente.values()].filter((g) => g.facturas.length > 0 || g.ncCount > 0);
+
+  // Cobranza consolidada: empresas del mismo grupo marcadas con cobranza_consolida
+  // se unen en una sola entrada (un destinatario, todas sus facturas).
+  const grupos = new Map<string, CobranzaCliente>();
+  const resultado: CobranzaCliente[] = [];
+  for (const g of individuales) {
+    const m = meta.get(g.cliente_id);
+    if (m?.consolida && m.grupoId) {
+      const acc = grupos.get(m.grupoId);
+      if (!acc) {
+        const nuevo: CobranzaCliente = {
+          ...g,
+          razon_social: m.contacto ?? g.razon_social,
+          facturas: [...g.facturas],
+          consolidado: true,
+          planNombre: null,
+          planLink: null,
+        };
+        grupos.set(m.grupoId, nuevo);
+        resultado.push(nuevo);
+      } else {
+        acc.facturas.push(...g.facturas);
+        acc.total += g.total;
+        acc.docs += g.docs;
+        acc.ncCount += g.ncCount;
+        acc.ncMonto += g.ncMonto;
+        if (g.formaPago === "T") acc.formaPago = "T";
+        else if (g.formaPago === "S" && acc.formaPago !== "T") acc.formaPago = "S";
+        acc.correosCC = [...new Set([...acc.correosCC, ...g.correosCC])];
+        if (g.ultimoEnvio && (!acc.ultimoEnvio || g.ultimoEnvio > acc.ultimoEnvio))
+          acc.ultimoEnvio = g.ultimoEnvio;
+      }
+    } else {
+      resultado.push(g);
+    }
+  }
+  for (const acc of grupos.values()) {
+    acc.facturas.sort((a, b) =>
+      a.empresa === b.empresa ? (a.periodo < b.periodo ? -1 : 1) : a.empresa < b.empresa ? -1 : 1,
+    );
+  }
+
+  const cobranza = resultado.sort((a, b) => b.total - a.total);
 
   return {
     ok: true,
@@ -765,14 +817,26 @@ export async function enviarCobranza(input: {
   // borde #e6e9f0, total en negrita, caja ámbar con los datos de transferencia.
   const tdI = "padding:9px 0;border-bottom:1px solid #e6e9f0;color:#445;";
   const tdD = "padding:9px 0;border-bottom:1px solid #e6e9f0;text-align:right;";
+  // Si la cobranza abarca varias empresas (consolidada), cada línea muestra la empresa.
+  const multiEmpresa = new Set(facturas.map((f) => f.razon_social_factura as string)).size > 1;
   const filas = [...facturas]
-    .sort((a, b) => ((a.periodo as string) < (b.periodo as string) ? -1 : 1))
-    .map(
-      (f) =>
-        `<tr><td style="${tdI}">Factura N° ${f.folio} · ${etiquetaPeriodo(f.periodo as string)}</td><td style="${tdD}">${montoCLP(Math.round(num(f.monto)))}</td></tr>`,
-    )
+    .sort((a, b) => {
+      const ea = (a.razon_social_factura as string) ?? "";
+      const eb = (b.razon_social_factura as string) ?? "";
+      if (multiEmpresa && ea !== eb) return ea < eb ? -1 : 1;
+      return (a.periodo as string) < (b.periodo as string) ? -1 : 1;
+    })
+    .map((f) => {
+      const etq = multiEmpresa
+        ? `${f.razon_social_factura} · N° ${f.folio} · ${etiquetaPeriodo(f.periodo as string)}`
+        : `Factura N° ${f.folio} · ${etiquetaPeriodo(f.periodo as string)}`;
+      return `<tr><td style="${tdI}">${etq}</td><td style="${tdD}">${montoCLP(Math.round(num(f.monto)))}</td></tr>`;
+    })
     .join("");
-  const tabla = `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;"><tr><td style="${tdI}">Empresa</td><td style="${tdD}">${cli.razon_social}</td></tr>${filas}<tr><td style="padding:9px 0;color:#0a1a2f;font-weight:bold;">Total a pagar</td><td style="padding:9px 0;text-align:right;font-weight:bold;">${montoCLP(Math.round(total))}</td></tr></table>`;
+  const filaEmpresa = multiEmpresa
+    ? ""
+    : `<tr><td style="${tdI}">Empresa</td><td style="${tdD}">${cli.razon_social}</td></tr>`;
+  const tabla = `<table style="width:100%;border-collapse:collapse;font-size:14px;margin:0 0 16px;">${filaEmpresa}${filas}<tr><td style="padding:9px 0;color:#0a1a2f;font-weight:bold;">Total a pagar</td><td style="padding:9px 0;text-align:right;font-weight:bold;">${montoCLP(Math.round(total))}</td></tr></table>`;
 
   const cuenta =
     input.datosCuentaHtml && input.datosCuentaHtml.trim()
