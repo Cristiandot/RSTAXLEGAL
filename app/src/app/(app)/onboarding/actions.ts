@@ -7,6 +7,7 @@ import {
   ESTADOS_ONBOARDING,
   GRUPOS_CARTERA,
   HITO_ESTADO,
+  parseNumeroCl,
   tipoCampo,
   type FaltanteRow,
 } from "@/lib/onboarding";
@@ -28,7 +29,7 @@ function coercerValor(
         return { ok: false, error: "Fecha inválida" };
       return { ok: true, valor: v };
     case "numero": {
-      const n = Number(v.replace(/\./g, "").replace(",", "."));
+      const n = parseNumeroCl(v);
       if (!Number.isFinite(n)) return { ok: false, error: "Número inválido" };
       return { ok: true, valor: n };
     }

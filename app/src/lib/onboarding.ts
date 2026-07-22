@@ -99,6 +99,44 @@ export function tipoCampo(campo: string): TipoCampo {
   return "texto";
 }
 
+/**
+ * Interpreta un número escrito por una persona, tolerando la coma o el punto
+ * como separador decimal y el punto como separador de miles (convención CL).
+ * Devuelve `NaN` si no hay dígitos.
+ *
+ *   "553.553" → 553553   (miles: 1 punto con 3 dígitos detrás)
+ *   "1.234.567" → 1234567 (miles: más de un punto)
+ *   "22,25" → 22.25       (coma decimal)
+ *   "22.25" → 22.25       (punto decimal: no son 3 dígitos detrás)
+ *   "1.234,56" → 1234.56  (ambos: el de más a la derecha es el decimal)
+ *   "30.5" / "45" → 30.5 / 45
+ */
+export function parseNumeroCl(raw: string): number {
+  const s = raw.trim().replace(/\s/g, "");
+  if (!/\d/.test(s)) return NaN;
+  const tieneComa = s.includes(",");
+  const tienePunto = s.includes(".");
+  let norm: string;
+  if (tieneComa && tienePunto) {
+    // El separador que aparece más a la derecha es el decimal; el otro, miles.
+    const decEsComa = s.lastIndexOf(",") > s.lastIndexOf(".");
+    const dec = decEsComa ? "," : ".";
+    const miles = decEsComa ? "." : ",";
+    norm = s.split(miles).join("").replace(dec, ".");
+  } else if (tieneComa) {
+    norm = s.replace(",", "."); // solo coma → decimal
+  } else if (tienePunto) {
+    const partes = s.split(".");
+    // Punto como miles: más de un punto, o uno solo con exactamente 3 dígitos
+    // detrás (ej. 553.553). En otro caso es decimal (ej. 22.25, 30.5).
+    const esMiles = partes.length > 2 || (partes.length === 2 && partes[1].length === 3);
+    norm = esMiles ? partes.join("") : s;
+  } else {
+    norm = s;
+  }
+  return Number(norm);
+}
+
 /** Placeholder de ayuda para los campos jsonb que se editan por líneas. */
 export const PLACEHOLDER_LINEAS: Record<string, string> = {
   socios: "Una línea por socio: Nombre; RUT; % participación\nEj.: Juan Pérez; 12.345.678-5; 50",
