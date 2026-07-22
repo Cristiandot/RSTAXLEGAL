@@ -194,16 +194,20 @@ export function EditorCampo({
           />
         ) : (
           <Input
-            type={
-              tipo === "fecha" ? "date" : tipo === "numero" ? "number" : "text"
-            }
+            // "numero" va como texto con teclado decimal (no type="number"):
+            // así se acepta la coma como separador decimal (ej. 22,25 horas).
+            // El servidor (coercerValor) interpreta coma=decimal y punto=miles.
+            type={tipo === "fecha" ? "date" : "text"}
+            inputMode={tipo === "numero" ? "decimal" : undefined}
             className="h-8 w-full min-w-0 bg-card text-sm"
             placeholder={
               tipo === "rut"
                 ? "12.345.678-9"
                 : tipo === "correo"
                   ? "correo@dominio.cl"
-                  : item.etiqueta
+                  : tipo === "numero"
+                    ? "Ej: 45 o 22,25"
+                    : item.etiqueta
             }
             value={valor}
             onChange={(e) => {
