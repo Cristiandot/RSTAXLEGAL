@@ -41,11 +41,13 @@ export async function fichasDeEmpresa(
       .select("campo")
       .eq("entidad", "trabajador")
       .eq("activo", true),
+    // Sólo la nómina vigente: los finiquitados/desvinculados (activo=false)
+    // no deben pedir relleno de datos ni contar en la ficha de la empresa.
     supabase
       .from("trabajadores")
       .select("*")
       .eq("cliente_id", clienteId)
-      .order("activo", { ascending: false })
+      .eq("activo", true)
       .order("apellido_paterno"),
   ]);
 
