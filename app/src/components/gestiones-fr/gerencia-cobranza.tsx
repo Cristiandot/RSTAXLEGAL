@@ -77,6 +77,7 @@ export function TabCobranza({
   const [intro, setIntro] = useState(INTRO_TRANSFIERE);
   const [cuenta, setCuenta] = useState(DATOS_CUENTA_DEFECTO);
   const [invitar, setInvitar] = useState(true);
+  const [copiaMi, setCopiaMi] = useState(true);
 
   const ficha = fichaId ? (cobranza.find((c) => c.cliente_id === fichaId) ?? null) : null;
   const modo: "transfiere" | "suscripcion" = ficha?.formaPago === "S" ? "suscripcion" : "transfiere";
@@ -105,6 +106,7 @@ export function TabCobranza({
     setIntro(c.formaPago === "S" ? INTRO_SUSCRIPCION : INTRO_TRANSFIERE);
     setCuenta(DATOS_CUENTA_DEFECTO);
     setInvitar(!c.suscrito && !!c.planLink);
+    setCopiaMi(true);
   }
 
   const totalSel = ficha
@@ -138,6 +140,7 @@ export function TabCobranza({
         introHtml: textoAHtml(intro),
         datosCuentaHtml: cuentaAHtml(cuenta),
         modo,
+        copiaRemitente: copiaMi,
         planNombre: modo === "transfiere" && invitar ? ficha.planNombre : null,
         planLink: modo === "transfiere" && invitar ? ficha.planLink : null,
       });
@@ -267,15 +270,35 @@ export function TabCobranza({
               </SheetHeader>
 
               <div className="space-y-5 p-4">
-                <div className="rounded-lg border bg-muted/30 p-3 text-xs">
-                  <span className="font-semibold">Destinatario:</span>{" "}
-                  {ficha.correo ?? <span className="text-red-600">sin correo — cárgalo en la ficha del cliente</span>}
-                  <br />
-                  <span className="text-muted-foreground">
+                <div className="space-y-1.5 rounded-lg border bg-muted/30 p-3 text-xs">
+                  <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Destinatarios
+                  </div>
+                  <div>
+                    <span className="font-semibold">Para:</span>{" "}
+                    {ficha.correo ?? (
+                      <span className="text-red-600">sin correo — cárgalo en la ficha del cliente</span>
+                    )}
+                  </div>
+                  {ficha.correosCC.length > 0 ? (
+                    <div>
+                      <span className="font-semibold">En copia:</span> {ficha.correosCC.join(", ")}
+                    </div>
+                  ) : null}
+                  <label className="flex cursor-pointer items-center gap-2 pt-0.5">
+                    <input
+                      type="checkbox"
+                      checked={copiaMi}
+                      onChange={(e) => setCopiaMi(e.target.checked)}
+                      className="size-3.5"
+                    />
+                    <span>Enviarme copia (frodriguez@rstaxlegal.cl)</span>
+                  </label>
+                  <p className="pt-0.5 text-muted-foreground">
                     {modo === "suscripcion"
-                      ? "Cliente con suscripción: el correo avisa el problema de cobro e indica los datos de cuenta para regularizar."
-                      : "El correo sale a tu nombre, con copia a tu buzón. Se adjuntan los PDF seleccionados."}
-                  </span>
+                      ? "Avisa el problema de cobro de la suscripción e indica los datos de cuenta para regularizar. Se adjuntan los PDF seleccionados."
+                      : "El correo sale a tu nombre. Se adjuntan los PDF seleccionados."}
+                  </p>
                 </div>
 
                 <div>

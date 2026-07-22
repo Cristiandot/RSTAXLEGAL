@@ -22,6 +22,7 @@ export async function enviarCorreo({
   adjuntos,
   de,
   cc,
+  bccRemitente = true,
 }: {
   para: string;
   asunto: string;
@@ -31,6 +32,8 @@ export async function enviarCorreo({
   de?: { nombre: string; correo: string };
   /** Copias visibles — correos adicionales del cliente. */
   cc?: string[];
+  /** Copia oculta al remitente (queda en su buzón). Default true. */
+  bccRemitente?: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -58,12 +61,8 @@ export async function enviarCorreo({
       subject: asunto,
       html,
       attachments: adjuntos,
-      ...(de
-        ? {
-            reply_to: [de.correo],
-            bcc: [de.correo],
-          }
-        : {}),
+      ...(de ? { reply_to: [de.correo] } : {}),
+      ...(de && bccRemitente ? { bcc: [de.correo] } : {}),
     }),
   });
 

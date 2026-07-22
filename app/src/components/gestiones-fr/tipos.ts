@@ -401,6 +401,7 @@ export type CobranzaCliente = {
   cliente_id: string;
   razon_social: string;
   correo: string | null; // destinatario (contacto_correo ?? correo_empresa)
+  correosCC: string[]; // correos adicionales del cliente (van en copia)
   facturas: CobranzaFactura[];
   total: number;
   docs: number;

@@ -545,7 +545,7 @@ export async function cargarGerencia(): Promise<
     supabase
       .from("facturas")
       .select(
-        "id, folio, folio_ref, periodo, monto, archivo_path, tipo, forma_pago, cliente_id, clientes(razon_social, contacto_correo, correo_empresa, suscripcion_pago)",
+        "id, folio, folio_ref, periodo, monto, archivo_path, tipo, forma_pago, cliente_id, clientes(razon_social, contacto_correo, correo_empresa, suscripcion_pago, correos_adicionales)",
       )
       .eq("pagada", false)
       .not("cliente_id", "is", null),
@@ -587,12 +587,18 @@ export async function cargarGerencia(): Promise<
       contacto_correo: string | null;
       correo_empresa: string | null;
       suscripcion_pago: boolean | null;
+      correos_adicionales: unknown;
     } | null;
     if (!porCliente.has(cid)) {
+      const principal = cli?.contacto_correo ?? cli?.correo_empresa ?? null;
+      const cc = (Array.isArray(cli?.correos_adicionales) ? cli!.correos_adicionales : [])
+        .map((c) => String(c ?? "").trim())
+        .filter((c) => c.includes("@") && c.toLowerCase() !== (principal ?? "").toLowerCase());
       porCliente.set(cid, {
         cliente_id: cid,
         razon_social: cli?.razon_social ?? "—",
-        correo: cli?.contacto_correo ?? cli?.correo_empresa ?? null,
+        correo: principal,
+        correosCC: [...new Set(cc)],
         facturas: [],
         total: 0,
         docs: 0,
@@ -711,6 +717,7 @@ export async function enviarCobranza(input: {
   introHtml: string;
   datosCuentaHtml: string;
   modo: "transfiere" | "suscripcion";
+  copiaRemitente: boolean;
   planNombre: string | null;
   planLink: string | null;
 }): Promise<{ ok: boolean; error?: string; enviadoA?: string }> {
@@ -796,6 +803,7 @@ export async function enviarCobranza(input: {
     }),
     adjuntos,
     de: { nombre: usuario.nombre, correo: usuario.correo },
+    bccRemitente: input.copiaRemitente,
   });
   if (!res.ok) return { ok: false, error: res.error };
 
