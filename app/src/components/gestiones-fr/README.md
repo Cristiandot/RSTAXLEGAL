@@ -82,20 +82,39 @@ separa fecha+hora.
 - **Time Box**: bloques del día por hora (audiencias, gestiones, pendientes, prospección, agenda) + lo
   "sin hora" arriba + tarjeta con la `propuesta_diaria_fr` del día.
 - **Gerencia › Cobranza** (`gerencia-cobranza.tsx`, `TabCobranza`): sistema de cobro de honorarios RS.
-  Agrupa las **facturas impagas** (`facturas.pagada = false`, con `cliente_id`) por cliente con su total y
-  documentos. Por cliente, una ficha (Sheet) arma el **correo de cobranza**: mensaje editable + detalle de
-  facturas + total (auto) + invitación a **suscripción** (link de `gerencia_links_planes` elegido por el
-  tramo de UF ≈ monto/UF), y **adjunta los PDF** (bucket `facturas`, `archivo_path`). Se envía vía
-  `enviarCobranza` (server action → Resend, a nombre del usuario, bcc a su buzón; ver `@/lib/enviar-correo`)
-  y queda registrado en **`gerencia_cobranza_envios`** (cliente, correo, folios, docs, total, enviado_por).
-  El destinatario es `contacto_correo ?? correo_empresa`. NO confundir con `cobranza_actividad`, que es de
-  Tesorería (cobranza a los deudores de los clientes). La cobranza se carga dentro de `cargarGerencia`
-  (`DatosGerencia.cobranza`). **Notas de crédito**: las `facturas.tipo='nota_credito'` NO se cobran; si su
-  `folio_ref` apunta a una factura pendiente del cliente, esa factura queda **acreditada** (se excluye del
-  cobro); las NC sin match quedan como **advertencia** (`ncCount`/`ncMonto`) — así se evita netear montos
-  anómalos (p. ej. NC folio 81 Panaderías $81M cuyo ref no existe). **Forma de pago**: `facturas.forma_pago`
-  ('T' transfiere / 'S' suscripción), backfilleada por folio desde la hoja "Facturación RS" (columna L);
-  Cobranza muestra el badge por cliente (moda de sus facturas).
+  Envío real **probado en producción (21-07-2026)**. Se carga dentro de `cargarGerencia`
+  (`DatosGerencia.cobranza`). NO confundir con `cobranza_actividad`, que es de Tesorería (cobranza a los
+  deudores de los clientes).
+  - **Universo**: `facturas.pagada = false` (tipo=factura) con `cliente_id`, agrupadas por cliente.
+  - **Correo** (server action `enviarCobranza` → Resend, a nombre del usuario; ver `@/lib/enviar-correo`):
+    formato tipo aviso F29 (tabla 9px + **caja ámbar con datos de transferencia**), texto por defecto
+    "Estimado Cliente… gestionar el saldo…" (editable), **pie automático** con tel +56 9 7392 8662
+    (`htmlCorreoDocumento({pie})`, opcional — no afecta F29). Adjunta los PDF (bucket `facturas`). Registra
+    en **`gerencia_cobranza_envios`** (cliente, correo, folios, docs, total, enviado_por). Historial por
+    cliente visible en la ficha.
+  - **Destinatario**: `clientes.cobranza_correo` (override específico de cobranza) `?? contacto_correo ??
+    correo_empresa`. Los `correos_adicionales` van en **CC**. El panel muestra los destinatarios (Para + En
+    copia) y un check **"Enviarme copia"** (controla el bcc al remitente; `bccRemitente` opcional).
+    Overrides activos: Red Barrera Distribuidora → alexis.ancic@redbarrera.cl; Chile Gold → Boris Stier.
+  - **Modo por `facturas.forma_pago`** ('T' transfiere / 'S' suscripción, backfill por folio desde col L de
+    "Facturación RS"): **T** = cobranza normal; **S** = aviso "problema con tu suscripción". Filtro
+    Todos/Transfieren/Suscritos + buscador. Badge por cliente.
+  - **Suscripción**: invitación solo a quienes **transfieren** y con factura **≤ $350.000** (tope de los
+    planes MercadoPago ≈ UF 8,5). El plan se elige por el valor **en pesos** más cercano (planes en UF y
+    especiales en $ de `gerencia_links_planes`).
+  - **Notas de crédito**: `tipo='nota_credito'` NO se cobran; si su `folio_ref` apunta a una factura
+    pendiente del cliente, esa factura queda **acreditada** (fuera de cobro). Las NC se cargan como el resto
+    (PDF en bucket `2026/nc-<folio>.pdf`). El flag/advertencia de NC se retiró de la UI (el neteo se mantiene).
+  - **Consolidada por grupo** (`clientes.cobranza_consolida`): empresas del mismo `grupo_id` marcadas se unen
+    en **un solo correo** (un destinatario, todas sus facturas, detalle por empresa). Casos: Rafael González
+    (Ranco, Garrucho, Inv. Los Almendros S.A., Agrícola Rosenqvist → rgonzalezmoller@gmail.com) y Diego
+    Segovia (Emporio Diego Segovia, Ibarra y Villouta, More Than Meat → diego.segovia.b@gmail.com).
+  - **Seguimiento**: ✓ verde antes del nombre si ya se cobró en el mes en curso (por `ultimoEnvio`); filtro
+    "solo pendientes de cobrar este mes". La sub-pestaña de Gerencia se persiste en `sessionStorage` (no se
+    sale de Cobranza al recargar tras un envío).
+  - **Storage sin service key local**: para subir PDF al bucket se usa el CLI de Supabase autenticado
+    (`supabase projects api-keys` → service_role → Storage REST). En `.env.local` la key de Resend es
+    placeholder; el envío real solo corre en Vercel/prod.
 
 ## Propuesta diaria automática
 Agente programado **local** `propuesta-diaria-fr` (`~/.claude/scheduled-tasks/`), ~07:00 hora Chile:
