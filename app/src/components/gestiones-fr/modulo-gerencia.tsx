@@ -93,7 +93,18 @@ export function ModuloGerencia({
   recargar: () => Promise<void>;
 }) {
   const [pendiente, startTransition] = useTransition();
-  const [tab, setTab] = useState<TabId>("resumen");
+  // La pestaña se persiste para no perderla al recargar tras un envío/guardado.
+  const [tab, setTabState] = useState<TabId>(() => {
+    if (typeof window !== "undefined") {
+      const guardada = window.sessionStorage.getItem("gerencia-tab");
+      if (guardada && TABS.some((t) => t.id === guardada)) return guardada as TabId;
+    }
+    return "resumen";
+  });
+  const setTab = (id: TabId) => {
+    setTabState(id);
+    if (typeof window !== "undefined") window.sessionStorage.setItem("gerencia-tab", id);
+  };
   const [busquedaCartera, setBusquedaCartera] = useState("");
   const [filtroCategoria, setFiltroCategoria] = useState("");
   const [formCartera, setFormCartera] = useState(false);
